@@ -38,16 +38,16 @@ Marks = {
     b'\x87\x00\x00\x00' : Field("Gain", "L", Unique = True),
     b'\x88\x00\x00\x00' : Field("SCount", "I", Unique = True),
     b'\x89\x00\x00\x00' : Field("DBLsampling", "d", Unique = True),
-    b'\x8a\x00\x00\x00' : Field("RateCorr", "d"),
-    b'\x8b\x00\x00\x00' : Field("RawRange", "h"),
-    b'\x8c\x00\x00\x00' : Field("TransRange", "h"),
-    b'\x8d\x00\x00\x00' : Field("Channel_32", "h"),
+    b'\x8a\x00\x00\x00' : Field("RateCorr", "d", Unique = True),
+    b'\x8b\x00\x00\x00' : Field("RawRange", "h", Unique = True),
+    b'\x8c\x00\x00\x00' : Field("TransRange", "h", Unique = True),
+    b'\x8d\x00\x00\x00' : Field("Channel_32", "h", Unique = True),
 
     b'\x90\x00\x00\x00' : Field("ChannName", "x", IsText = True, Unique = True),
     b'\x95\x00\x00\x00' : Field("DMask_16", "h"),
     b'\x96\x00\x00\x00' : Field("SignData", "B", Unique = True, Size = 1),
     b'\x98\x00\x00\x00' : Field("CalFunc", "x", IsText = True, Unique = True),
-    b'\x99\x00\x00\x00' : Field("CalUnit", "h"),
+    b'\x99\x00\x00\x00' : Field("CalUnit", "h", IsText=True, Unique = True),
     b'\x9A\x00\x00\x00' : Field("CalPoint", "h"),
     
     b'\xa0\x00\x00\x00' : Field("Event", "h"),
@@ -62,16 +62,16 @@ Marks = {
     
     b'\xe0\x00\x00\x00' : Field("FilterSet", "h"),
     
-    b'\x20\x00\x00\x00' : Field("Data", "l"),
+    b'\x20\x00\x00\x00' : Field("Data", "f"),
     
     b'\x30\x00\x00\x00' : Field("DataGuId", "x", IsText = True, Unique = True),
     b'\x40\x00\x00\x00' : Field("RecGuId", "x", IsText = True, Unique = True),
     
-    b'\xA0\x00\x00\x02' : Field("SigType", "h"),
-    b'\x20\x00\x00\x04' : Field("LowHight", "h"),
-    b'\x70\x00\x00\x03' : Field("SigRef", "h"),
-    b'\x72\x00\x00\x03' : Field("SigMainType", "h"),
-    b'\x74\x00\x00\x03' : Field("SigSubType", "h"),
+    b'\xA0\x00\x00\x02' : Field("SigType", "h", IsText = True, Unique = True),
+    b'\x20\x00\x00\x04' : Field("LowHight", "h", Unique = True),
+    b'\x70\x00\x00\x03' : Field("SigRef", "h", IsText = True, Unique = True),
+    b'\x72\x00\x00\x03' : Field("SigMainType", "h", IsText = True, Unique = True),
+    b'\x74\x00\x00\x03' : Field("SigSubType", "h", IsText = True, Unique = True),
    } 
 #b'\x1a\x00\x00\x00' : ["SigEnd",        0, ""],
 #b'\xff\x00\x00\x00' : ["Invalid",       0, "b"],
@@ -129,9 +129,12 @@ class Channel(object):
                 unpacked = struct.unpack(dec, data)
                 if fname == "Version":
                     if self.Endian == '>':
-                        self.Version = unpacked[0]+unpacked[1]/10
+                        big, small = unpacked
                     else:
-                        self.Version = unpacked[1]+unpacked[0]/10
+                        small, big = unpacked
+                    if small > 100: small = small/100
+                    else: small = small/10
+                    self.Version = big + small/10
                 elif fname == "Time":
                     year, mon, day, h, m, s, us = unpacked
                     time = datetime(year, mon, day, h, m, s, us*10000)
@@ -139,7 +142,10 @@ class Channel(object):
 
                 else:
                     if dtype.IsUnique():
-                        setattr(self, fname, unpacked)
+                        if len(unpacked) == 1:
+                            setattr(self, fname, unpacked[0])
+                        else:
+                            setattr(self, fname, list(unpacked))
                     else:
                         setattr(self, fname, getattr(self, fname)+[list(unpacked)])
 

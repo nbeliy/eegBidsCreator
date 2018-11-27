@@ -76,3 +76,8 @@ while True:
     ch.read(index, data)
 
 print(str(ch))
+print("RawRange:", ch.RawRange[0:10])
+print("TransRange:", ch.TransRange[0:10])
+print("Data:", ch.Data[0][0:10])
+print("SigType:", ch.SigType[0:10])
+print("SigRef:", ch.SigRef[0:10])
