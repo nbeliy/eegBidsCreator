@@ -149,7 +149,7 @@ class Entry(object):
             
         self.__data  = None
         Stream.seek(self.__dsize,1)
-        self.__name = Stream.read(self.__size - self.__dsize - 12).decode("ascii")
+        self.__name = Stream.read(self.__size - self.__dsize - 12).decode("ascii").strip('\0')
 
     def read(self):
         """Read and returns data, formatted folowing the type"""
@@ -159,7 +159,7 @@ class Entry(object):
             if self.__type == 4:
                 data = (Stream.read(self.__dsize) != 0) 
             elif self.__type == 3:
-                data = Stream.read(self.__dsize).decode('1252')
+                data = Stream.read(self.__dsize).decode('1252').strip('\0')
             elif self.__type == 6:
                 data = struct.unpack("<H",Stream.read(self.__dsize))[0]
             elif self.__type == 7:
