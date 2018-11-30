@@ -91,12 +91,16 @@ class Channel(object):
     def __str__(self):
         string = ""
         for f in self.__slots__:
-            if getattr(self, f) != None:
-                if type(getattr(self, f)) is list:
-                    if len(getattr(self, f)) < 5:
-                        string = string + f + '\t' + str(getattr(self, f))+ '\n'
+            attr = getattr(self, f)
+            if attr != None:
+                if type(attr) is list:
+                    if len(attr) < 5 and len(attr) > 0:
+                        if type(attr[0]) is list:
+                            string = string + f + '\t' + str((attr[0])[0:5])+ '\n'
+                        else:
+                            string = string + f + '\t' + str(attr[0:5])+ '\n'
                     else:
-                        string = string + f + '\t[{} entries]\n'.format(len(getattr(self, f)))
+                        string = string + f + '\t[{} entries]\n'.format(len(attr))
                 else:
                     string = string + f + '\t' + str(getattr(self, f))+ '\n'
         return string
@@ -139,7 +143,9 @@ class Channel(object):
                     year, mon, day, h, m, s, us = unpacked
                     time = datetime(year, mon, day, h, m, s, us*10000)
                     self.Time = self.Time+[time]
-
+                elif fname == "Data":
+                    print(data[0:8])
+                    setattr(self, fname, getattr(self, fname)+[list(unpacked)])
                 else:
                     if dtype.IsUnique():
                         if len(unpacked) == 1:
