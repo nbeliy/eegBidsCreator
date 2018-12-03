@@ -25,5 +25,5 @@ for fname in args.infiles:
             ev_type = aux.get("Aux",ev.AuxDataID).getlist("Sub Classification History")[0].get("1").get('type')
         except:
             ev_type = grp.get("Event Group Type", ev.GroupTypeIdx).get("Group Type")
-        print (ev_type, '-', time.strftime("%d/%m/%Y %H:%M:%S.%f"), "({}".format(ev.TimeSpan), " s)")
-    #    print (ev_type, '-', datetime.fromtimestamp(ev.StartTime).strftime("%d/%m/%Y %H:%M:%S.%f"), "({}".format(ev.TimeSpan), "s)")
+        print (ev_type, '-', "{0}.{1:03d}".format(time.strftime("%m/%d/%Y %H:%M:%S"),int(time.microsecond/1000 + 0.5)), "({} s)".format(int(ev.TimeSpan)))
+    #    print (ev_type, '-', datetime.fromtimestamp(ev.StartTime).strftime("%m/%d/%Y %H:%M:%S.%f"), "({} s)".format(ev.TimeSpan))
