@@ -84,9 +84,9 @@ class Channel(object):
         self.Endian = end
         self.Wide = wide
         if wide:
-            Marks[b'\x20\x00\x00\x00'].Format = 'q'
+            Marks[b'\x20\x00\x00\x00'].Format = 'h'
         else:
-            Marks[b'\x20\x00\x00\x00'].Format = 'l'
+            Marks[b'\x20\x00\x00\x00'].Format = 'b'
     
     def __str__(self):
         string = ""
@@ -157,3 +157,74 @@ class Channel(object):
 
         except Exception as e:
             raise Exception("Unamble to parce {}:{}\n{}".format(dtype[0], data, e))
+
+
+
+def readChannel(stream):
+    #Reading header
+    buff = b''
+    ch = stream.read(1)
+
+
+    while ch != b'\x1a':
+        buff = buff+ch
+        ch = stream.read(1)
+
+    if (buff.decode('ascii') == 'Embla data file'):
+        print("We reading Embla data file")
+    elif (buff.decode('ascii') == 'Embla results file'):
+        print("We are reading Embla results file")
+    else:
+        raise Exception("We are not reading either Embla results or Embla data")
+
+    ch = stream.read(1)
+
+    if ch == b'\xff':
+        BigEndian = True
+        byteorder = 'big'
+        byteprefix= '>'
+        print("We using big-endian")
+    elif ch == b'\x00':
+        BigEndian = False
+        byteorder = 'little'
+        byteprefix= '<'
+        print("We using little-endian")
+    else:
+        raise Exception("Can't determine endian, format problrm?")
+
+    wideId = False
+    ch = stream.read(1)
+    if (ch == b'\xff'):
+        ch = stream.read(4)
+        if ch == b'\xff\xff\xff\xff':
+            wideId = True
+            print("We using wide Id")
+            stream.seek(32 - 6,1)
+    else:
+        print("We using normal Id")
+
+    if wideId :
+        base_size = 4
+    else:
+        base_size = 1
+    ch = Channel(byteprefix, wideId)
+
+    while True:
+        start = stream.tell()
+        if wideId :
+            index = stream.read(4)
+        else:
+            index = stream.read(2)
+            index = index+b'\x00\x00'
+
+        if(index == b''):break
+        #print(hex(start), index)
+        size = stream.read(4)
+        #print(size)
+        size = struct.unpack("<L", size)[0]
+        #print("Size:",size)
+        data = stream.read(size)
+        ch.read(index, data)    
+
+    return ch
+
