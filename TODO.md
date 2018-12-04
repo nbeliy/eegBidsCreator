@@ -1,1 +1,2 @@
 - Implement additional data types
+- Use barin-products as standard output file for eeg
