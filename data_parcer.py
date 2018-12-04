@@ -6,9 +6,8 @@ from DataStructure.Channel import Marks
 
 #f = open("testdata.ebm", "rb")
 #f = open("../data_test/EEG/BL/c6902c41-642b-4dd2-88b2-81e03feba944/C3.ebm", "rb")
-f = open("data_example/embla_data/C3.ebm", "rb")
 
-ch = Channel(f)
+ch = Channel("data_example/embla_data/C3.ebm")
 
 print(str(ch))
 print("RawRange:", ch.RawRange[0:10])

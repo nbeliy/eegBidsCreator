@@ -80,13 +80,13 @@ Marks = {
 class Channel(object):
     """ Class containing all information retrieved from ebm file. The data instead to be loaded in the memory, are readed directly from file """
     __slots__ = [x.Name for x in list(Marks.values())]+["Endian", "Wide", "_stream", "_seqStart", "_seqSize", "_totSize", "_dataSize"]
-    def __init__(self, stream):
+    def __init__(self, filename):
         for f in self.__slots__:
             setattr(self, f, [])
-        if not isinstance(stream, (io.RawIOBase, io.BufferedIOBase)):
-            raise Exception("Stream is not valid")
 
-        self._stream = stream
+        self._stream = open(filename, "rb")
+        if not isinstance(self._stream, (io.RawIOBase, io.BufferedIOBase)):
+            raise Exception("Stream is not valid")
         self._stream.seek(0)
         #Reading header
         buff = b''
@@ -163,6 +163,9 @@ class Channel(object):
                     string = string + f + '\t' + str(getattr(self, f))+ '\n'
         return string
 
+    def __del__(self):
+        self._stream.close()
+
     def __read(self, marker, size):
         dtype = Marks[marker]
         try:
@@ -219,14 +222,14 @@ class Channel(object):
             raise Exception("Unamble to parce {}:{}\n{}".format(dtype[0], data, e))
 
     def getSize(self, sequence = None):
-    """ Returns total size (nmb. of measure points) of dataset """
+        """ Returns total size (nmb. of measure points) of dataset """
         if sequence == None:
             return self._totSize
         else:
             return self._seqSize[sequence]
 
     def getValue(self, point, sequence = None):
-    """ Returns value of given measure point. If sequance is given, the point should be in correspondent sequance. If no suequance is given, the point is interpreted as global one """
+        """ Returns value of given measure point. If sequance is given, the point should be in correspondent sequance. If no suequance is given, the point is interpreted as global one """
         if sequence == None:
             point, sequence = self.getRelPoint(point)
 
@@ -234,7 +237,7 @@ class Channel(object):
         return struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, self._stream.read(self._dataSize))[0]*self.Gain/1000
 
     def getRelPoint(self, point):
-    """ Returns a tuple (point, sequance) for absolute point index """
+        """ Returns a tuple (point, sequance) for absolute point index """
         for sequence in range(0, len(self._seqSize)):
             if point >= self._seqSize[sequence]:
                 point = point - self._seqSize[sequence]    
@@ -242,7 +245,7 @@ class Channel(object):
         return (point, sequence)
 
     def getTime(self, point, sequence = None):
-    """ If sequance given, returns nmb. of seconds passed cince the start of sequence, or secons scince the start of recording (first sequence) """
+        """ If sequance given, returns nmb. of seconds passed cince the start of sequence, or secons scince the start of recording (first sequence) """
         if sequence == None:
             point, seq = self.getRelPoint(point)
             t = self.Time[seq] + timedelta(seconds = point/self.DBLsampling)
