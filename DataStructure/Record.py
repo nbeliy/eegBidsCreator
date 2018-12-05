@@ -8,7 +8,7 @@ def addDict(parent):
         if data != None :
             del child.attrib['{urn:schemas-microsoft-com:datatypes}dt']
             try:
-                if child.text = None:
+                if child.text == None:
                     d[child.tag] = None
                 else:
                     if data == 'string':
