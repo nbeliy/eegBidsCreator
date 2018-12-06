@@ -1,4 +1,4 @@
-VERSION = '0.1'
+VERSION = '0.3'
 
 import logging, argparse, os, json, glob, olefile
 from datetime import datetime
@@ -28,6 +28,9 @@ parser.add_argument('-a, --acquisition',
 parser.add_argument('-s, --session',
     metavar='sesId', dest='ses', default='',
     help = 'Id of the session' )
+parser.add_argument('-r, --run,',
+    metavar='runId', dest='run', default='',
+    help = 'Id of the run' )
 parser.add_argument('-j, --json', nargs=1, default='',
     metavar='eegJson', dest='eegJson',
     help = "A json file with task description"
@@ -55,6 +58,7 @@ if args.logfile != '':
 task    = args.task
 acq     = args.acq
 ses     = args.ses
+run     = args.run
 eegJson = args.eegJson
 path    = os.path.realpath(args.infile[0])
 eegform = None
@@ -126,16 +130,101 @@ try:
     try:
         os.makedirs(srcPath)
     except OSError:
-        logging.warning("Directory already exists. Contents will be eraised.")
+        logging.warning("Directory already exists. Contents will be erased.")
         rmdir(srcPath)
+    prefix = "sub-"+metadata["PatientInfo"]["ID"]
+    if ses != "": prefix = prefix + "_ses-"+ses
+    prefix = prefix + "_task-" + task
+    if acq != "": prefix = prefix + "_acq-"+acq
+    if run != "": prefix = prefix + "_run-"+run
     
     logging.info("Copiyng data to folders")
     if eegJson != '':
-        shutil.copy2(eegJson, eegPath)
+        shutil.copy2(eegJson, eegPath+"/"+prefix+"_eeg.json")
     if dirName != "":
         shutil.copytree(path, srcPath+"/"+dirName)
     else:
         shutil.copy2(path, srcPath)
+    
+    logging.info("Creating channels.tsv file")
+    with open(eegPath+"/"+prefix+"_channels.tsv", "w") as f:
+        if eegform == "embla":
+            from DataStructure.Channel import Channel
+            channels = [Channel(c) for c in glob.glob(path+"/*.ebm")]
+            print("name", "type", "units", "description", "sampling_frequency", "reference", 
+                "low_cutoff", "high_cutoff", "notch", "status", "status_description", sep='\t', file = f)
+            ch_dict = dict()
+            t_ref   = metadata["RecordingInfo"]["StartTime"]
+            t_min   = datetime.max
+            
+
+            for c in channels:
+                logging.debug("Channel {}, type {}, Sampling {} Hz".format(c.ChannName, c.SigType, int(c.DBLsampling)))
+                ch_dict[c.ChannName] = c
+                ch_dict[c.ChannName+" "+c.SigType] = c
+                l = [c.ChannName, c.SigType, c.CalUnit, c.Header, int(c.DBLsampling), c.SigRef, "", "", "", "", ""]
+                for field in l:
+                    if type(field) is list:
+                        field = str.join(" ", field)
+                    if field == "":
+                        field = "n/a"
+                    print(field, end = '\t', file=f)
+                print("", file = f)
+                if t_ref != None:
+                    if t_ref != c.Time[0]:
+                        logging.warning("Channel '{}': Starts {} sec later than recording {}".format(c.ChannName, (c.Time[0] - t_ref).total_seconds(), t_ref.isoformat()))
+                if c.Time[0] < t_min:
+                    t_min = c.Time[0]
+                elif c.Time[0] != t_min:
+                    logging.warning("Channel '{}': Starts {} sec later than other channels".format(c.ChannName, (c.Time[0] - t_min).total_seconds()))
+        else:
+            raise Exception("EEG format {} not implemented (yet)".format(eegform))
+
+    logging.info("Creating events.tsv file")
+    with open(eegPath+"/"+prefix+"_events.tsv", "w") as f:
+        if eegform == "embla":
+            from  Parcel.parcel import Parcel
+            evfile = glob.glob(path+"/*.esedb")[0]
+            print("onset", "duration", "trial_type", "responce_time", "value", "sample", sep='\t', file = f)
+            esedb = olefile.OleFileIO(evfile).openstream('Event Store/Events')
+            root = Parcel(esedb)
+            events  = root.get("Events")
+            aux_l   = root.getlist("Aux Data")[0]
+            grp_l   = root.getlist("Event Groups")[0]
+            times   = root.getlist("EventsStartTimes")[0]
+            locat   = root.get("Locations", 0)
+                
+            for ev,time in zip(events, times):
+                logging.debug("Event {}, at {}, loc. {}, aux. {} ".format(ev.EventID, time.strftime("%d/%m/%Y %H:%M:%S.%f"), ev.LocationIdx, ev.AuxDataID))
+
+                try :
+                    loc = locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("SubType") 
+                    ch  = ch_dict[loc]
+                    dt = (time - ch.Time[0]).total_seconds()
+                except:
+                    logging.warning("Channel '{}' not in the list of channels".format(loc))
+                    ch = None
+                    dt = float(ev.LocationIdx) 
+
+                if t_ref != None:
+                    dt = (time - t_ref).total_seconds()
+                elif ch != None:
+                    dt = (time - ch.Time[0]).total_seconds()
+                else :
+                    dt = (time - t_min).total_seconds()
+
+                try:
+                    aux = aux_l.get("Aux", ev.AuxDataID).get("Sub Classification History").get("1")
+                    name = aux.get("type")
+                except:
+                    logging.warning("Can't get event name for index {}".format(ev.AuxDataID))
+                    aux = None
+                    name = "n/a"
+
+                print("%.3f\t%s\t%.2f"% (dt, name, ev.TimeSpan), file = f)
+
+        else:
+            raise Exception("EEG format {} not implemented (yet)".format(eegform))
     
 
 except Exception as e:
