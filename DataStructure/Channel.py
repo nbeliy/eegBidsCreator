@@ -96,22 +96,13 @@ class Channel(object):
             buff = buff+ch
             ch = self._stream.read(1)
 
-        if (buff.decode('ascii') == 'Embla data file'):
-            print("We reading Embla data file")
-        elif (buff.decode('ascii') == 'Embla results file'):
-            print("We are reading Embla results file")
-        elif (buff.decode('ascii') == 'Embla raw file'):
-            print("We are reading Embla raw file")
-        else:
-            print("We are not reading either Embla results or Embla data")
+        if (buff.decode('ascii') != 'Embla data file') and (buff.decode('ascii') != 'Embla results file')and (buff.decode('ascii') != 'Embla raw file'):
             raise Exception("We are not reading either Embla results or Embla data")
         ch = self._stream.read(1)
         if ch == b'\xff':
             self.Endian = '>'
-            print("We using big-endian")
         elif ch == b'\x00':
             self.Endian = '<'
-            print("We using little-endian")
         else:
             raise Exception("Can't determine endian")
 
