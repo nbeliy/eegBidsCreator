@@ -11,7 +11,8 @@ I didn't found the task/acquisition/session/run id in the files, so they must be
 
 ## Usage
 
-`usage: eegBidsCreator.py [-h] [-t, --task taskId] [-a, --acquisition acqId]
+```
+usage: eegBidsCreator.py [-h] [-t, --task taskId] [-a, --acquisition acqId]
                          [-s, --session sesId] [-r, --run, runId]
                          [-j, --json eegJson] [-o, --output OUTDIR]
                          [--logfile [log.out]]
@@ -37,7 +38,7 @@ optional arguments:
   --log {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         logging level
   --version             show program's version number and exit
-`
+```
 
 ### Example
 
