@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 class Field(object):
     """ Class describes type of data and how to read it"""
     __slots__ = ["Name", "Size", "IsText", "Format", "Encoding", "Entries"]
-    def __init__(self, Name, Format, Size = 0, IsText = False, Encoding = "ascii", Entries = 0, Unique = False):
+    def __init__(self, Name, Format, Size = 0, IsText = False, Encoding = "Latin-1", Entries = 0, Unique = False):
         self.Name     = Name
         self.Format   = Format
         self.Size     = Size #0 -- no size restriction
@@ -18,7 +18,7 @@ class Field(object):
         else:
             self.Entries  = Entries
     def __str__(self):
-        string = Name + ":"
+        string = self.Name + ":"
         if (self.IsText):
             string = string + "text ("+self.Encoding+")"
         else :
@@ -96,22 +96,13 @@ class Channel(object):
             buff = buff+ch
             ch = self._stream.read(1)
 
-        if (buff.decode('ascii') == 'Embla data file'):
-            print("We reading Embla data file")
-        elif (buff.decode('ascii') == 'Embla results file'):
-            print("We are reading Embla results file")
-        elif (buff.decode('ascii') == 'Embla raw file'):
-            print("We are reading Embla raw file")
-        else:
-            print("We are not reading either Embla results or Embla data")
+        if (buff.decode('ascii') != 'Embla data file') and (buff.decode('ascii') != 'Embla results file')and (buff.decode('ascii') != 'Embla raw file'):
             raise Exception("We are not reading either Embla results or Embla data")
         ch = self._stream.read(1)
         if ch == b'\xff':
             self.Endian = '>'
-            print("We using big-endian")
         elif ch == b'\x00':
             self.Endian = '<'
-            print("We using little-endian")
         else:
             raise Exception("Can't determine endian")
 
@@ -219,7 +210,7 @@ class Channel(object):
                     else:
                         setattr(self, fname, getattr(self, fname)+[list(unpacked)])
         except Exception as e:
-            raise Exception("Unamble to parce {}:{}\n{}".format(dtype[0], data, e))
+            raise Exception("{}: Unamble to parce {}: {}".format(self._stream.name, dtype.Name, e))
 
     def getSize(self, sequence = None):
         """ Returns total size (nmb. of measure points) of dataset """
