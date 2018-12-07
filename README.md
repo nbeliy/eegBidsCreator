@@ -66,7 +66,7 @@ It runs only with python3, and need following standard modules installed:
 ## Known issues
 
 - Some events don't have an associated type, they will appear as "n/a" in events.tsv file
-- For some channels, the names in esedb and in emb files mismach, thus can't determine the corect `sample` value 
+- For some channels, the names in esedb and in emb files mismach, thus can't determine the corect `sample` value -- **fixed**
 - `sample` value can be not an integer, if corresponding event happened between two measures
 
 ## Need help!
