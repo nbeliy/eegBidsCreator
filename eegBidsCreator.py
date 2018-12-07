@@ -2,6 +2,7 @@ VERSION = '0.4'
 
 import logging, argparse, os, json, glob, olefile
 from datetime import datetime
+import time as tm
 
 from DataStructure.Record import ParceRecording
 
@@ -156,8 +157,11 @@ try:
             
             for c in channels:
                 logging.debug("Channel {}, type {}, Sampling {} Hz".format(c.ChannName, c.SigType, int(c.DBLsampling)))
-                ch_dict[c.ChannName] = c
-                ch_dict[c.ChannName+" "+c.SigType] = c
+                if c.SigSubType in ch_dict:
+                    logging.warning("Channel {} has same sub-type {} as channel {}".format(c.ChannName, c.c.SigSubType, ch_dict[c.SigSubType].ChannName ))
+                else:
+                    ch_dict[c.SigSubType] = c
+                #ch_dict[c.ChannName+" "+c.SigType] = c
                 l = [c.ChannName, c.SigType, c.CalUnit, c.Header, int(c.DBLsampling), c.SigRef, "", "", "", "", ""]
                 for field in l:
                     if type(field) is list:
@@ -225,7 +229,9 @@ try:
 
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
+        logging.info("All done. Took {} secons".format(tm.process_time()))
     
 
 except Exception as e:
     logging.error(e)
+    logging.info("Took {} seconds".format(tm.process_time()))
