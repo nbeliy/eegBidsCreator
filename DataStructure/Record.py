@@ -14,7 +14,7 @@ def addDict(parent):
                     if data == 'string':
                         d[child.tag] = child.text
                     elif data == 'datetime':
-                        d[child.tag] = datetime.strptime(child.text+"000", "%Y-%m-%dT%H:%M:%S.%f")
+                        d[child.tag] = datetime.strptime(child.text, "%Y-%m-%dT%H:%M:%S.%f")
                     elif data == 'r8':
                         d[child.tag] = float(child.text)
                     elif data == 'i2' or data == 'i4':
