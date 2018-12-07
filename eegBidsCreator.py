@@ -49,10 +49,8 @@ parser.add_argument('--version', action='version', version='%(prog)s '+VERSION)
 args = parser.parse_args()
 
 numeric_level = getattr(logging, args.loglevel, None)
-logging.basicConfig(filemode='w', level=numeric_level,
+logging.basicConfig(filename=args.logfile, filemode='w', level=numeric_level,
     format='%(levelname)s:%(asctime)s: %(message)s', datefmt='%m/%d/%Y %H:%M:%S')
-if args.logfile != '':
-    logging.config.fileConfig(filename=args.logfile, filemode='w')
 
 task    = args.task
 acq     = args.acq
