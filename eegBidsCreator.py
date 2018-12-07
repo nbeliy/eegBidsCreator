@@ -1,4 +1,4 @@
-VERSION = '0.3'
+VERSION = '0.4'
 
 import logging, argparse, os, json, glob, olefile
 from datetime import datetime
@@ -37,20 +37,19 @@ parser.add_argument('-j, --json', nargs=1, default='',
     )
 parser.add_argument('-o, --output', nargs=1, default='.', dest='outdir',
     help='destination folder')
-parser.add_argument('--log', nargs='?', default='',
-    metavar='logfile', dest='logfile',
-    help='log ')
-parser.add_argument('--quiet, -q', action='store_true', dest='quiet',
-    help='suppress terminal output')
+parser.add_argument('--logfile', nargs='?', default='',
+    metavar='log.out', dest='logfile',
+    help='log file destination')
 
-parser.add_argument('--verbose', '-v', action='count', dest='verbosity', default=5,
-    help='verbosity level')
+parser.add_argument('--log', dest='loglevel', default='INFO', choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    help='logging level')
 parser.add_argument('--version', action='version', version='%(prog)s '+VERSION)
 
 
 args = parser.parse_args()
 
-logging.basicConfig(filemode='w', level=logging.DEBUG,
+numeric_level = getattr(logging, args.loglevel, None)
+logging.basicConfig(filemode='w', level=numeric_level,
     format='%(levelname)s:%(asctime)s: %(message)s', datefmt='%m/%d/%Y %H:%M:%S')
 if args.logfile != '':
     logging.config.fileConfig(filename=args.logfile, filemode='w')
@@ -83,10 +82,10 @@ try:
     
     if len(eegJson) == 1:
         eegJson = os.path.realpath(eegJson[0])
-        logging.info("JSON File: {}".format(eegJson[0]))
-        if not os.path.exists(path):
-            raise Exception("File {} don't exists".format(path))
-        f = open(path)
+        logging.info("JSON File: {}".format(eegJson))
+        if not os.path.isfile(eegJson):
+            raise Exception("File {} don't exists".format(eegJson))
+        f = open(eegJson)
         eegJson = json.load(f.read())
         f.close()
 
@@ -157,7 +156,6 @@ try:
             t_ref   = metadata["RecordingInfo"]["StartTime"]
             t_min   = datetime.max
             
-
             for c in channels:
                 logging.debug("Channel {}, type {}, Sampling {} Hz".format(c.ChannName, c.SigType, int(c.DBLsampling)))
                 ch_dict[c.ChannName] = c
@@ -208,8 +206,8 @@ try:
 
                 if t_ref != None:
                     dt = (time - t_ref).total_seconds()
-                elif ch != None:
-                    dt = (time - ch.Time[0]).total_seconds()
+#                elif ch != None:
+#                    dt = (time - ch.Time[0]).total_seconds()
                 else :
                     dt = (time - t_min).total_seconds()
 
@@ -221,7 +219,11 @@ try:
                     aux = None
                     name = "n/a"
 
-                print("%.3f\t%s\t%.2f"% (dt, name, ev.TimeSpan), file = f)
+                print("%.3f\t%.2f\t%s\tn/a\tn/a"% (dt, ev.TimeSpan, name), file = f, end="")
+                if ch != None:
+                    print("\t%f"%(dt*ch.DBLsampling), file = f )
+                else:
+                    print("\tn/a", file = f)
 
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
