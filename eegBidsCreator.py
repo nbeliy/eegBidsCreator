@@ -1,10 +1,12 @@
 VERSION = '0.4'
 
-import logging, argparse, os, json, glob, olefile
+import logging, argparse, os, json, glob, olefile, traceback
 from datetime import datetime
 import time as tm
 
 from DataStructure.Record import ParceRecording
+from DataStructure.BrainVision.Recording import Header as bvHeader
+from DataStructure.BrainVision.Events import MarkerFile
 
 import shutil
 
@@ -144,6 +146,9 @@ try:
     else:
         shutil.copy2(path, srcPath)
     
+    header = bvHeader(eegPath, prefix)
+    header.CommonInfo.CodePage = "UTF-8"
+
     logging.info("Creating channels.tsv file")
     with open(eegPath+"/"+prefix+"_channels.tsv", "w") as f:
         if eegform == "embla":
@@ -157,6 +162,8 @@ try:
             
             for c in channels:
                 logging.debug("Channel {}, type {}, Sampling {} Hz".format(c.ChannName, c.SigType, int(c.DBLsampling)))
+                header.CommonInfo.AddFrequancy(int(c.DBLsampling))
+                header.AddChannel(c.ChannName, '', 1., '' )
                 if c.SigSubType in ch_dict:
                     logging.warning("Channel {} has same sub-type {} as channel {}".format(c.ChannName, c.c.SigSubType, ch_dict[c.SigSubType].ChannName ))
                 else:
@@ -179,6 +186,15 @@ try:
                     logging.warning("Channel '{}': Starts {} sec later than other channels".format(c.ChannName, (c.Time[0] - t_min).total_seconds()))
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
+
+    logging.info("Writting new segment events")
+    if t_ref == None:
+        t_ref = t_min
+    mkFile = MarkerFile(eegPath, prefix, t_ref, header.CommonInfo.GetFrequancy(), "UTF-8")
+    for i,ch in enumerate(channels):
+        for t in ch.Time:
+            logging.debug(str(t))
+            mkFile.AddNewSegment(t, i+1)
 
     logging.info("Creating events.tsv file")
     with open(eegPath+"/"+prefix+"_events.tsv", "w") as f:
@@ -224,14 +240,23 @@ try:
                 print("%.3f\t%.2f\t%s\tn/a\tn/a"% (dt, ev.TimeSpan, name), file = f, end="")
                 if ch != None:
                     print("\t%f"%(dt*ch.DBLsampling), file = f )
+                    ch_id = channels.index(ch)
                 else:
                     print("\tn/a", file = f)
+                    ch_id = 0
+
+                mkFile.AddMarker(name, time, ev.TimeSpan, ch_id, "")
 
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
-        logging.info("All done. Took {} secons".format(tm.process_time()))
     
+    logging.info("Creating eeg.vhdr header file")
+    header.write()
+
+    logging.info("All done. Took {} secons".format(tm.process_time()))
 
 except Exception as e:
     logging.error(e)
+    traceback.print_exc()
     logging.info("Took {} seconds".format(tm.process_time()))
+    exit(1)
