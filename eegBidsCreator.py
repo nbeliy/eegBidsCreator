@@ -1,7 +1,7 @@
 VERSION = '0.4'
 
-import logging, argparse, os, json, glob, olefile, traceback
-from datetime import datetime
+import logging, argparse, os, json, glob, olefile, traceback, struct
+from datetime import datetime, timedelta
 import time as tm
 
 from DataStructure.Record import ParceRecording
@@ -148,6 +148,8 @@ try:
     
     header = bvHeader(eegPath, prefix)
     header.CommonInfo.CodePage = "UTF-8"
+    #header.BinaryInfo.BinaryFormat = "IEEE_FLOAT_32"
+    header.BinaryInfo.BinaryFormat = "INT_16"
 
     logging.info("Creating channels.tsv file")
     with open(eegPath+"/"+prefix+"_channels.tsv", "w") as f:
@@ -158,12 +160,14 @@ try:
                 "low_cutoff", "high_cutoff", "notch", "status", "status_description", sep='\t', file = f)
             ch_dict = dict()
             t_ref   = metadata["RecordingInfo"]["StartTime"]
+            t_end   = metadata["RecordingInfo"]["StopTime"]
             t_min   = datetime.max
+            t_max   = datetime.min
             
             for c in channels:
                 logging.debug("Channel {}, type {}, Sampling {} Hz".format(c.ChannName, c.SigType, int(c.DBLsampling)))
                 header.CommonInfo.AddFrequancy(int(c.DBLsampling))
-                header.AddChannel(c.ChannName, '', 1., '' )
+                header.AddChannel(c.ChannName, '', c.Gain, '' )
                 if c.SigSubType in ch_dict:
                     logging.warning("Channel {} has same sub-type {} as channel {}".format(c.ChannName, c.c.SigSubType, ch_dict[c.SigSubType].ChannName ))
                 else:
@@ -184,12 +188,18 @@ try:
                     t_min = c.Time[0]
                 elif c.Time[0] != t_min:
                     logging.warning("Channel '{}': Starts {} sec later than other channels".format(c.ChannName, (c.Time[0] - t_min).total_seconds()))
+                if c.Time[-1]+timedelta(0, c._seqSize[-1]*c.DBLsampling, 0) > t_max:
+                    t_max = c.Time[-1]+timedelta(0, c._seqSize[-1]/c.DBLsampling, 0) 
+                    logging.debug("New t_max {}".format(t_max.isoformat()))
+                    
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
 
     logging.info("Writting new segment events")
     if t_ref == None:
         t_ref = t_min
+    if t_end == None or t_end < t_max:
+        t_end = t_max
     mkFile = MarkerFile(eegPath, prefix, t_ref, header.CommonInfo.GetFrequancy(), "UTF-8")
     for i,ch in enumerate(channels):
         for t in ch.Time:
@@ -246,10 +256,42 @@ try:
                     ch_id = 0
 
                 mkFile.AddMarker(name, time, ev.TimeSpan, ch_id, "")
-
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
     
+    logging.info("Creating eeg file")
+    with open(eegPath+"/"+prefix+"_eeg.eeg", "wb") as f:
+        if header.BinaryInfo.UseBigEndianOrder == "NO":
+            endian = '<'
+        else:
+            endian = '>'
+        if header.BinaryInfo.BinaryFormat == "INT_16":
+            marker = 'h'
+        elif header.BinaryInfo.BinaryFormat == "UINT_16":
+            marker = 'H'
+        elif header.BinaryInfo.BinaryFormat == "IEEE_FLOAT_32":
+            marker = 'f'
+
+        print(t_ref, t_min)
+        print(t_max, t_end)
+        if eegform == "embla":
+            t_e = t_ref 
+            while True:
+                logging.info("Timepoint: {}".format(t_e.isoformat()))
+                t_s = t_e
+                t_e = t_e + timedelta(0,3600,0)
+                if t_s > t_end: break
+
+                l_data = []
+                for ch in channels:
+                    l_data.append(ch.getValueVector(t_s, t_e, freq_mult=int(header.CommonInfo.GetFrequancy()/ch.DBLsampling), raw = True ))
+                for j in range(0, len(l_data[0])):
+                    for k in range(0, len(l_data)):
+                        f.write(struct.pack(endian+marker,int(l_data[k][j])))
+        else:
+            raise Exception("EEG format {} not implemented (yet)".format(eegform))
+
+
     logging.info("Creating eeg.vhdr header file")
     header.write()
 
