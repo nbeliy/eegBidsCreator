@@ -244,4 +244,37 @@ class Channel(object):
         else : 
             return(point/self.DBLsampling)
 
-        
+    def getValueVector(self, timeStart, timeEnd, default=0):
+        if timeStart > timeEnd:
+            raise Exception("Starting time must be lower than ending time")
+
+        #getting list of sequences
+        res = [default]*int((timeEnd - timeStart).total_seconds()*self.DBLsampling)
+        pos = 0
+        for  seq_start, seq_size, seq_time in zip(self._seqStart, self._seqSize, self.Time):
+            #Case 1: sequence started before timeStart
+            #We fill from beginning of res list, but reading data from middle of sequence
+            if seq_time <= timeStart:
+                seq_pos = int((timeStart - seq_time).total_seconds()*self.DBLsampling)
+                if seq_pos >= seq_size: #Sequence ends before time start
+                    continue
+                self._stream.seek(seq_start+seq_pos*self._dataSize)
+                to_read = min(seq_size - seq_pos, len(res))
+                for i in range (0, to_read):
+                    res[pos] = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, self._stream.read(self._dataSize))[0]*self.Gain/1000
+                    pos += 1
+
+            #Case 2: sequence starts after timeStart
+            #We read from start of sequence, but fill in the middle of res vector
+            else:
+                if seq_time >= timeEnd: break
+                pos = int((seq_time - timeStart).total_seconds()*self.DBLsampling)
+                if pos > len(res): break
+                self._stream.seek(seq_start)
+                to_read = min(seq_size, len(res) - pos)
+                for i in range (0, to_read):
+                    res[pos] = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, self._stream.read(self._dataSize))[0]*self.Gain/1000
+                    pos += 1
+                
+
+        return res
