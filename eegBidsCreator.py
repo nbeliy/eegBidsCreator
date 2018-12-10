@@ -169,7 +169,7 @@ try:
                 header.CommonInfo.AddFrequancy(int(c.DBLsampling))
                 header.AddChannel(c.ChannName, '', c.Gain, '' )
                 if c.SigSubType in ch_dict:
-                    logging.warning("Channel {} has same sub-type {} as channel {}".format(c.ChannName, c.c.SigSubType, ch_dict[c.SigSubType].ChannName ))
+                    logging.warning("Channel {} has same sub-type {} as channel {}".format(c.ChannName, c.SigSubType, ch_dict[c.SigSubType].ChannName ))
                 else:
                     ch_dict[c.SigSubType] = c
                 #ch_dict[c.ChannName+" "+c.SigType] = c
