@@ -254,43 +254,52 @@ class Channel(object):
             raise Exception("Frequance multiplicator must be positve integer")
 
         #getting list of sequences
-        points = int((timeEnd - timeStart).total_seconds()*self.DBLsampling)
-        res = [default]*(points*freq_mult)
-        pos = 0
-        for  seq_start, seq_size, seq_time in zip(self._seqStart, self._seqSize, self.Time):
-            #Case 1: sequence started before timeStart
-            #We fill from beginning of res list, but reading data from middle of sequence
-            if seq_time <= timeStart:
-                seq_pos = int((timeStart - seq_time).total_seconds()*self.DBLsampling)
-                if seq_pos >= seq_size: #Sequence ends before time start
-                    continue
-                self._stream.seek(seq_start+seq_pos*self._dataSize)
-                to_read = min(seq_size - seq_pos, points)
-                for i in range (0, to_read):
-                    if raw :
-                        res[pos] = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, self._stream.read(self._dataSize))[0]
-                    else:
-                        res[pos] = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, self._stream.read(self._dataSize))[0]*self.Gain/1000
-                    for j in range(pos+1, pos+freq_mult):
-                        res[j] = res[pos]
-                    pos += freq_mult
+        #Points = number of data points to read
+        dt = (timeEnd - timeStart).total_seconds()
+        points = int(dt*self.DBLsampling)
+        #resulting list of size point*freq_mult
+        res = [default]*int(dt*self.DBLsampling*freq_mult)
+        #Index to point in res
 
-            #Case 2: sequence starts after timeStart
+        for  seq_start, seq_size, seq_time in zip(self._seqStart, self._seqSize, self.Time):
+            #Sequance starts after end time
+            if seq_time >= timeEnd: break
+            #offset of sequance start relative to start time
+            offset = int((timeStart - seq_time).total_seconds()*self.DBLsampling)
+            if (-offset) >= seq_size: #Sequence ends before time start
+                continue
+
+            to_read = 0
+            index = 0
+
+            #Case 1: sequence started before timeStart, offset is negative
+            #We fill from beginning of res list, but reading data from middle of sequence
+            if offset <= 0 :
+                offset = -offset
+                self._stream.seek(seq_start+offset*self._dataSize)
+                #number of points to the end of sequence
+                to_read = min(seq_size - offset, points)
+
+            #Case 2: sequence starts after timeStart, offset is positive
             #We read from start of sequence, but fill in the middle of res vector
             else:
-                if seq_time >= timeEnd: break
-                pos = int((seq_time - timeStart).total_seconds()*self.DBLsampling)
-                if pos*freq_mult > len(res): break
+                if offset*freq_mult > len(res): break
                 self._stream.seek(seq_start)
-                to_read = min(seq_size, points - pos)
-                pos *= freq_mult
-                for i in range (0, to_read):
-                    if raw:
-                        res[pos] = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, self._stream.read(self._dataSize))[0]
-                    else:
-                        res[pos] = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, self._stream.read(self._dataSize))[0]*self.Gain/1000
-                    for j in range(pos+1, pos+freq_mult):
-                        res[j] = res[pos]
-                    pos += freq_mult
+                to_read = min(seq_size, points - offset)
+                index = offset*freq_mult
+
+            data = self._stream.read(self._dataSize*to_read)
+            if len(data) != self._dataSize*to_read:
+                raise Exception("Unexpected end of stream for channel {}, expected {}*{} data, read {}".format(self.ChannName, self._dataSize,to_read, len(data)))
+            if len(res) < index+to_read*freq_mult:
+                raise Exception("Unexpected end of list for channel {}. Need {}+{}*{} cells, got {}".format(self.ChannName, index, to_read,freq_mult, len(res)))
+            for i in range (0, to_read):
+                res[index] = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, data[i:i+self._dataSize])[0]
+                if not raw:
+                    res[index] *= self.Gain/1000
+                #filling the interpoint space with previous value
+                for j in range(index+1, index+freq_mult):
+                    res[j] = res[index]
+                index += freq_mult
 
         return res

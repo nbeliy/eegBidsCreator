@@ -186,6 +186,7 @@ try:
                         logging.warning("Channel '{}': Starts {} sec later than recording {}".format(c.ChannName, (c.Time[0] - t_ref).total_seconds(), t_ref.isoformat()))
                 if c.Time[0] < t_min:
                     t_min = c.Time[0]
+                    logging.debug("New t_min {}".format(t_min.isoformat()))
                 elif c.Time[0] != t_min:
                     logging.warning("Channel '{}': Starts {} sec later than other channels".format(c.ChannName, (c.Time[0] - t_min).total_seconds()))
                 if c.Time[-1]+timedelta(0, c._seqSize[-1]*c.DBLsampling, 0) > t_max:
@@ -195,15 +196,16 @@ try:
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
 
-    logging.info("Writting new segment events")
+
     if t_ref == None:
         t_ref = t_min
     if t_end == None or t_end < t_max:
         t_end = t_max
+    logging.info("Start time: {}, Stop time: {}".format(t_ref.isoformat(), t_end.isoformat()))
+    logging.info("Writting new segment events")
     mkFile = MarkerFile(eegPath, prefix, t_ref, header.CommonInfo.GetFrequancy(), "UTF-8")
     for i,ch in enumerate(channels):
         for t in ch.Time:
-            logging.debug(str(t))
             mkFile.AddNewSegment(t, i+1)
 
     logging.info("Creating events.tsv file")
@@ -272,15 +274,15 @@ try:
         elif header.BinaryInfo.BinaryFormat == "IEEE_FLOAT_32":
             marker = 'f'
 
-        print(t_ref, t_min)
-        print(t_max, t_end)
         if eegform == "embla":
             t_e = t_ref 
             while True:
-                logging.info("Timepoint: {}".format(t_e.isoformat()))
                 t_s = t_e
                 t_e = t_e + timedelta(0,3600,0)
-                if t_s > t_end: break
+                if t_s >= t_end: break
+                if t_e > t_end: t_e = t_end
+                logging.info("Timepoint: {}".format(t_s.isoformat()))
+                logging.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
 
                 l_data = []
                 for ch in channels:
