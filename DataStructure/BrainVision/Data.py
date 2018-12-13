@@ -40,6 +40,6 @@ class DataFile(object):
 
         for j in range(0, len(data[0])):
             for k in range(0, len(data)):
-                self.__file.write(struct.pack(self.__endian+self.__marker,int(data[k][j])))
+                self.__file.write(struct.pack(self.__endian+self.__marker,data[k][j]))
 
 
