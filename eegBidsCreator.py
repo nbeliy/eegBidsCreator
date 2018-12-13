@@ -298,7 +298,10 @@ try:
             logging.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
             l_data = []
             for ch in channels:
-                l_data.append(ch.getValueVector(t_s, t_e, freq_mult=int(outData.GetFrequency()/ch.DBLsampling), raw = True ))
+                if outData.Header.BinaryInfo.BinaryFormat == "IEEE_FLOAT_32":
+                    l_data.append(ch.getValueVector(t_s, t_e, freq_mult=int(outData.GetFrequency()/ch.DBLsampling)))
+                else:
+                    l_data.append(ch.getValueVector(t_s, t_e, freq_mult=int(outData.GetFrequency()/ch.DBLsampling), raw = True ))
             outData.DataFile.WriteBlock(l_data)
 
             

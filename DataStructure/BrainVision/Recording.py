@@ -33,15 +33,15 @@ class Header(object):
         f = open(self.__path+"/"+self.__prefix+"_eeg.vhdr", "w", encoding=enc)
         f.write("Brain Vision Data Exchange Header File Version 1.0\n")
 
-        f.write("\n[Common Info]\n")
+        f.write("\n[Common Infos]\n")
         
         f.write(self.CommonInfo.printout())
         
         if self.CommonInfo.DataFormat == "BINARY":
-            f.write("\n\n[Binary Info]\n")
+            f.write("\n\n[Binary Infos]\n")
             f.write(self.BinaryInfo.printout())
         elif self.CommonInfo.DataFormat == "ASCII":
-            f.write("\n\n[ASCII Info]\n")
+            f.write("\n\n[ASCII Infos]\n")
             f.write(self.AsciiInfo.printout())
         else: raise Exception("BrainVision Header: Data format '{}' should be either 'BINARY' or 'ASCII'")
 
@@ -67,7 +67,7 @@ class CommonInfo(object):
         self.DataFile   = prefix+"_eeg.eeg"
         self.MarkerFile = prefix+"_eeg.vmrk"
         self.DataFormat = "BINARY"
-        self.DataOrientation = "MULTYPLEXED"
+        self.DataOrientation = "MULTIPLEXED"
         self.DataType   = "TIMEDOMAIN"
         self.NumberOfChannels = nChannels
         self.SamplingInterval = sInterval
