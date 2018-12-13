@@ -1,13 +1,15 @@
 # eegBidsCreator
 
-A script to convert embla files to the BID standart
+A script to convert embla files to the BID standard
 It creates the required folders: `sub-<participant_label>/[ses-<session_label>/]eeg`,  which will contain acquisition information, and `source/sub-<participant_label>/[ses-<session_label>/]eeg`, where the original raw data will be copied. If subfolder eeg already exists, the content will be **erased**
 
-It also creates channels.tsv file, containing the list of all channels. Information that I maneged to retrieve are the name, units(may be not accurate), type, description(if it is provided by embla), and sampling frequency. Remaining fields are filled with "n/a".
+It also creates channels.tsv file, containing the list of all channels. Information that I managed to retrieve are the name, units(may be not accurate), type, description(if it is provided by embla), and sampling frequency. Remaining fields are filled with "n/a".
 
-Extracted events are stored in events.tsv file with its onset time, duration, type, and corresponding sample (i.e. the numero of data point of corresponding time, onset\*sampling) 
+Extracted events are stored in events.tsv file with its onset time, duration, type, and corresponding sample (i.e. the number of data point of corresponding time, onset\*sampling) 
 
 I didn't found the task/acquisition/session/run id in the files, so they must be passed to script via options `-t, -a, -s, -r`. Only task option is mandatory.
+
+If an additional command `BrainVision` is provided, the source files will be converted into BrainVision format
 
 ## Usage
 
@@ -18,7 +20,7 @@ usage: eegBidsCreator.py [-h] [-t, --task taskId] [-a, --acquisition acqId]
                          [--logfile [log.out]]
                          [--log {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
                          [--version]
-                         eegfile
+                         eegfile {BrainVision} ...
 
 Converts EEG file formats to BID standard
 
@@ -38,15 +40,32 @@ optional arguments:
   --log {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         logging level
   --version             show program's version number and exit
+
+conversions:
+  {BrainVision}         do <command --help> for additional help
+    BrainVision         Conversion to BrainVision format
+```
+```
+usage: eegBidsCreator.py eegfile BrainVision [-h] [--encoding {UTF-8,ANSI}]
+                                             [--format {IEEE_FLOAT_32,INT_16,UINT_16}]
+                                             [--big_endian]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --encoding {UTF-8,ANSI}
+                        Header encoding
+  --format {IEEE_FLOAT_32,INT_16,UINT_16}
+                        Data number format
+  --big_endian          Use big endian
 ```
 
 ### Example
 
-`python3 eegBidsCreator.py -t my_task "data_example/embla_data/" --log DEBUG`
+`python3 eegBidsCreator.py -t my_task "data_example/embla_data/" --log DEBUG BrainVision --format INT_16`
 
 `python3 eegBidsCreator.py -l task-my_task_eeg.json "data_example/embla_data/" --log DEBUG`
 
-### Dependenties
+### Dependencies
 
 It runs only with python3, and need following standard modules installed:
 - struct (need to convert binary data to various number formats)
@@ -62,6 +81,19 @@ It runs only with python3, and need following standard modules installed:
 - xml.etree.ElementTree
 - glob
 - shutil
+
+## Conversion into BrainVision
+
+The original ebmbla format stores each channel into separated file. The values of each measurement points are stored as shorts, with a defined scale (gain) allowing the retrieval of the original value. This system allows to channel to be desynchronized and having independent sampling rate.
+
+The BrainVision format have only one data file, thus all channels must have same sampling rate and to be synchronized.
+ 
+In the conversion, this is achieved by finding the least common multiple for the channels sampling rate (thus all rates should be expressed as integer and measured in `Hz`). If a given channel has a sampling rate lower than the common multiple, then the space between two measurement point is expanded and filled with value of the lower point.
+
+If a given channel has a missing value at given time (i.e. the acquisition started later wrt other channels), they are filled by 0
+
+Finally, the BrainVision format can store the values in float as well as in short with a scale factor. Storage in float remove the need of scale value, but increase size of data file by a factor of 2.
+
 
 ## Known issues
 

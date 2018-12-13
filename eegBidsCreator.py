@@ -1,12 +1,11 @@
-VERSION = '0.4'
+VERSION = '0.5'
 
 import logging, argparse, os, json, glob, olefile, traceback, struct
 from datetime import datetime, timedelta
 import time as tm
 
 from DataStructure.Record import ParceRecording
-from DataStructure.BrainVision.Recording import Header as bvHeader
-from DataStructure.BrainVision.Events import MarkerFile
+from DataStructure.BrainVision.BrainVision import BrainVision
 
 import shutil
 
@@ -19,6 +18,7 @@ def rmdir(path):
 
 
 parser = argparse.ArgumentParser(description='Converts EEG file formats to BID standard')
+
 parser.add_argument('infile', 
     metavar='eegfile', nargs = 1,
     help='input eeg file')
@@ -49,7 +49,17 @@ parser.add_argument('--log', dest='loglevel', default='INFO', choices=["DEBUG", 
 parser.add_argument('--version', action='version', version='%(prog)s '+VERSION)
 
 
+subparsers = parser.add_subparsers(title='conversions', help='do <command --help> for additional help', dest="command")
+group_bv = subparsers.add_parser('BrainVision', help='Conversion to BrainVision format')
+group_bv.add_argument('--encoding', dest='bv_encoding', default='UTF-8', choices=["UTF-8","ANSI"],
+    help='Header encoding')
+group_bv.add_argument('--format', dest='bv_format', default='IEEE_FLOAT_32', choices=['IEEE_FLOAT_32', 'INT_16', 'UINT_16'], help='Data number format')
+group_bv.add_argument('--big_endian', dest='bv_endian', action="store_true", help='Use big endian')
+
+
+
 args = parser.parse_args()
+print(args)
 
 numeric_level = getattr(logging, args.loglevel, None)
 logging.basicConfig(filename=args.logfile, filemode='w', level=numeric_level,
@@ -145,34 +155,29 @@ try:
         shutil.copytree(path, srcPath+"/"+dirName)
     else:
         shutil.copy2(path, srcPath)
-    
-    header = bvHeader(eegPath, prefix)
-    header.CommonInfo.CodePage = "UTF-8"
-    #header.BinaryInfo.BinaryFormat = "IEEE_FLOAT_32"
-    header.BinaryInfo.BinaryFormat = "INT_16"
+
+    t_ref   = metadata["RecordingInfo"]["StartTime"]
+    t_end   = metadata["RecordingInfo"]["StopTime"]
+    t_min   = datetime.max
+    t_max   = datetime.min
 
     logging.info("Creating channels.tsv file")
     with open(eegPath+"/"+prefix+"_channels.tsv", "w") as f:
+        logging.info("Creating channels.tsv file")
         if eegform == "embla":
             from DataStructure.Channel import Channel
             channels = [Channel(c) for c in glob.glob(path+"/*.ebm")]
             print("name", "type", "units", "description", "sampling_frequency", "reference", 
                 "low_cutoff", "high_cutoff", "notch", "status", "status_description", sep='\t', file = f)
             ch_dict = dict()
-            t_ref   = metadata["RecordingInfo"]["StartTime"]
-            t_end   = metadata["RecordingInfo"]["StopTime"]
-            t_min   = datetime.max
-            t_max   = datetime.min
             
             for c in channels:
                 logging.debug("Channel {}, type {}, Sampling {} Hz".format(c.ChannName, c.SigType, int(c.DBLsampling)))
-                header.CommonInfo.AddFrequancy(int(c.DBLsampling))
-                header.AddChannel(c.ChannName, '', c.Gain, '' )
+
                 if c.SigSubType in ch_dict:
                     logging.warning("Channel {} has same sub-type {} as channel {}".format(c.ChannName, c.SigSubType, ch_dict[c.SigSubType].ChannName ))
                 else:
                     ch_dict[c.SigSubType] = c
-                #ch_dict[c.ChannName+" "+c.SigType] = c
                 l = [c.ChannName, c.SigType, c.CalUnit, c.Header, int(c.DBLsampling), c.SigRef, "", "", "", "", ""]
                 for field in l:
                     if type(field) is list:
@@ -196,35 +201,32 @@ try:
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
 
-
     if t_ref == None:
         t_ref = t_min
     if t_end == None or t_end < t_max:
         t_end = t_max
     logging.info("Start time: {}, Stop time: {}".format(t_ref.isoformat(), t_end.isoformat()))
-    logging.info("Writting new segment events")
-    mkFile = MarkerFile(eegPath, prefix, t_ref, header.CommonInfo.GetFrequancy(), "UTF-8")
-    for i,ch in enumerate(channels):
-        for t in ch.Time:
-            mkFile.AddNewSegment(t, i+1)
+    logging.info("Earliest time: {}, Latest time: {}".format(t_min.isoformat(), t_max.isoformat()))
 
+
+    events = []
     logging.info("Creating events.tsv file")
     with open(eegPath+"/"+prefix+"_events.tsv", "w") as f:
+        logging.info("Reading events info")
         if eegform == "embla":
             from  Parcel.parcel import Parcel
             evfile = glob.glob(path+"/*.esedb")[0]
             print("onset", "duration", "trial_type", "responce_time", "value", "sample", sep='\t', file = f)
             esedb = olefile.OleFileIO(evfile).openstream('Event Store/Events')
             root = Parcel(esedb)
-            events  = root.get("Events")
+            evs     = root.get("Events")
             aux_l   = root.getlist("Aux Data")[0]
             grp_l   = root.getlist("Event Groups")[0]
             times   = root.getlist("EventsStartTimes")[0]
             locat   = root.get("Locations", 0)
                 
-            for ev,time in zip(events, times):
+            for ev,time in zip(evs, times):
                 logging.debug("Event {}, at {}, loc. {}, aux. {} ".format(ev.EventID, time.strftime("%d/%m/%Y %H:%M:%S.%f"), ev.LocationIdx, ev.AuxDataID))
-
                 try :
                     loc = locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("SubType") 
                     ch  = ch_dict[loc]
@@ -234,12 +236,7 @@ try:
                     ch = None
                     dt = float(ev.LocationIdx) 
 
-                if t_ref != None:
-                    dt = (time - t_ref).total_seconds()
-#                elif ch != None:
-#                    dt = (time - ch.Time[0]).total_seconds()
-                else :
-                    dt = (time - t_min).total_seconds()
+                dt = (time - t_ref).total_seconds()
 
                 try:
                     aux = aux_l.get("Aux", ev.AuxDataID).get("Sub Classification History").get("1")
@@ -256,46 +253,55 @@ try:
                 else:
                     print("\tn/a", file = f)
                     ch_id = 0
-
-                mkFile.AddMarker(name, time, ev.TimeSpan, ch_id, "")
-        else:
-            raise Exception("EEG format {} not implemented (yet)".format(eegform))
-    
-    logging.info("Creating eeg file")
-    with open(eegPath+"/"+prefix+"_eeg.eeg", "wb") as f:
-        if header.BinaryInfo.UseBigEndianOrder == "NO":
-            endian = '<'
-        else:
-            endian = '>'
-        if header.BinaryInfo.BinaryFormat == "INT_16":
-            marker = 'h'
-        elif header.BinaryInfo.BinaryFormat == "UINT_16":
-            marker = 'H'
-        elif header.BinaryInfo.BinaryFormat == "IEEE_FLOAT_32":
-            marker = 'f'
-
-        if eegform == "embla":
-            t_e = t_ref 
-            while True:
-                t_s = t_e
-                t_e = t_e + timedelta(0,3600,0)
-                if t_s >= t_end: break
-                if t_e > t_end: t_e = t_end
-                logging.info("Timepoint: {}".format(t_s.isoformat()))
-                logging.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
-
-                l_data = []
-                for ch in channels:
-                    l_data.append(ch.getValueVector(t_s, t_e, freq_mult=int(header.CommonInfo.GetFrequancy()/ch.DBLsampling), raw = True ))
-                for j in range(0, len(l_data[0])):
-                    for k in range(0, len(l_data)):
-                        f.write(struct.pack(endian+marker,int(l_data[k][j])))
+                events.append({"Name": name,  "Time":time, "Channel": ch_id, "Span": ev.TimeSpan, "Location": loc})
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
 
+    outData = None
+    if  args.command == "BrainVision":
+        logging.info("Converting to BrainVision format")
+        outData = BrainVision(eegPath, prefix)
+        outData.SetEncoding(args.bv_encoding)
+        outData.SetDataFormat(args.bv_format)
+        outData.SetEndian(args.bv_endian == "NO")
 
-    logging.info("Creating eeg.vhdr header file")
-    header.write()
+        logging.info("Creating eeg.vhdr header file")
+        for ch in channels:
+            outData.Header.CommonInfo.AddFrequency(int(ch.DBLsampling))
+            outData.AddChannel(ch.ChannName, '', ch.Gain, ch.CalUnit, "{} at {}".format(ch.SigMainType, ch.SigSubType ))
+        outData.Header.write()
+        
+        logging.info("Creating eeg.vmrk markers file")
+        outData.MarkerFile.OpenFile(outData.GetEncoding())
+        outData.MarkerFile.SetFrequency(outData.GetFrequency())
+        outData.MarkerFile.SetStartTime(t_ref)
+        logging.info("Writting new segment events")
+        for i,ch in enumerate(channels):
+            for t in ch.Time:
+                outData.MarkerFile.AddNewSegment(t, i+1)
+        logging.info("Writting proper events")
+        for ev in events:
+            outData.MarkerFile.AddMarker(ev["Name"], ev["Time"], ev["Span"], ev["Channel"], "")
+        outData.MarkerFile.Write()
+
+        logging.info("Creating eeg data file")
+        outData.DataFile.SetDataFormat(outData.Header.BinaryInfo.BinaryFormat)
+        outData.DataFile.SetEndian(outData.Header.BinaryInfo.UseBigEndianOrder)
+        outData.DataFile.OpenFile()
+        t_e = t_ref
+        while True:
+            t_s = t_e
+            t_e = t_e + timedelta(0,3600,0)
+            if t_s >= t_end: break
+            if t_e > t_end: t_e = t_end
+            logging.info("Timepoint: {}".format(t_s.isoformat()))
+            logging.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
+            l_data = []
+            for ch in channels:
+                l_data.append(ch.getValueVector(t_s, t_e, freq_mult=int(outData.GetFrequency()/ch.DBLsampling), raw = True ))
+            outData.DataFile.WriteBlock(l_data)
+
+            
 
     logging.info("All done. Took {} secons".format(tm.process_time()))
 
