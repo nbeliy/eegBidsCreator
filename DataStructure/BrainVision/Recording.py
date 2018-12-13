@@ -24,7 +24,7 @@ class Header(object):
 
     def write(self):
         self.CommonInfo.NumberOfChannels  = len(self.Channels)
-        self.CommonInfo.SamplingInterval = 1e6/self.CommonInfo.GetFrequancy()
+        self.CommonInfo.SamplingInterval = 1e6/self.CommonInfo.GetFrequency()
         if self.CommonInfo.CodePage == "ANSI":
             enc = "ascii"
         elif self.CommonInfo.CodePage == "UTF-8":
@@ -79,16 +79,16 @@ class CommonInfo(object):
         self.CodePage   = "ANSI"
         self.__freq     = 0
 
-    def GetFrequancy(self):
+    def GetFrequency(self):
         return(self.__freq)
 
-    def SetFrequancy(self, freq):
+    def SetFrequency(self, freq):
         if type(freq) != int:
             raise TypeError("int expected")
         self.__freq = freq
         self.SamplingInterval = 1e6/freq
 
-    def AddFrequancy(self, freq):
+    def AddFrequency(self, freq):
         if type(freq) != int:
             raise TypeError("int expected")
         if self.__freq == 0:
