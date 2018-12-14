@@ -293,8 +293,10 @@ class Channel(object):
                 raise Exception("Unexpected end of stream for channel {}, expected {}*{} data, read {}".format(self.ChannName, self._dataSize,to_read, len(data)))
             if len(res) < index+to_read*freq_mult:
                 raise Exception("Unexpected end of list for channel {}. Need {}+{}*{} cells, got {}".format(self.ChannName, index, to_read,freq_mult, len(res)))
-            for i in range (0, len(data), self._dataSize ):
-                res[index] = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, data[i:i+self._dataSize])[0]
+            d = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format*to_read, data)
+            for i in range (0, to_read ):
+#                res[index] = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, data[i:i+self._dataSize])[0]
+                res[index] = d[i]
                 if not raw:
                     res[index] *= self.Gain/1000
                 #filling the interpoint space with previous value

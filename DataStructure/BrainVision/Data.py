@@ -39,7 +39,9 @@ class DataFile(object):
                 raise Exception("BrainVision: All points list must have same lenght")
 
         for j in range(0, len(data[0])):
+            d = [0]*len(data)
             for k in range(0, len(data)):
-                self.__file.write(struct.pack(self.__endian+self.__marker,data[k][j]))
+                d[k] = data[k][j]
+            self.__file.write(struct.pack(self.__endian+self.__marker*len(data),*d))
 
 
