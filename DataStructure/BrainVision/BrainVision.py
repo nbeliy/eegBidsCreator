@@ -42,9 +42,9 @@ class BrainVision(object):
 
     def SetEndian(self, useLittle):
         if useLittle:
-            self.Header.BinaryInfo.UseBigEndianOrder == "NO"
+            self.Header.BinaryInfo.UseBigEndianOrder = "NO"
         else:
-            self.Header.BinaryInfo.UseBigEndianOrder == "YES"
+            self.Header.BinaryInfo.UseBigEndianOrder = "YES"
 
     def AddEvent(self, name, date, duration = 0, channel = 0, description = ''):
         self.MarkerFile.AddMarker(name, date, duration, channel, description)
