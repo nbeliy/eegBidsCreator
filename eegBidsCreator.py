@@ -1,6 +1,6 @@
 VERSION = '0.5'
 
-import logging, argparse, os, json, glob, olefile, traceback, struct
+import logging, argparse, os, json, glob, olefile, traceback, struct, configparser
 from datetime import datetime, timedelta
 import time as tm
 
@@ -8,6 +8,9 @@ from DataStructure.Record import ParceRecording
 from DataStructure.BrainVision.BrainVision import BrainVision
 
 import shutil
+
+
+
 
 def rmdir(path):
     for root, dirs, files in os.walk(path):
@@ -26,91 +29,127 @@ parser.add_argument('-t, --task',
     metavar='taskId', dest='task',
     help = 'Id of the task' )
 parser.add_argument('-a, --acquisition',
-    metavar='acqId', dest='acq', default='',
+    metavar='acqId', dest='acq', 
     help = 'Id of the acquisition' )
 parser.add_argument('-s, --session',
-    metavar='sesId', dest='ses', default='',
+    metavar='sesId', dest='ses',
     help = 'Id of the session' )
 parser.add_argument('-r, --run,',
-    metavar='runId', dest='run', default='',
+    metavar='runId', dest='run',
     help = 'Id of the run' )
-parser.add_argument('-j, --json', nargs=1, default='',
+parser.add_argument('-j, --json', nargs=1,
     metavar='eegJson', dest='eegJson',
     help = "A json file with task description"
     )
-parser.add_argument('-o, --output', nargs=1, default='.', dest='outdir',
+parser.add_argument('-o, --output', nargs=1, dest='outdir',
     help='destination folder')
-parser.add_argument('--logfile', nargs='?', default='',
+
+
+parser.add_argument('-c, --config', nargs='?', dest='config_file',
+    help="Path to configuration file")
+
+parser.add_argument('--logfile', nargs='?',
     metavar='log.out', dest='logfile',
     help='log file destination')
 
-parser.add_argument('--log', dest='loglevel', default='INFO', choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+parser.add_argument('--log', dest='loglevel', choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
     help='logging level')
 parser.add_argument('--version', action='version', version='%(prog)s '+VERSION)
 
 
 subparsers = parser.add_subparsers(title='conversions', help='do <command --help> for additional help', dest="command")
 group_bv = subparsers.add_parser('BrainVision', help='Conversion to BrainVision format')
-group_bv.add_argument('--encoding', dest='bv_encoding', default='UTF-8', choices=["UTF-8","ANSI"],
+group_bv.add_argument('--encoding', dest='bv_encoding', choices=["UTF-8","ANSI"],
     help='Header encoding')
-group_bv.add_argument('--format', dest='bv_format', default='IEEE_FLOAT_32', choices=['IEEE_FLOAT_32', 'INT_16', 'UINT_16'], help='Data number format')
+group_bv.add_argument('--format', dest='bv_format', choices=['IEEE_FLOAT_32', 'INT_16', 'UINT_16'], help='Data number format')
 group_bv.add_argument('--big_endian', dest='bv_endian', action="store_true", help='Use big endian')
 
 
 
 args = parser.parse_args()
-print(args)
 
-numeric_level = getattr(logging, args.loglevel, None)
-logging.basicConfig(filename=args.logfile, filemode='w', level=numeric_level,
-    format='%(levelname)s:%(asctime)s: %(message)s', datefmt='%m/%d/%Y %H:%M:%S')
 
-task    = args.task
-acq     = args.acq
-ses     = args.ses
-run     = args.run
-eegJson = args.eegJson
-path    = os.path.realpath(args.infile[0])
+parameters = configparser.ConfigParser()
+#Making keys case-sensitive
+parameters.optionxform = lambda option: option
+
+#Setting up default values
+parameters['GENERAL'] = {"TaskId":"", "AcquisitionId":"", "SessionId":"", "RunId":"",
+                        "JsonFile":"",
+                        "OutputFolder":".", 
+                        "LogLevel":"INFO", "LogFile":"", 
+                        "Conversion":""}
+parameters['DATATREATMENT'] = {"DropChannels":"", "StartTime":"", "EndTime":"", 
+                                "StartEvent":"","EndEvent":""}
+parameters['BRAINVISION']   = {"Encoding":"UTF-8", "DataFormat":"IEEE_FLOAT_32", "Endian":"Little"}
+
+#Reading configuration file
+if args.config_file != None:
+    parameters.read(args.config_file)
+print(args.config_file)
+print(parameters['GENERAL']['Conversion'])
+print(parameters['BRAINVISION']['Endian'])
+
+#Overloading values by command-line arguments
+if args.task != None : parameters['GENERAL']['TaskId']          = args.task
+if args.acq  != None : parameters['GENERAL']['AcquisitionId']   = args.acq
+if args.ses  != None : parameters['GENERAL']['SessionId']       = args.ses
+if args.run  != None : parameters['GENERAL']['RunId']           = args.run
+if args.eegJson  != None: parameters['GENERAL']['JsonFile']     = args.eegJson
+if args.loglevel != None: parameters['GENERAL']['LogLevel']     = args.loglevel
+if args.logfile  != None: parameters['GENERAL']['LogFile']      = args.logfile
+if args.command != None : parameters['GENERAL']['Conversion']   = args.command
+if args.infile  != None : parameters['GENERAL']['Path']         = os.path.realpath(args.infile[0])
+if args.outdir  !=None  : parameters['GENERAL']['OutputFolder'] = os.path.realpath(args.outdir[0])
+
+if parameters['GENERAL']['Conversion']      == "BrainVision":
+    if hasattr(args, 'bv_encoding') and args.bv_encoding != None : parameters['BRAINVISION']['Encoding']   = args.bv_encoding
+    if hasattr(args, 'bv_format') and args.bv_format   != None : parameters['BRAINVISION']['DataFormat'] = args.bv_format
+    if hasattr(args,'bv_endian'):
+        parameters['BRAINVISION']['Endian']     = ("Little" if args.bv_endian else "Big")
+    
 eegform = None
-outdir  = os.path.realpath(args.outdir[0])
 
-logging.info("Task: {}".format(task))
-if acq != '' :
-    logging.info("Acquisition: {}".format(acq))
-logging.info("File: {}".format(path))
+numeric_level = getattr(logging, parameters['GENERAL']['LogLevel'], None)
+logging.basicConfig(filename=parameters['GENERAL']['LogFile'], filemode='w', level=numeric_level,
+    format='%(levelname)s:%(asctime)s: %(message)s', datefmt='%m/%d/%Y %H:%M:%S')
+logging.info("Task: {}".format(parameters['GENERAL']['TaskId']))
+if parameters['GENERAL']['AcquisitionId'] != '' :
+    logging.info("Acquisition: {}".format(parameters['GENERAL']['AcquisitionId']))
+logging.info("File: {}".format(parameters['GENERAL']['Path']))
 try:
     dirName = ""
-    if not os.path.exists(path):
-        raise Exception("Path {} is not valid".format(path))       
-    if os.path.isdir(path):
-        dirName = os.path.basename(path)
-        if len(glob.glob(path+'/*.ebm')) > 0:
+    if not os.path.exists(parameters['GENERAL']['Path']):
+        raise Exception("Path {} is not valid".format(parameters['GENERAL']['Path']))       
+    if os.path.isdir(parameters['GENERAL']['Path']):
+        dirName = os.path.basename(parameters['GENERAL']['Path'])
+        if len(glob.glob(parameters['GENERAL']['Path']+'/*.ebm')) > 0:
             eegform = "embla"
-    elif os.path.splitext(path)[0] == '.edf':
+    elif os.path.splitext(parameters['GENERAL']['Path'])[0] == '.edf':
         eegform = "edf"
     else:
         raise Exception("Unable determine eeg format")
     
-    if len(eegJson) == 1:
-        eegJson = os.path.realpath(eegJson[0])
-        logging.info("JSON File: {}".format(eegJson))
-        if not os.path.isfile(eegJson):
-            raise Exception("File {} don't exists".format(eegJson))
-        f = open(eegJson)
-        eegJson = json.load(f.read())
+    if len(parameters['GENERAL']['JsonFile']) == 1:
+        parameters['GENERAL']['JsonFile'] = os.path.realpath(parameters['GENERAL']['JsonFile'][0])
+        logging.info("JSON File: {}".format(parameters['GENERAL']['JsonFile']))
+        if not os.path.isfile(parameters['GENERAL']['JsonFile']):
+            raise Exception("File {} don't exists".format(parameters['GENERAL']['JsonFile']))
+        f = open(parameters['GENERAL']['JsonFile'])
+        parameters['GENERAL']['JsonFile'] = json.load(f.read())
         f.close()
 
-    logging.info("Output: {}".format(outdir))
-    if not os.path.isdir(path):
-        raise Exception("Path {} is not valid".format(path))
+    logging.info("Output: {}".format(parameters['GENERAL']['OutputFolder']))
+    if not os.path.isdir(parameters['GENERAL']['Path']):
+        raise Exception("Path {} is not valid".format(parameters['GENERAL']['Path']))
     metadata = dict()
     
     if eegform == "embla":
         logging.info("Detected {} format".format(eegform))
-        if len(glob.glob(path+'/Recording.esrc')) != 1 or len (glob.glob(path+'/*.esedb')) != 1:
+        if len(glob.glob(parameters['GENERAL']['Path']+'/Recording.esrc')) != 1 or len (glob.glob(parameters['GENERAL']['Path']+'/*.esedb')) != 1:
             raise Exception("Embla folder should contain exacly 1 Recording.escr and 1 events .esedb files")
         #Reading metadata
-        esrc = olefile.OleFileIO(path+'/Recording.esrc').openstream('RecordingXML')
+        esrc = olefile.OleFileIO(parameters['GENERAL']['Path']+'/Recording.esrc').openstream('RecordingXML')
         xml  = esrc.read().decode("utf_16_le")[2:-1]
         metadata = ParceRecording(xml)
         esrc.close()
@@ -121,11 +160,11 @@ try:
 
 
     
-    eegPath = outdir+"/sub-"+metadata["PatientInfo"]["ID"]
-    srcPath = outdir+"/source/sub-"+metadata["PatientInfo"]["ID"]
-    if ses != '':
-        eegPath = eegPath+"/ses-"+ses+"/eeg"
-        srcPath = srcPath+"/ses-"+ses+"/eeg"
+    eegPath = parameters['GENERAL']['OutputFolder']+"/sub-"+metadata["PatientInfo"]["ID"]
+    srcPath = parameters['GENERAL']['OutputFolder']+"/source/sub-"+metadata["PatientInfo"]["ID"]
+    if parameters['GENERAL']['SessionId'] != '':
+        eegPath = eegPath+"/ses-"+parameters['GENERAL']['SessionId']+"/eeg"
+        srcPath = srcPath+"/ses-"+parameters['GENERAL']['SessionId']+"/eeg"
     else:
         eegPath = eegPath+"/eeg"
         srcPath = srcPath+"/eeg"
@@ -143,18 +182,19 @@ try:
         logging.warning("Directory already exists. Contents will be erased.")
         rmdir(srcPath)
     prefix = "sub-"+metadata["PatientInfo"]["ID"]
-    if ses != "": prefix = prefix + "_ses-"+ses
-    prefix = prefix + "_task-" + task
-    if acq != "": prefix = prefix + "_acq-"+acq
-    if run != "": prefix = prefix + "_run-"+run
+    if parameters['GENERAL']['SessionId'] != "": prefix = prefix + "_ses-"+parameters['GENERAL']['SessionId']
+    prefix = prefix + "_task-" + parameters['GENERAL']['TaskId']
+    if parameters['GENERAL']['AcquisitionId'] != "": prefix = prefix + "_acq-"+parameters['GENERAL']['AcquisitionId']
+    if parameters['GENERAL']['RunId'] != "": prefix = prefix + "_run-"+parameters['GENERAL']['RunId']
     
     logging.info("Copiyng data to folders")
-    if eegJson != '':
-        shutil.copy2(eegJson, eegPath+"/"+prefix+"_eeg.json")
+    if parameters['GENERAL']['JsonFile'] != '':
+        shutil.copy2(parameters['GENERAL']['JsonFile'], eegPath+"/"+prefix+"_eeg.json")
     if dirName != "":
-        shutil.copytree(path, srcPath+"/"+dirName)
+        shutil.copytree(parameters['GENERAL']['Path'], srcPath+"/"+dirName)
     else:
-        shutil.copy2(path, srcPath)
+        shutil.copy2(parameters['GENERAL']['Path'], srcPath)
+    with open(eegPath+"/"+prefix+".conf", 'w') as configfile: parameters.write(configfile)
 
     t_ref   = metadata["RecordingInfo"]["StartTime"]
     t_end   = metadata["RecordingInfo"]["StopTime"]
@@ -166,7 +206,7 @@ try:
         logging.info("Creating channels.tsv file")
         if eegform == "embla":
             from DataStructure.Channel import Channel
-            channels = [Channel(c) for c in glob.glob(path+"/*.ebm")]
+            channels = [Channel(c) for c in glob.glob(parameters['GENERAL']['Path']+"/*.ebm")]
             print("name", "type", "units", "description", "sampling_frequency", "reference", 
                 "low_cutoff", "high_cutoff", "notch", "status", "status_description", sep='\t', file = f)
             ch_dict = dict()
@@ -215,7 +255,7 @@ try:
         logging.info("Reading events info")
         if eegform == "embla":
             from  Parcel.parcel import Parcel
-            evfile = glob.glob(path+"/*.esedb")[0]
+            evfile = glob.glob(parameters['GENERAL']['Path']+"/*.esedb")[0]
             print("onset", "duration", "trial_type", "responce_time", "value", "sample", sep='\t', file = f)
             esedb = olefile.OleFileIO(evfile).openstream('Event Store/Events')
             root = Parcel(esedb)
@@ -258,12 +298,12 @@ try:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
 
     outData = None
-    if  args.command == "BrainVision":
+    if  parameters['GENERAL']['Conversion'] == "BrainVision":
         logging.info("Converting to BrainVision format")
         outData = BrainVision(eegPath, prefix)
-        outData.SetEncoding(args.bv_encoding)
-        outData.SetDataFormat(args.bv_format)
-        outData.SetEndian(args.bv_endian == "NO")
+        outData.SetEncoding(parameters['BRAINVISION']['Encoding'])
+        outData.SetDataFormat(parameters['BRAINVISION']['DataFormat'])
+        outData.SetEndian(parameters['BRAINVISION']['Endian'] == "Little")
 
         logging.info("Creating eeg.vhdr header file")
         for ch in channels:
@@ -313,3 +353,5 @@ except Exception as e:
     traceback.print_exc()
     logging.info("Took {} seconds".format(tm.process_time()))
     exit(1)
+
+
