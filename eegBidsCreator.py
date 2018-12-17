@@ -80,15 +80,14 @@ parameters['GENERAL'] = {"TaskId":"", "AcquisitionId":"", "SessionId":"", "RunId
                         "LogLevel":"INFO", "LogFile":"", 
                         "Conversion":""}
 parameters['DATATREATMENT'] = {"DropChannels":"", "StartTime":"", "EndTime":"", 
-                                "StartEvent":"","EndEvent":""}
+                                "StartEvent":"","EndEvent":"",
+                                "IgnoreOutOfTimeEvents":"yes",
+                                "MergeCommonEvents":"yes"}
 parameters['BRAINVISION']   = {"Encoding":"UTF-8", "DataFormat":"IEEE_FLOAT_32", "Endian":"Little"}
 
 #Reading configuration file
 if args.config_file != None:
     parameters.read(args.config_file)
-print(args.config_file)
-print(parameters['GENERAL']['Conversion'])
-print(parameters['BRAINVISION']['Endian'])
 
 #Overloading values by command-line arguments
 if args.task != None : parameters['GENERAL']['TaskId']          = args.task
@@ -203,12 +202,14 @@ try:
 
     logging.info("Creating channels.tsv file")
     with open(eegPath+"/"+prefix+"_channels.tsv", "w") as f:
-        logging.info("Creating channels.tsv file")
         if eegform == "embla":
             from DataStructure.Channel import Channel
             channels = [Channel(c) for c in glob.glob(parameters['GENERAL']['Path']+"/*.ebm")]
             print("name", "type", "units", "description", "sampling_frequency", "reference", 
                 "low_cutoff", "high_cutoff", "notch", "status", "status_description", sep='\t', file = f)
+            if parameters["DATATREATMENT"]['DropChannels'] != "":
+                to_drop = [p.strip() for p in parameters['DATATREATMENT']['DropChannels'].split(',')]
+                channels = [ch for ch in channels if ch.ChannName not in to_drop]
             ch_dict = dict()
             
             for c in channels:
@@ -247,6 +248,16 @@ try:
         t_end = t_max
     logging.info("Start time: {}, Stop time: {}".format(t_ref.isoformat(), t_end.isoformat()))
     logging.info("Earliest time: {}, Latest time: {}".format(t_min.isoformat(), t_max.isoformat()))
+    if parameters['DATATREATMENT']['StartTime'] != '':
+        t = datetime.strptime(parameters['DATATREATMENT']['StartTime'], "%Y-%m-%d %H:%M:%S.%f")
+        if t > t_ref : 
+            logging.info("Cropping start time: from {} to {}".format(t_ref.isoformat(), t.isoformat()))
+            t_ref = t
+    if parameters['DATATREATMENT']['EndTime'] != '':
+        t = datetime.strptime(parameters['DATATREATMENT']['EndTime'], "%Y-%m-%d %H:%M:%S.%f")
+        if t < t_end : 
+            logging.info("Cropping end time: from {} to {}".format(t_end.isoformat(), t.isoformat()))
+            t_end = t
 
 
     events = []
