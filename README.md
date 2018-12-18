@@ -17,7 +17,7 @@ If an additional command `BrainVision` is provided, the source files will be con
 usage: eegBidsCreator.py [-h] [-t, --task taskId] [-a, --acquisition acqId]
                          [-s, --session sesId] [-r, --run, runId]
                          [-j, --json eegJson] [-o, --output OUTDIR]
-                         [--logfile [log.out]]
+                         [-c, --config [CONFIG_FILE]] [--logfile [log.out]]
                          [--log {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
                          [--version]
                          eegfile {BrainVision} ...
@@ -36,6 +36,8 @@ optional arguments:
   -r, --run, runId      Id of the run
   -j, --json eegJson    A json file with task description
   -o, --output OUTDIR   destination folder
+  -c, --config [CONFIG_FILE]
+                        Path to configuration file
   --logfile [log.out]   log file destination
   --log {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         logging level
@@ -59,11 +61,17 @@ optional arguments:
   --big_endian          Use big endian
 ```
 
+### Config File
+Several options are accessible by the configuration file, which is loaded by `-c <configuration file>`.
+The file follows a standard `ini` structture, with parameters and possible values are explained in the example file `eegBidsCreator.conf`. The parameters specification priority are as follows: `default < conf < cmd line`
+
 ### Example
 
 `python3 eegBidsCreator.py -t my_task "data_example/embla_data/" --log DEBUG BrainVision --format INT_16`
 
-`python3 eegBidsCreator.py -l task-my_task_eeg.json "data_example/embla_data/" --log DEBUG`
+`python3 eegBidsCreator.py -t task-my_task_eeg.json "data_example/embla_data/" --log DEBUG`
+
+`python3 eegBidsCreator.py -c eegBidsCreator.conf "data_example/embla_data/" --log DEBUG`
 
 ### Dependencies
 
