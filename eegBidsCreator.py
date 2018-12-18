@@ -303,6 +303,7 @@ try:
             else:
 #                print("\tn/a", file = f)
                 ch_id = 0
+                continue
             events.append({"Name": name,  "Time":time, "Channel": ch_id, "Span": ev.TimeSpan, "Location": loc})
 
             if parameters["DATATREATMENT"]["StartEvent"] == name and time > t_ref and time < t_ev_min:
@@ -323,7 +324,6 @@ try:
         for i, ch in enumerate(channels):
             for t in ch.Time:
                 events.append({"Name": "New Segment", "Time":t, "Channel": i, "Span":0., "Location":""})
-                print(events[-1])
     events.sort(key=lambda a: a["Time"])
     events.insert(0,{"Name": "New Segment", "Time":t_ref, "Channel": -1, "Span":0., "Location":""})
     if parameters.getboolean("DATATREATMENT","IgnoreOutOfTimeEvents"):
