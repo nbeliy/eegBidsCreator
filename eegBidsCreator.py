@@ -82,7 +82,8 @@ parameters['GENERAL'] = {"TaskId":"", "AcquisitionId":"", "SessionId":"", "RunId
 parameters['DATATREATMENT'] = {"DropChannels":"", "StartTime":"", "EndTime":"", 
                                 "StartEvent":"","EndEvent":"",
                                 "IgnoreOutOfTimeEvents":"yes",
-                                "MergeCommonEvents":"yes"}
+                                "MergeCommonEvents":"yes",
+                                "IncludeSegmentStart":"yes"}
 parameters['BRAINVISION']   = {"Encoding":"UTF-8", "DataFormat":"IEEE_FLOAT_32", "Endian":"Little"}
 
 #Reading configuration file
@@ -199,6 +200,8 @@ try:
     t_end   = metadata["RecordingInfo"]["StopTime"]
     t_min   = datetime.max
     t_max   = datetime.min
+    t_ev_min= datetime.max
+    t_ev_max= datetime.min
 
     logging.info("Creating channels.tsv file")
     with open(eegPath+"/"+prefix+"_channels.tsv", "w") as f:
@@ -261,52 +264,82 @@ try:
 
 
     events = []
-    logging.info("Creating events.tsv file")
+    logging.info("Reading events info")
+    if eegform == "embla":
+        from  Parcel.parcel import Parcel
+        evfile = glob.glob(parameters['GENERAL']['Path']+"/*.esedb")[0]
+        esedb = olefile.OleFileIO(evfile).openstream('Event Store/Events')
+        root = Parcel(esedb)
+        evs     = root.get("Events")
+        aux_l   = root.getlist("Aux Data")[0]
+        grp_l   = root.getlist("Event Groups")[0]
+        times   = root.getlist("EventsStartTimes")[0]
+        locat   = root.get("Locations", 0)
+            
+        for ev,time in zip(evs, times):
+            logging.debug("Event {}, at {}, loc. {}, aux. {} ".format(ev.EventID, time.strftime("%d/%m/%Y %H:%M:%S.%f"), ev.LocationIdx, ev.AuxDataID))
+            try :
+                loc = locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("SubType") 
+                ch  = ch_dict[loc]
+                dt = (time - ch.Time[0]).total_seconds()
+            except:
+                logging.warning("Channel '{}' not in the list of channels".format(loc))
+                ch = None
+                dt = float(ev.LocationIdx) 
+
+            dt = (time - t_ref).total_seconds()
+
+            try:
+                aux = aux_l.get("Aux", ev.AuxDataID).get("Sub Classification History").get("1")
+                name = aux.get("type")
+            except:
+                logging.warning("Can't get event name for index {}".format(ev.AuxDataID))
+                aux = None
+                name = "n/a"
+
+            if ch != None:
+#                print("\t%f"%(dt*ch.DBLsampling), file = f )
+                ch_id = channels.index(ch)
+            else:
+#                print("\tn/a", file = f)
+                ch_id = 0
+            events.append({"Name": name,  "Time":time, "Channel": ch_id, "Span": ev.TimeSpan, "Location": loc})
+
+            if parameters["DATATREATMENT"]["StartEvent"] == name and time > t_ref and time < t_ev_min:
+                t_ev_min = time
+                logging.info("Updated start time {} from event {}".format(time, name))
+            if parameters["DATATREATMENT"]["EndEvent"]   == name and time < t_end and time > t_ev_max:
+                t_ev_max = time
+                logging.info("Updated end time {} from event {}".format(time, name))
+            
+    else:
+        raise Exception("EEG format {} not implemented (yet)".format(eegform))
+
+    ##Treating events
+    if t_ev_min != datetime.max: t_ref = t_ev_min
+    if t_ev_max != datetime.min: t_end = t_ev_max
+
+    if parameters.getboolean("DATATREATMENT","IncludeSegmentStart"):
+        for i, ch in enumerate(channels):
+            for t in ch.Time:
+                events.append({"Name": "New Segment", "Time":t, "Channel": i, "Span":0., "Location":""})
+                print(events[-1])
+    events.sort(key=lambda a: a["Time"])
+    events.insert(0,{"Name": "New Segment", "Time":t_ref, "Channel": -1, "Span":0., "Location":""})
+    if parameters.getboolean("DATATREATMENT","IgnoreOutOfTimeEvents"):
+        events = [ev for ev in events if (ev["Time"] >= t_ref and ev["Time"] <= t_end) ]
+
+    logging.info("Creating events.tsv file")     
     with open(eegPath+"/"+prefix+"_events.tsv", "w") as f:
-        logging.info("Reading events info")
-        if eegform == "embla":
-            from  Parcel.parcel import Parcel
-            evfile = glob.glob(parameters['GENERAL']['Path']+"/*.esedb")[0]
-            print("onset", "duration", "trial_type", "responce_time", "value", "sample", sep='\t', file = f)
-            esedb = olefile.OleFileIO(evfile).openstream('Event Store/Events')
-            root = Parcel(esedb)
-            evs     = root.get("Events")
-            aux_l   = root.getlist("Aux Data")[0]
-            grp_l   = root.getlist("Event Groups")[0]
-            times   = root.getlist("EventsStartTimes")[0]
-            locat   = root.get("Locations", 0)
-                
-            for ev,time in zip(evs, times):
-                logging.debug("Event {}, at {}, loc. {}, aux. {} ".format(ev.EventID, time.strftime("%d/%m/%Y %H:%M:%S.%f"), ev.LocationIdx, ev.AuxDataID))
-                try :
-                    loc = locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("SubType") 
-                    ch  = ch_dict[loc]
-                    dt = (time - ch.Time[0]).total_seconds()
-                except:
-                    logging.warning("Channel '{}' not in the list of channels".format(loc))
-                    ch = None
-                    dt = float(ev.LocationIdx) 
-
-                dt = (time - t_ref).total_seconds()
-
-                try:
-                    aux = aux_l.get("Aux", ev.AuxDataID).get("Sub Classification History").get("1")
-                    name = aux.get("type")
-                except:
-                    logging.warning("Can't get event name for index {}".format(ev.AuxDataID))
-                    aux = None
-                    name = "n/a"
-
-                print("%.3f\t%.2f\t%s\tn/a\tn/a"% (dt, ev.TimeSpan, name), file = f, end="")
-                if ch != None:
-                    print("\t%f"%(dt*ch.DBLsampling), file = f )
-                    ch_id = channels.index(ch)
-                else:
-                    print("\tn/a", file = f)
-                    ch_id = 0
-                events.append({"Name": name,  "Time":time, "Channel": ch_id, "Span": ev.TimeSpan, "Location": loc})
-        else:
-            raise Exception("EEG format {} not implemented (yet)".format(eegform))
+        print("onset", "duration", "trial_type", "responce_time", "value", "sample", sep='\t', file = f)
+        for ev in events:
+            dt = (ev["Time"] - t_ref).total_seconds()
+            print("%.3f\t%.2f\t%s\tn/a\tn/a"% (dt, ev["Span"], ev["Name"]), file = f, end="")
+            if ev["Channel"] >= 0 :
+                print("\t%d"%int(dt*channels[ev["Channel"]].DBLsampling), file = f )
+            else : 
+                print("\tn/a", file = f )
+            
 
     outData = None
     if  parameters['GENERAL']['Conversion'] == "BrainVision":
@@ -326,10 +359,6 @@ try:
         outData.MarkerFile.OpenFile(outData.GetEncoding())
         outData.MarkerFile.SetFrequency(outData.GetFrequency())
         outData.MarkerFile.SetStartTime(t_ref)
-        logging.info("Writting new segment events")
-        for i,ch in enumerate(channels):
-            for t in ch.Time:
-                outData.MarkerFile.AddNewSegment(t, i+1)
         logging.info("Writting proper events")
         for ev in events:
             outData.MarkerFile.AddMarker(ev["Name"], ev["Time"], ev["Span"], ev["Channel"], "")
