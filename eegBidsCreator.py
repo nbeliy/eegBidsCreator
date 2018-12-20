@@ -7,6 +7,8 @@ import time as tm
 from DataStructure.Record import ParceRecording
 from DataStructure.BrainVision.BrainVision import BrainVision
 
+from DataStructure.EDF.EDF import EDF
+
 import shutil
 
 
@@ -65,6 +67,7 @@ group_bv.add_argument('--format', dest='bv_format', choices=['IEEE_FLOAT_32', 'I
 group_bv.add_argument('--big_endian', dest='bv_endian', action="store_true", help='Use big endian')
 
 
+group_edf = subparsers.add_parser('EDF', help='Conversion to EDF format')
 
 args = parser.parse_args()
 
@@ -351,7 +354,7 @@ try:
 
         logging.info("Creating eeg.vhdr header file")
         for ch in channels:
-            outData.Header.CommonInfo.AddFrequency(int(ch.DBLsampling))
+            outData.AddFrequency(int(ch.DBLsampling))
             outData.AddChannel(ch.ChannName, '', ch.Gain, ch.CalUnit, "{} at {}".format(ch.SigMainType, ch.SigSubType ))
         outData.Header.write()
         
@@ -383,7 +386,33 @@ try:
                 else:
                     l_data.append(ch.getValueVector(t_s, t_e, freq_mult=int(outData.GetFrequency()/ch.DBLsampling), raw = True ))
             outData.DataFile.WriteBlock(l_data)
+    elif parameters['GENERAL']['Conversion'] == "EDF":
+        logging.info("Converting to EDF+ format")
+        outData = EDF(eegPath, prefix)
+        logging.info("Creating events.edf file")
+        outData.Patient["Code"] = metadata["PatientInfo"]["ID"]
+        if "Gender" in metadata["PatientInfo"]:
+            outData.Patient["Sex"] = "F" if metadata["PatientInfo"]["Gender"] == 1 else "M"
+        if "DateOfBirth" in metadata["PatientInfo"]:
+            outData.Patient["Birthdate"] = metadata["PatientInfo"]["DateOfBirth"].date()
 
+        name = ""
+        if "FirstName" in metadata["PatientInfo"] and metadata["PatientInfo"]["FirstName"] != None:
+            name += metadata["PatientInfo"]["FirstName"]+" "
+        if "MiddleName" in metadata["PatientInfo"] and metadata["PatientInfo"]["MiddleName"] != None:
+            name += metadata["PatientInfo"]["MiddleName"]+" "
+        if "LastName" in metadata["PatientInfo"] and metadata["PatientInfo"]["LastName"] != None:
+            name += metadata["PatientInfo"]["LastName"]+" "
+        outData.Patient["Name"] = name.strip()
+        
+        outData.Record["StartDate"] = metadata["RecordingInfo"]["StartTime"] 
+        outData.Record["Code"]  = metadata["RecordingInfo"]["Type"]
+        outData.Record["Equipment"] = metadata["Device"]["DeviceID"]
+        outData.StartTime = t_ref
+
+        for ev in events:
+            outData.AddEvent(ev["Name"], ev["Time"], ev["Span"], ev["Channel"], "")
+        outData.WriteEvents()
             
 
     logging.info("All done. Took {} secons".format(tm.process_time()))
