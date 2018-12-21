@@ -409,11 +409,39 @@ try:
         outData.Record["Code"]  = metadata["RecordingInfo"]["Type"]
         outData.Record["Equipment"] = metadata["Device"]["DeviceID"]
         outData.StartTime = t_ref
+        outData.RecordDuration = 10.
 
         for ev in events:
             outData.AddEvent(ev["Name"], ev["Time"], ev["Span"], ev["Channel"], "")
         outData.WriteEvents()
             
+        for ch in channels:
+            outData.AddChannel(ch.ChannName, ch.Gain, ch.CalUnit, "", int(ch.DBLsampling), ch.SigMainType)
+        outData.WriteHeader()
+        t_e = t_ref
+        t_step = 3600
+        if t_step%outData.RecordDuration != 0:
+            t_step = outData.RecordDuration*(t_step//outData.RecordDuration+1)
+        while True:
+            t_s = t_e
+            t_e = t_e + timedelta(0,t_step,0)
+            if t_s >= t_end: break
+            if t_e > t_end: 
+                t_e = t_end
+                t_step = (t_e - t_s).total_seconds()
+                if t_step%outData.RecordDuration != 0:
+                    t_step = outData.RecordDuration*(t_step//outData.RecordDuration+1)
+                    t_e = t_s + timedelta(0,t_step,0)
+
+            logging.info("Timepoint: {}".format(t_s.isoformat()))
+            logging.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
+            l_data = []
+            for ch in channels:
+                l_data.append(ch.getValueVector(t_s, t_e, raw = True ))
+            outData.WriteDataBlock(l_data, t_s)
+        outData.Close()
+
+        
 
     logging.info("All done. Took {} secons".format(tm.process_time()))
 
