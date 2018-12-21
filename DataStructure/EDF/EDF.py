@@ -78,8 +78,8 @@ class EDF(object):
             return
         f  = open(self.__path+"/"+self.__prefix+"_events.edf", "wb")
         self.__writeUpperBlock(f,1)
-        f.seek(236,1)
-        f.write("{:<8d}".format(-1).encode("ascii"))
+        f.seek(236,0)
+        f.write("{:<8d}".format(1).encode("ascii"))
         f.seek(256)
         f.write("{:<16s}".format("EDF Annotations").encode("ascii"))
         f.write("{:<80s}".format(" ").encode("ascii"))
