@@ -52,8 +52,29 @@ class Record(object):
             "__task", "__acquisition", "__session", "__run", 
             "Channels",
             "Events",
-            "Frequency",
-            "__path", "__prefix"]
+            "__Frequency",
+            "__path", "__prefix"
+            ]
+    #__JSONfields contains the full list of fields in JSON with a tags:
+    #   0 - required
+    #   1 - recommended
+    #   2 - optional
+    __JSONfields = {"TaskName": 0, "TaskDescription": 1, "Instructions":1,
+        "CogAtlasID":1, "CogPOID":1, 
+        "InstitutionName":1, "InstitutionAddress":1, "InstitutionalDepartementName":1,
+        "DeviceSerialNumber":1,
+        "HeadCircumference":1,
+        "SamplingFrequency":0,
+        "EEGChannelCount":0, "EOGChannelCount":1, "ECGChannelCount":1, "EMGChannelCount":1, "MiscChannelCount":2, "TriggerChannelCount":1,
+        "EEGReference":0, "PowerLineFrequency":0, "EEGGround":1,
+        "EEGPlacementScheme":1,
+        "Manufacturer":1, "ManufacturersModelName":2, "CapManufacturer":1, "CapManufacturersModelName":2,
+        "HardwareFilters":2, "SoftwareFilters":0, 
+        "RecordingDuration":1, 
+        "RecordingType":1, "EpochLenght":1,
+        "SoftwareVersions":1,
+        "SubjectArtefactDescription":2}
+
     def __init__(self, task, session = "", acquisition = "", run = ""):
         self.JSONdata       = dict()
         self.SubjectInfo    = Subject()
@@ -70,7 +91,7 @@ class Record(object):
 
         self.Channels       = []
         self.Events         = []
-        self.Frequency      = 1
+        self.__Frequency    = 1
 
     def Prefix(self):
         return self.__prefix
@@ -98,7 +119,28 @@ class Record(object):
         self.__path = path
         return path
         
-    
+    @property
+    def Frequency(self): return self.__Frequency
+    @Frequency.setter
+    def Frequency(self, value):
+        if not isinstance(value, int):
+            raise TypeError("Only integer frequency is supported")
+        if value <= 0 :
+            raise ValueError("Frequency must be positive non null value")
+        self.__Frequency = value
+
+    def AddFrequency(self, value):
+        if not isinstance(value, int):
+            raise TypeError("Only integer frequency is supported")
+        if value <= 0 :
+            raise ValueError("Frequency must be positive non null value")
+        if self.__Frequency == 0 or value == self.__Frequency:
+            self.__Frequency = value
+            return
+        lcd = min(self.__Frequency, value)
+        while (lcd % value != 0) or (lcd % self.__Frequency != 0):
+            lcd += 1
+        self.__Frequency = lcd
 
     @property
     def StartTime(self):
@@ -143,3 +185,26 @@ class Record(object):
         self.DeviceInfo.Model= model
         self.DeviceInfo.Version = version
 
+    def UpdateJSON(self):
+        if not ("TaskName" in self.JSONdata):
+            self.JSONdata["TaskName"] = self.__task
+        if not ("DeviceSerialNumber" in self.JSONdata) and self.DeviceInfo.ID != "":
+            self.JSONdata["DeviceSerialNumber"] = self.DeviceInfo.ID
+        if not ("Manufacturer" in self.JSONdata) and self.DeviceInfo.Manufactor != "":
+            self.JSONdata["Manufacturer"] = self.DeviceInfo.Manufactor
+        if not ("ManufacturersModelName" in self.JSONdata) and self.DeviceInfo.Model != "":
+            self.JSONdata["ManufacturersModelName"] = self.DeviceInfo.Model
+        if not ("HeadCircumference" in self.JSONdata) and self.SubjectInfo.Head > 0:
+            self.JSONdata["HeadCircumference"] = self.SubjectInfo.Head
+        self.JSONdata["SamplingFrequency"] = self.__Frequency
+        if not ("RecordingDuration" in self.JSONdata):
+            self.JSONdata["RecordingDuration"] = (self.__StopTime - self.__StartTime).total_seconds()
+
+    def CheckJSON(self):
+        diff = [ k for k in self.__JSONfields if k not in self.JSONdata ]
+        res1 = [k for k in diff if self.__JSONfields[k] == 0 ]
+        res2 = [k for k in diff if self.__JSONfields[k] == 1 ]
+        res3 = [k for k in diff if self.__JSONfields[k] == 2 ]
+        res4 = [ k for k in self.JSONdata if k not in self.__JSONfields ]
+        return (res1,res2,res3,res4)
+            
