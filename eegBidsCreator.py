@@ -5,6 +5,8 @@ import tempfile
 from datetime import datetime, timedelta
 import time as tm
 
+from DataStructure.Generic.Record import Record as GRecord
+
 from DataStructure.Record import ParceRecording
 from DataStructure.BrainVision.BrainVision import BrainVision
 
@@ -40,7 +42,7 @@ parser.add_argument('-s, --session',
 parser.add_argument('-r, --run,',
     metavar='runId', dest='run',
     help = 'Id of the run' )
-parser.add_argument('-j, --json', nargs=1,
+parser.add_argument('-j, --json', 
     metavar='eegJson', dest='eegJson',
     help = "A json file with task description"
     )
@@ -72,7 +74,6 @@ group_bv.add_argument('--big_endian', dest='bv_endian', action="store_true", hel
 group_edf = subparsers.add_parser('EDF', help='Conversion to EDF format')
 
 args = parser.parse_args()
-
 
 parameters = configparser.ConfigParser()
 #Making keys case-sensitive
@@ -120,7 +121,7 @@ eegform = None
 Setup logging.
 Logfile will be stored into temporary directory first, then moved to output directory.
 '''
-tmpDir = tempfile.mkdtemp(prefix=os.sys.argv[0])
+tmpDir = tempfile.mkdtemp(prefix=os.sys.argv[0]+"_")
 
 #logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
 logFormatter = logging.Formatter("%(levelname)s:%(asctime)s: %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
@@ -164,19 +165,38 @@ try:
     else:
         raise Exception("Unable determine eeg format")
     
-    if len(parameters['GENERAL']['JsonFile']) == 1:
-        parameters['GENERAL']['JsonFile'] = os.path.realpath(parameters['GENERAL']['JsonFile'][0])
+    JSONdata = dict()
+    print( parameters['GENERAL']['JsonFile'])
+    if parameters['GENERAL']['JsonFile'] != "":
+        parameters['GENERAL']['JsonFile'] = os.path.realpath(parameters['GENERAL']['JsonFile'])
         Logger.info("JSON File: {}".format(parameters['GENERAL']['JsonFile']))
         if not os.path.isfile(parameters['GENERAL']['JsonFile']):
             raise Exception("File {} don't exists".format(parameters['GENERAL']['JsonFile']))
-        f = open(parameters['GENERAL']['JsonFile'])
-        parameters['GENERAL']['JsonFile'] = json.load(f.read())
-        f.close()
+        with open(parameters['GENERAL']['JsonFile']) as f:
+             JSONdata = json.load(f)
+        t = JSONdata["TaskName"]
+        if t != parameters['GENERAL']['TaskId']:
+            t = ''.join(filter(str.isalnum, t))
+            if parameters['GENERAL']['TaskId'] == "":
+                parameters['GENERAL']['TaskId'] = t
+            elif t != parameters['GENERAL']['TaskId']:
+                raise Exception("Task name in JSON '{}' mismach given Task name '{}'".format(t, parameters['GENERAL']['TaskId']))
 
     Logger.info("Output: {}".format(parameters['GENERAL']['OutputFolder']))
     if not os.path.isdir(parameters['GENERAL']['Path']):
         raise Exception("Path {} is not valid".format(parameters['GENERAL']['Path']))
-    metadata = dict()
+
+    recording = GRecord(task = parameters['GENERAL']['TaskId'], 
+                        session = parameters['GENERAL']['SessionId'], 
+                        acquisition = parameters['GENERAL']['AcquisitionId'],
+                        run = parameters['GENERAL']['RunId'])
+    eegPath = "/"
+    srcPath = "/"
+    if parameters['GENERAL']['JsonFile'] != "":
+        with open(parameters['GENERAL']['JsonFile']) as f:
+            recording.JSONdata = JSONdata
+        if "SamplingFrequency" in recording.JSONdata:
+            recording.Frequency = recording.JSONdata["SamplingFrequency"]
     
     if eegform == "embla":
         Logger.info("Detected {} format".format(eegform))
@@ -186,22 +206,42 @@ try:
         esrc = olefile.OleFileIO(parameters['GENERAL']['Path']+'/Recording.esrc').openstream('RecordingXML')
         xml  = esrc.read().decode("utf_16_le")[2:-1]
         metadata = ParceRecording(xml)
+        name = ""
+        if metadata["PatientInfo"]["FirstName"] != None:
+            name += metadata["PatientInfo"]["FirstName"]
+        if metadata["PatientInfo"]["MiddleName"]!= None:
+            name += " "+metadata["PatientInfo"]["MiddleName"]
+        if metadata["PatientInfo"]["LastName"]  != None:
+            name += " "+metadata["PatientInfo"]["LastName"]
+        name = name.strip()
+        birth = datetime.min
+        if "DateOfBirth" in metadata["PatientInfo"]:
+            birth = metadata["PatientInfo"]["DateOfBirth"]
+        recording.StartTime = metadata["RecordingInfo"]["StartTime"]
+        recording.StopTime  = metadata["RecordingInfo"]["StopTime"]
+        recording.SetSubject (id = metadata["PatientInfo"]["ID"],
+                            name  = name,
+                            birth  = birth,
+                            gender = metadata["PatientInfo"]["Gender"],
+                            notes  = metadata["PatientInfo"]["Notes"],
+                            height = metadata["PatientInfo"]["Height"],
+                            weight = metadata["PatientInfo"]["Weight"])
+        recording.SetDevice(    type=metadata["Device"]["DeviceTypeID"],
+                                id  = metadata["Device"]["DeviceID"],
+                                name= metadata["Device"]["DeviceName"],
+                                manufactor= "RemLogic")
+        recording.StartTime = metadata["RecordingInfo"]["StartTime"]
+        recording.StopTime  = metadata["RecordingInfo"]["StopTime"]
         esrc.close()
-        Logger.info("Patient Id: {}".format(metadata["PatientInfo"]["ID"]))
+        Logger.info("Patient Id: {}".format(recording.SubjectInfo.ID))
         
     else:
         raise Exception("EEG format {} not implemented (yet)".format(eegform))
-
-
     
-    eegPath = parameters['GENERAL']['OutputFolder']+"/sub-"+metadata["PatientInfo"]["ID"]
-    srcPath = parameters['GENERAL']['OutputFolder']+"/source/sub-"+metadata["PatientInfo"]["ID"]
-    if parameters['GENERAL']['SessionId'] != '':
-        eegPath = eegPath+"/ses-"+parameters['GENERAL']['SessionId']+"/eeg"
-        srcPath = srcPath+"/ses-"+parameters['GENERAL']['SessionId']+"/eeg"
-    else:
-        eegPath = eegPath+"/eeg"
-        srcPath = srcPath+"/eeg"
+    recording.ResetPrefix()
+    recording.ResetPath()
+    eegPath = parameters['GENERAL']['OutputFolder']+"/"+ recording.Path()
+    srcPath = parameters['GENERAL']['OutputFolder']+"/source/"+ recording.Path()
     Logger.info("Creating output directory {}".format(eegPath))
     try:
         os.makedirs(eegPath)
@@ -215,29 +255,23 @@ try:
     except OSError:
         Logger.warning("Directory already exists. Contents will be erased.")
         rmdir(srcPath)
-    prefix = "sub-"+metadata["PatientInfo"]["ID"]
-    if parameters['GENERAL']['SessionId'] != "": prefix = prefix + "_ses-"+parameters['GENERAL']['SessionId']
-    prefix = prefix + "_task-" + parameters['GENERAL']['TaskId']
-    if parameters['GENERAL']['AcquisitionId'] != "": prefix = prefix + "_acq-"+parameters['GENERAL']['AcquisitionId']
-    if parameters['GENERAL']['RunId'] != "": prefix = prefix + "_run-"+parameters['GENERAL']['RunId']
     
     Logger.info("Copiyng data to folders")
-    if parameters['GENERAL']['JsonFile'] != '':
-        shutil.copy2(parameters['GENERAL']['JsonFile'], eegPath+"/"+prefix+"_eeg.json")
     if dirName != "":
         shutil.copytree(parameters['GENERAL']['Path'], srcPath+"/"+dirName)
     else:
         shutil.copy2(parameters['GENERAL']['Path'], srcPath)
+    with open(eegPath+"/"+recording.Prefix()+".conf", 'w') as configfile: parameters.write(configfile)
 
-    t_ref   = metadata["RecordingInfo"]["StartTime"]
-    t_end   = metadata["RecordingInfo"]["StopTime"]
+    t_ref   = recording.StartTime
+    t_end   = recording.StopTime
     t_min   = datetime.max
     t_max   = datetime.min
     t_ev_min= datetime.max
     t_ev_max= datetime.min
 
     Logger.info("Creating channels.tsv file")
-    with open(eegPath+"/"+prefix+"_channels.tsv", "w") as f:
+    with open(eegPath+"/"+recording.Prefix()+"_channels.tsv", "w") as f:
         if eegform == "embla":
             from DataStructure.Channel import Channel
             channels = [Channel(c) for c in glob.glob(parameters['GENERAL']['Path']+"/*.ebm")]
@@ -274,13 +308,19 @@ try:
                 if c.Time[-1]+timedelta(0, c._seqSize[-1]*c.DBLsampling, 0) > t_max:
                     t_max = c.Time[-1]+timedelta(0, c._seqSize[-1]/c.DBLsampling, 0) 
                     Logger.debug("New t_max {}".format(t_max.isoformat()))
+                if int(c.DBLsampling) != recording.Frequency:
+                    Logger.debug("Channel '{}': Mismatch common sampling frequency {} Hz".format(c.ChannName, recording.Frequency))
+                    fr = recording.Frequency
+                    recording.AddFrequency(int(c.DBLsampling))
+                    if fr != recording.Frequency:
+                        Logger.info("Updated common sampling frequency to {} Hz".format(recording.Frequency))
                     
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
 
-    if t_ref == None:
+    if t_ref == datetime.min:
         t_ref = t_min
-    if t_end == None or t_end < t_max:
+    if t_end == datetime.min or t_end < t_max:
         t_end = t_max
     Logger.info("Start time: {}, Stop time: {}".format(t_ref.isoformat(), t_end.isoformat()))
     Logger.info("Earliest time: {}, Latest time: {}".format(t_min.isoformat(), t_max.isoformat()))
@@ -363,7 +403,7 @@ try:
         events = [ev for ev in events if (ev["Time"] >= t_ref and ev["Time"] <= t_end) ]
 
     Logger.info("Creating events.tsv file")     
-    with open(eegPath+"/"+prefix+"_events.tsv", "w") as f:
+    with open(eegPath+"/"+recording.Prefix()+"_events.tsv", "w") as f:
         print("onset", "duration", "trial_type", "responce_time", "value", "sample", sep='\t', file = f)
         for ev in events:
             dt = (ev["Time"] - t_ref).total_seconds()
@@ -373,18 +413,39 @@ try:
             else : 
                 print("\tn/a", file = f )
             
+    logging.info("Creating eeg.json file")
+    with open(eegPath+"/"+recording.Prefix()+"_eeg.json", "w") as f:
+        recording.UpdateJSON()
+        counter = {"EEGChannelCount":0, "EOGChannelCount":0, "ECGChannelCount":0, "EMGChannelCount":0, "MiscChannelCount":0}
+        for ch in channels:
+           if   ch.SigType == "EEG": counter["EEGChannelCount"] += 1
+           elif ch.SigType == "EOG": counter["EOGChannelCount"] += 1
+           elif ch.SigType == "ECG": counter["ECGChannelCount"] += 1
+           elif ch.SigType == "EMG": counter["EMGChannelCount"] += 1
+           else: counter["MiscChannelCount"] += 1
+        recording.JSONdata.update(counter)
+        res = recording.CheckJSON()
+        if len(res[0]) > 0:
+            logging.warning("JSON: Missing next required fields: "+ str(res[0]))
+        if len(res[1]) > 0:
+            logging.info("JSON: Missing next recomennded fields: "+ str(res[1]))
+        if len(res[2]) > 0:
+            logging.debug("JSON: Missing next optional fields: "+ str(res[2]))
+        if len(res[3]) > 0:
+            logging.warning("JSON: Contains next non BIDS fields: "+ str(res[3]))
+        json.dump(recording.JSONdata, f, skipkeys=False, indent="  ", separators=(',',':'))
 
     outData = None
     if  parameters['GENERAL']['Conversion'] == "BrainVision":
         Logger.info("Converting to BrainVision format")
-        outData = BrainVision(eegPath, prefix)
+        outData = BrainVision(eegPath, recording.Prefix())
         outData.SetEncoding(parameters['BRAINVISION']['Encoding'])
         outData.SetDataFormat(parameters['BRAINVISION']['DataFormat'])
         outData.SetEndian(parameters['BRAINVISION']['Endian'] == "Little")
+        outData.AddFrequency(recording.Frequency)
 
         Logger.info("Creating eeg.vhdr header file")
         for ch in channels:
-            outData.AddFrequency(int(ch.DBLsampling))
             outData.AddChannel(ch.ChannName, '', ch.Gain, ch.CalUnit, "{} at {}".format(ch.SigMainType, ch.SigSubType ))
         outData.Header.write()
         
@@ -418,8 +479,9 @@ try:
             outData.DataFile.WriteBlock(l_data)
     elif parameters['GENERAL']['Conversion'] == "EDF":
         Logger.info("Converting to EDF+ format")
-        outData = EDF(eegPath, prefix)
         Logger.info("Creating events.edf file")
+        outData = EDF(eegPath, recording.Prefix())
+        logging.info("Creating events.edf file")
         outData.Patient["Code"] = metadata["PatientInfo"]["ID"]
         if "Gender" in metadata["PatientInfo"]:
             outData.Patient["Sex"] = "F" if metadata["PatientInfo"]["Gender"] == 1 else "M"
@@ -483,8 +545,8 @@ except Exception as e:
     ex_code = 1
 
 try:
-    shutil.copy2(tmpDir+"/logfile", eegPath+"/"+prefix+".log") 
-    shutil.copy2(tmpDir+"/configuration", eegPath+"/"+prefix+".conf") 
+    shutil.copy2(tmpDir+"/logfile", eegPath+"/"+recording.Prefix()+".log") 
+    shutil.copy2(tmpDir+"/configuration", eegPath+"/"+recording.Prefix()+".conf") 
     rmdir(tmpDir)
     shutil.rmtree(tmpDir)
 except:
