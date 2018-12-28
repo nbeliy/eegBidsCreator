@@ -164,6 +164,8 @@ try:
     if parameters['GENERAL']['JsonFile'] != "":
         with open(parameters['GENERAL']['JsonFile']) as f:
             recording.JSONdata = JSONdata
+        if "SamplingFrequency" in recording.JSONdata:
+            recording.Frequency = recording.JSONdata["SamplingFrequency"]
     
     if eegform == "embla":
         logging.info("Detected {} format".format(eegform))
@@ -277,6 +279,12 @@ try:
                 if c.Time[-1]+timedelta(0, c._seqSize[-1]*c.DBLsampling, 0) > t_max:
                     t_max = c.Time[-1]+timedelta(0, c._seqSize[-1]/c.DBLsampling, 0) 
                     logging.debug("New t_max {}".format(t_max.isoformat()))
+                if int(c.DBLsampling) != recording.Frequency:
+                    logging.debug("Channel '{}': Mismatch common sampling frequency {} Hz".format(c.ChannName, recording.Frequency))
+                    fr = recording.Frequency
+                    recording.AddFrequency(int(c.DBLsampling))
+                    if fr != recording.Frequency:
+                        logging.info("Updated common sampling frequency to {} Hz".format(recording.Frequency))
                     
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
@@ -378,18 +386,7 @@ try:
             
     logging.info("Creating eeg.json file")
     with open(eegPath+"/"+recording.Prefix()+"_eeg.json", "w") as f:
-        if not ("DeviceSerialNumber" in recording.JSONdata) and recording.DeviceInfo.ID != "":
-            recording.JSONdata["DeviceSerialNumber"] = recording.DeviceInfo.ID
-        if not ("Manufacturer" in recording.JSONdata) and recording.DeviceInfo.Manufactor != "":
-            recording.JSONdata["Manufacturer"] = recording.DeviceInfo.Manufactor
-        if not ("ManufacturersModelName" in recording.JSONdata) and recording.DeviceInfo.Model != "":
-            recording.JSONdata["ManufacturersModelName"] = recording.DeviceInfo.Model
-        if not ("HeadCircumference" in recording.JSONdata) and recording.SubjectInfo.Head > 0:
-            recording.JSONdata["HeadCircumference"] = recording.SubjectInfo.Head
-        if not ("SoftwareFilters" in recording.JSONdata)
-            recording.JSONdata["SoftwareFilters"] = "n/a"
-        
-        recording.JSONdata["SamplingFrequency"] = 1.
+        recording.UpdateJSON()
         counter = {"EEGChannelCount":0, "EOGChannelCount":0, "ECGChannelCount":0, "EMGChannelCount":0, "MiscChannelCount":0}
         for ch in channels:
            if   ch.SigType == "EEG": counter["EEGChannelCount"] += 1
@@ -398,6 +395,15 @@ try:
            elif ch.SigType == "EMG": counter["EMGChannelCount"] += 1
            else: counter["MiscChannelCount"] += 1
         recording.JSONdata.update(counter)
+        res = recording.CheckJSON()
+        if len(res[0]) > 0:
+            logging.warning("JSON: Missing next required fields: "+ str(res[0]))
+        if len(res[1]) > 0:
+            logging.info("JSON: Missing next recomennded fields: "+ str(res[1]))
+        if len(res[2]) > 0:
+            logging.debug("JSON: Missing next optional fields: "+ str(res[2]))
+        if len(res[3]) > 0:
+            logging.warning("JSON: Contains next non BIDS fields: "+ str(res[3]))
         json.dump(recording.JSONdata, f, skipkeys=False, indent="  ", separators=(',',':'))
 
     outData = None
@@ -407,10 +413,10 @@ try:
         outData.SetEncoding(parameters['BRAINVISION']['Encoding'])
         outData.SetDataFormat(parameters['BRAINVISION']['DataFormat'])
         outData.SetEndian(parameters['BRAINVISION']['Endian'] == "Little")
+        outData.AddFrequency(recording.Frequency)
 
         logging.info("Creating eeg.vhdr header file")
         for ch in channels:
-            outData.AddFrequency(int(ch.DBLsampling))
             outData.AddChannel(ch.ChannName, '', ch.Gain, ch.CalUnit, "{} at {}".format(ch.SigMainType, ch.SigSubType ))
         outData.Header.write()
         
