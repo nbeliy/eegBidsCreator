@@ -1,5 +1,6 @@
 import struct
 from datetime import datetime
+import sys
 
 from DataStructure.Channel import Channel
 from DataStructure.Channel import Marks
@@ -19,3 +20,14 @@ for c in ch:
     except: pass
     print("##############################")
 
+def GetExtrema(channel, sequence, raw = False):
+    v_min = sys.maxsize
+    v_max = -v_min
+    for j in range(0, channel.getSize(sequence)):
+        v = channel.getValue(j, sequence, raw = raw)
+        if v < v_min:
+            v_min = v
+        if v > v_max:
+            v_max = v 
+        
+    return (v_min, v_max)

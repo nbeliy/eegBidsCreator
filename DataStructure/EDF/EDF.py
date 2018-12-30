@@ -1,23 +1,52 @@
 from datetime import datetime, date, timedelta
-import struct
+import struct, math
 
 from fractions import Fraction
 from decimal   import Decimal
 
 class Channel(object):
-    __slots__ = ["Type", "Specification", "Unit", "Gain", "Scale", "Filter", "Frequency"]
+    __slots__ = ["Type", "Specification", "Unit", "Filter", "Frequency", "__phMin", "__phMax", "__digMin", "__digMax"]
+    __prefixes = {24:'Y', 21:'Z', 18:'E', 15:'P', 12:'T', 9:'G', 6:'M', 3:'K', 2:'H', 1:'D', 0:'', -1:'d', -2:'c', -3:'m', -6:'u', -9:'n', -12:'p', -15:'f', -18:'a', -21:'z', -24:'y'}
+    __orders   = {'Y':24, 'Z':21, 'E':18, 'P':15, 'T':12,'G': 9,'M': 6,'K': 3,'H': 2,'D': 1, 0:'', 'd':-1, 'c':-2, 'm':-3, 'u':-6, 'n':-9, 'p':-12, 'f':-15, 'a':-18, 'z':21, 'y':-24}
     
     def __init__(self, name, resolution, unit, comments, frequency, Type):
         #dec = Fraction(Decimal(str(resolution)))
         self.Type = Type
         self.Specification = name
         self.Unit = unit
-        #self.Gain = resolution #dec.numerator
-        self.Gain  = resolution*32.767
-        self.Scale = 32767
-#        self.Scale = 1000 #dec.denominator
+        self.__digMin = -32768
+        self.__digMax =  32767
+        self.__phMin  = -( self.__digMax - self.__digMin)*resolution/2
+        self.__phMax  = -self.__phMin 
         self.Filter = comments
         self.Frequency = frequency
+
+    def GetPhysExtrema(self):
+        return (self.__phMin, self.__phMax)
+
+    def GetDigExtrema(self):
+        return (self.__digMin, self.__digMax)
+
+    def SetPhysExtrema(self, minimum, maximum):
+        if minimum >= maximum:
+            raise Exception("EDF: Phisical min {} must be less tham max {}".format(minimum, maximum))
+        self.__phMin = minimum
+        self.__phMax = maximum
+
+        if self.Unit != "":
+            scale = (self.__phMax - self.__phMin)/(self.__digMax - self.__digMin)
+            base = 0
+            if len(self.Unit) == 2 and self.Unit[0] in self.__orders:
+                base = self.__orders[self.Unit[0]]
+                self.Unit = self.Unit[1:]
+            magn  = math.floor(math.log10(scale))/3
+            if magn > 0 : magn = int(magn-0.5)*3
+            else: magn = int(magn+0.5)*3
+            self.Unit = self.__prefixes[magn+base]+self.Unit
+            self.__phMin /= 10**magn
+            self.__phMax /= 10**magn
+         
+        
 
     def Label(self):
         if (self.Type in ["EEG", "ECG", "EOG", "ERG", "EMG", "MEG", "MCG"]):
@@ -129,22 +158,19 @@ class EDF(object):
         #[8]    Physical minimum
         self.__file.write("{:<8d}".format(-32768).encode("ascii"))
         for ch in self.Channels:
-            print(ch.Gain)
-            self.__file.write("{:<8f}".format(-ch.Gain).encode("ascii")[:8])
+            self.__file.write("{:<8f}".format(ch.GetPhysExtrema()[0]).encode("ascii")[:8])
         #[8]    Physical maximum
         self.__file.write("{:<8d}".format(32767).encode("ascii"))
         for ch in self.Channels:
-            self.__file.write("{:<8f}".format(ch.Gain).encode("ascii")[:8])
+            self.__file.write("{:<8f}".format(ch.GetPhysExtrema()[1]).encode("ascii")[:8])
         #[8]    Digital Minimum
         self.__file.write("{:<8d}".format(-32768).encode("ascii"))
         for ch in self.Channels:
-            self.__file.write("{:<8d}".format(-32768).encode("ascii"))
-            #self.__file.write("{:<8d}".format(-ch.Scale).encode("ascii")[:8])
+            self.__file.write("{:<8d}".format(ch.GetDigExtrema()[0]).encode("ascii"))
         #[8]    Digital maximum
         self.__file.write("{:<8d}".format(32767).encode("ascii"))
         for ch in self.Channels:
-            self.__file.write("{:<8d}".format(32767).encode("ascii"))
-            #self.__file.write("{:<8d}".format(ch.Scale).encode("ascii")[:8])
+            self.__file.write("{:<8d}".format(ch.GetDigExtrema()[1]).encode("ascii"))
         #[80]   Prefiltering 
         self.__file.write("{:<80s}".format(" ").encode("ascii"))
         for ch in self.Channels:
@@ -195,8 +221,7 @@ class EDF(object):
             self.__file.write(t_stamp)
             for d,ch in zip(data,self.Channels):
                 block_size = int(self.RecordDuration*ch.Frequency)
-                if records != len(d)/block_size:
-                    print(ch.Specification, ch.Frequency, records, len(d)/block_size)
+                #if records != len(d)/block_size:
                 #self.__file.write(struct.pack("<"+"h"*block_size, *d[0:block_size]))
                 self.__file.write(struct.pack("<"+"h"*block_size, *d[r*block_size:(r+1)*block_size]))
             self.__records += 1
