@@ -42,8 +42,8 @@ Marks = {
     b'\x88\x00\x00\x00' : Field("SCount", "I", Unique = True),
     b'\x89\x00\x00\x00' : Field("DBLsampling", "d", Unique = True),
     b'\x8a\x00\x00\x00' : Field("RateCorr", "d", Unique = True),
-    b'\x8b\x00\x00\x00' : Field("RawRange", "h", Unique = True),
-    b'\x8c\x00\x00\x00' : Field("TransRange", "h", Unique = True),
+    b'\x8b\x00\x00\x00' : Field("RawRange", "d", Unique = True),
+    b'\x8c\x00\x00\x00' : Field("TransRange", "d", Unique = True),
     b'\x8d\x00\x00\x00' : Field("Channel_32", "h", Unique = True),
 
     b'\x90\x00\x00\x00' : Field("ChannName", "x", IsText = True, Unique = True),

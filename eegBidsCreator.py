@@ -481,7 +481,7 @@ try:
         Logger.info("Converting to EDF+ format")
         Logger.info("Creating events.edf file")
         outData = EDF(eegPath, recording.Prefix())
-        logging.info("Creating events.edf file")
+        Logger.info("Creating events.edf file")
         outData.Patient["Code"] = metadata["PatientInfo"]["ID"]
         if "Gender" in metadata["PatientInfo"]:
             outData.Patient["Sex"] = "F" if metadata["PatientInfo"]["Gender"] == 1 else "M"
@@ -509,6 +509,7 @@ try:
             
         for ch in channels:
             outData.AddChannel(ch.ChannName, ch.Gain, ch.CalUnit, "", int(ch.DBLsampling), ch.SigMainType)
+            outData.Channels[-1].SetPhysExtrema(ch.RawRange[0], ch.RawRange[1])
         outData.WriteHeader()
         t_e = t_ref
         t_step = 3600
