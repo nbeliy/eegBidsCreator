@@ -446,7 +446,7 @@ try:
 
         Logger.info("Creating eeg.vhdr header file")
         for ch in channels:
-            outData.AddChannel(ch.ChannName, '', ch.Gain, ch.CalUnit, "{} at {}".format(ch.SigMainType, ch.SigSubType ))
+            outData.AddChannel(ch.ChannName, '', ch.Scale(), ch.Unit(), "{} at {}".format(ch.SigMainType, ch.SigSubType ))
         outData.Header.write()
         
         Logger.info("Creating eeg.vmrk markers file")
@@ -508,8 +508,9 @@ try:
         outData.WriteEvents()
             
         for ch in channels:
-            outData.AddChannel(ch.ChannName, ch.Gain, ch.CalUnit, "", int(ch.DBLsampling), ch.SigMainType)
-            outData.Channels[-1].SetPhysExtrema(ch.RawRange[0], ch.RawRange[1])
+            outData.AddChannel(ch.ChannName, ch.Scale(), ch.Unit(), "", int(ch.DBLsampling), ch.SigMainType)
+            outData.Channels[-1].SetDigExtrema (ch.GetDigitalExtrema()[0], ch.GetDigitalExtrema()[1],  do_prefix = False)
+            outData.Channels[-1].SetPhysExtrema(ch.GetPhysicalExtrema()[0],ch.GetPhysicalExtrema()[1], do_prefix = False)
         outData.WriteHeader()
         t_e = t_ref
         t_step = 3600
