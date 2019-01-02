@@ -8,14 +8,18 @@ class Channel(object):
     __slots__ = ["Type", "Specification", "Unit", "Filter", "Frequency", "__phMin", "__phMax", "__digMin", "__digMax"]
     __prefixes = {24:'Y', 21:'Z', 18:'E', 15:'P', 12:'T', 9:'G', 6:'M', 3:'K', 2:'H', 1:'D', 0:'', -1:'d', -2:'c', -3:'m', -6:'u', -9:'n', -12:'p', -15:'f', -18:'a', -21:'z', -24:'y'}
     __orders   = {'Y':24, 'Z':21, 'E':18, 'P':15, 'T':12,'G': 9,'M': 6,'K': 3,'H': 2,'D': 1, 0:'', 'd':-1, 'c':-2, 'm':-3, 'u':-6, 'n':-9, 'p':-12, 'f':-15, 'a':-18, 'z':21, 'y':-24}
+    __MAXINT = 32767
+    __MININT = -32768
     
     def __init__(self, name, resolution, unit, comments, frequency, Type):
         #dec = Fraction(Decimal(str(resolution)))
         self.Type = Type
         self.Specification = name
+        if unit == "°":
+            unit = "deg"
         self.Unit = unit
-        self.__digMin = -32768
-        self.__digMax =  32767
+        self.__digMin = self.__MININT
+        self.__digMax =  self.__MAXINT
         self.__phMin  = -( self.__digMax - self.__digMin)*resolution/2
         self.__phMax  = -self.__phMin 
         self.Filter = comments
@@ -27,12 +31,23 @@ class Channel(object):
     def GetDigExtrema(self):
         return (self.__digMin, self.__digMax)
 
-    def SetPhysExtrema(self, minimum, maximum):
+    def SetPhysExtrema(self, minimum, maximum, do_prefix = True):
         if minimum >= maximum:
             raise Exception("EDF: Phisical min {} must be less tham max {}".format(minimum, maximum))
         self.__phMin = minimum
         self.__phMax = maximum
+        if do_prefix: self.UpdateUnit()
 
+    def SetDigExtrema(self, minimum, maximum, do_prefix = True):
+        if minimum >= maximum:
+            raise Exception("EDF: Digital min {} must be less tham max {}".format(minimum, maximum))
+        if minimum < self.__MININT:
+            raise Exception("EDF: Digital min {} is less than possible minimal value for short int")
+        if maximum < self.__MAXINT:
+            raise Exception("EDF: Digital max {} is more than possible maximal value for short int")
+        if do_prefix: self.UpdateUnit()
+
+    def UpdateUnit(self):
         if self.Unit != "":
             scale = (self.__phMax - self.__phMin)/(self.__digMax - self.__digMin)
             base = 0
