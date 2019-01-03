@@ -140,13 +140,13 @@ class Channel(object):
         self._totSize = sum(self._seqSize)
 
         self.__scale = (self.RawRange[1] - self.RawRange[0])/(self.__MAXINT - self.__MININT)
-        #self.__offset= self.RawRange[0] - self.__MININT*self.__scale
-        self.__offset= 0
+        self.__offset= self.RawRange[0] - self.__MININT*self.__scale
+        #self.__offset= 0
         self.__unit = self.CalUnit
         if self.CalUnit != "":
-            magn  = math.ceil(math.log10(self.__scale))/3
-            if magn > 0 : magn = int(magn-0.5)*3
-            else: magn = int(magn+0.5)*3
+            magn  = math.log10(self.__scale)
+            if magn > 0 : magn = int(math.floor(math.log10(self.__scale))/3 - 0.5)*3
+            else :        magn = int(math.ceil(math.log10(self.__scale))/3 + 0.5)*3
             self.__unit = self.__prefixes[magn]+self.CalUnit
             self.__scale /= 10**magn
             self.__offset /= 10**magn
