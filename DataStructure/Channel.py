@@ -78,10 +78,10 @@ Marks = {
 
 class Channel(object):
     """ Class containing all information retrieved from ebm file. The data instead to be loaded in the memory, are readed directly from file """
-    __slots__ = [x.Name for x in list(Marks.values())]+["Endian", "Wide", "_stream", "_seqStart", "_seqSize", "_totSize", "_dataSize", "__scale", "__offset", "__unit"]
+    __slots__ = [x.Name for x in list(Marks.values())]+["Endian", "Wide", "_stream", "_seqStart", "_seqSize", "_totSize", "_dataSize", "__scale", "__offset", "__unit", "__DigRange"]
     #Minimum and maximum values for short integer
     __MAXINT = 32767
-    __MININT = -32768
+    __MININT = -32767
     __prefixes = {24:'Y', 21:'Z', 18:'E', 15:'P', 12:'T', 9:'G', 6:'M', 3:'K', 2:'H', 1:'D', 0:'', -1:'d', -2:'c', -3:'m', -6:'u', -9:'n', -12:'p', -15:'f', -18:'a', -21:'z', -24:'y'}
     def __init__(self, filename):
         for f in self.__slots__:
@@ -139,19 +139,27 @@ class Channel(object):
             self.__read(index, size)
         self._totSize = sum(self._seqSize)
 
-        self.__scale = (self.RawRange[1] - self.RawRange[0])/(self.__MAXINT - self.__MININT)
-        self.__offset= self.RawRange[0] - self.__MININT*self.__scale
-        #self.__offset= 0
+        v = max(abs(self.RawRange[1]), abs(self.RawRange[0]))
+        if (self.RawRange[2] == 0.):
+            self.__scale = v/self.__MAXINT
+        else:
+            self.__scale    = self.RawRange[2]
+            
+        self.__offset   = 0
+        self.__DigRange = (int(self.RawRange[0]/self.__scale), int(self.RawRange[1]/self.__scale))
+#            self.__scale = (self.RawRange[1] - self.RawRange[0])/(self.__DigRange[0] - self.__DigRange[1])
+#            self.__offset= self.RawRange[0] - self.__DigRange[0]*self.__scale
         self.__unit = self.CalUnit
         if self.CalUnit != "":
             magn  = math.log10(self.__scale)
-            if magn > 0 : magn = int(math.floor(math.log10(self.__scale))/3 - 0.5)*3
-            else :        magn = int(math.ceil(math.log10(self.__scale))/3 + 0.5)*3
+            if magn < 0 : magn = int(math.floor(magn)/3 - 0.5+1)*3
+            else :        magn = int(math.ceil(magn)/3  + 0.5-1)*3
             self.__unit = self.__prefixes[magn]+self.CalUnit
             self.__scale /= 10**magn
             self.__offset /= 10**magn
-
-
+            self.RawRange[0] /= 10**magn
+            self.RawRange[1] /= 10**magn
+            
     
     def __str__(self):
         string = ""
@@ -234,7 +242,7 @@ class Channel(object):
     def Offset(self): return self.__offset
     def Unit(self):   return self.__unit
     def GetPhysicalExtrema(self): return (self.RawRange[0], self.RawRange[1])
-    def GetDigitalExtrema(self):  return (self.__MININT, self.__MAXINT)    
+    def GetDigitalExtrema(self):  return self.__DigRange    
     
     def getSize(self, sequence = None):
         """ Returns total size (nmb. of measure points) of dataset """
@@ -249,10 +257,15 @@ class Channel(object):
             point, sequence = self.getRelPoint(point)
 
         self._stream.seek(self._seqStart[sequence] + (point)*self._dataSize)
+        val = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, self._stream.read(self._dataSize))[0]
+        if val > self.__DigRange[1]:
+            val = self.__DigRange[1]
+        if val < self.__DigRange[0]:
+            val = self.__DigRange[0]
         if raw :
-            return struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, self._stream.read(self._dataSize))[0]
+            return val
         else:
-            return struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, self._stream.read(self._dataSize))[0]*self.__scale + self.__offset
+            return val*self.__scale + self.__offset
 
     def getRelPoint(self, point):
         """ Returns a tuple (point, sequance) for absolute point index """
@@ -321,6 +334,8 @@ class Channel(object):
             for i in range (0, to_read ):
 #                res[index] = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, data[i:i+self._dataSize])[0]
                 res[index] = d[i]
+                if res[index] > self.__DigRange[1]: res[index] = self.__DigRange[1]
+                if res[index] < self.__DigRange[0]: res[index] = self.__DigRange[0]
                 if not raw:
                     res[index] = res[index]*self.__scale + self.__offset
                 #filling the interpoint space with previous value

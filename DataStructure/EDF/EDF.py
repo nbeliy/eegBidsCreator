@@ -15,8 +15,8 @@ class Channel(object):
         #dec = Fraction(Decimal(str(resolution)))
         self.Type = Type
         self.Specification = name
-        if unit == "°":
-            unit = "deg"
+        if "°" in unit:
+            unit = unit[:unit.index("°")]+"deg"+ unit[unit.index("°")+1:]
         self.Unit = unit
         self.__digMin = self.__MININT
         self.__digMax =  self.__MAXINT
@@ -42,9 +42,11 @@ class Channel(object):
         if minimum >= maximum:
             raise Exception("EDF: Digital min {} must be less tham max {}".format(minimum, maximum))
         if minimum < self.__MININT:
-            raise Exception("EDF: Digital min {} is less than possible minimal value for short int")
-        if maximum < self.__MAXINT:
-            raise Exception("EDF: Digital max {} is more than possible maximal value for short int")
+            raise Exception("EDF: Digital min {} is less than possible minimal value for short int".format(minimum))
+        if maximum > self.__MAXINT:
+            raise Exception("EDF: Digital max {} is more than possible maximal value for short int".format(maximum))
+        self.__digMin = minimum
+        self.__digMax = maximum
         if do_prefix: self.UpdateUnit()
 
     def UpdateUnit(self):
@@ -182,10 +184,12 @@ class EDF(object):
         self.__file.write("{:<8d}".format(-32768).encode("ascii"))
         for ch in self.Channels:
             self.__file.write("{:<8d}".format(ch.GetDigExtrema()[0]).encode("ascii"))
+            print(ch.GetDigExtrema()[0])
         #[8]    Digital maximum
         self.__file.write("{:<8d}".format(32767).encode("ascii"))
         for ch in self.Channels:
             self.__file.write("{:<8d}".format(ch.GetDigExtrema()[1]).encode("ascii"))
+            print(ch.GetDigExtrema()[1])
         #[80]   Prefiltering 
         self.__file.write("{:<80s}".format(" ").encode("ascii"))
         for ch in self.Channels:
