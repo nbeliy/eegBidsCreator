@@ -159,7 +159,6 @@ class EDF(object):
     def WriteHeader(self):
         self.__file  = open(self.__path+"/"+self.__prefix+".edf", "wb")
         self.__writeUpperBlock(self.__file, len(self.Channels)+1)
-        print(self.__file.tell())
         #[16] Label in format Type Emplacement
         self.__file.write("{:<16s}".format("EDF Annotations").encode("ascii"))
         for ch in self.Channels:
@@ -184,12 +183,10 @@ class EDF(object):
         self.__file.write("{:<8d}".format(-32768).encode("ascii"))
         for ch in self.Channels:
             self.__file.write("{:<8d}".format(ch.GetDigExtrema()[0]).encode("ascii"))
-            print(ch.GetDigExtrema()[0])
         #[8]    Digital maximum
         self.__file.write("{:<8d}".format(32767).encode("ascii"))
         for ch in self.Channels:
             self.__file.write("{:<8d}".format(ch.GetDigExtrema()[1]).encode("ascii"))
-            print(ch.GetDigExtrema()[1])
         #[80]   Prefiltering 
         self.__file.write("{:<80s}".format(" ").encode("ascii"))
         for ch in self.Channels:
