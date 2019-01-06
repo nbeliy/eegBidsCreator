@@ -150,15 +150,17 @@ class Channel(object):
 #            self.__scale = (self.RawRange[1] - self.RawRange[0])/(self.__DigRange[0] - self.__DigRange[1])
 #            self.__offset= self.RawRange[0] - self.__DigRange[0]*self.__scale
         self.__unit = self.CalUnit
+        magn  = math.log10(self.__scale)
+        if magn < 0 : magn = int(math.floor(magn)/3 - 0.5+1)*3
+        else :        magn = int(math.ceil(magn)/3  + 0.5-1)*3
+        self.__scale /= 10**magn
+        self.__offset /= 10**magn
+        self.RawRange[0] /= 10**magn
+        self.RawRange[1] /= 10**magn
         if self.CalUnit != "":
-            magn  = math.log10(self.__scale)
-            if magn < 0 : magn = int(math.floor(magn)/3 - 0.5+1)*3
-            else :        magn = int(math.ceil(magn)/3  + 0.5-1)*3
             self.__unit = self.__prefixes[magn]+self.CalUnit
-            self.__scale /= 10**magn
-            self.__offset /= 10**magn
-            self.RawRange[0] /= 10**magn
-            self.RawRange[1] /= 10**magn
+        elif magn != 0:
+            self.__unit = "x10^"+str(magn)
             
     
     def __str__(self):
