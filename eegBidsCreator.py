@@ -132,9 +132,7 @@ fileHandler = logging.FileHandler(tmpDir+"/logfile")
 fileHandler.setFormatter(logFormatter)
 Logger.addHandler(fileHandler)
 
-print(parameters['GENERAL'].getboolean('Quiet'))
 if not parameters['GENERAL'].getboolean('Quiet'):
-    print(parameters['GENERAL'].getboolean('Quiet'))
     consoleHandler = logging.StreamHandler()
     consoleHandler.setFormatter(logFormatter)
     Logger.addHandler(consoleHandler)
@@ -166,7 +164,6 @@ try:
         raise Exception("Unable determine eeg format")
     
     JSONdata = dict()
-    print( parameters['GENERAL']['JsonFile'])
     if parameters['GENERAL']['JsonFile'] != "":
         parameters['GENERAL']['JsonFile'] = os.path.realpath(parameters['GENERAL']['JsonFile'])
         Logger.info("JSON File: {}".format(parameters['GENERAL']['JsonFile']))
@@ -371,10 +368,8 @@ try:
                 name = "n/a"
 
             if ch != None:
-#                print("\t%f"%(dt*ch.DBLsampling), file = f )
                 ch_id = channels.index(ch)
             else:
-#                print("\tn/a", file = f)
                 ch_id = 0
                 continue
             events.append({"Name": name,  "Time":time, "Channel": ch_id, "Span": ev.TimeSpan, "Location": loc})
