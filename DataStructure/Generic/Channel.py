@@ -1,56 +1,68 @@
 import datetime, math
-
+from datetime import datetime
 
 class GenChannel(object):
     """An intendent virtual class serving as parent to other, format specific channel classes"""
-    __slots__ = [
-        "__scale", "__offset", 
-        "__unit", "__magnitude", 
-        "__physMin", "__physMax",
-        "__digMin", "__digMax",
-        "__seqStartTime",
-        "__seqSize",
-        "__frequency",
-        "__name",
+    __base_slots__ = [
+        "_scale", "_offset",
+        "_unit", "_magnitude",
+        "_physMin", "_physMax",
+        "_digMin", "_digMax",
+        "_seqStartTime",
+        "_seqSize",
+        "_frequency",
+        "_name",
 
-        "__startTime",
-        "__frMultiplier"
+        "_startTime",
+        "_frMultiplier",
+        "_baseChannel"
     ]
+    __slots__ = __base_slots__
+
+    def __copy__(self, source):
+        if not isinstance(source, GenChannel):
+            raise TypeError(self.__type+": Source object must be a daughter of "+self.__type)
+        for f in self.__base_slots__:
+            setattr(self, f, getattr(source, f))
+        self._baseChannel = source
     
     "Min and max values for an signed short integer"
-    __MAXSHORT = 32767
-    __MINSHORT = -32768
+    _MAXSHORT = 32767
+    _MINSHORT = -32768
 
     "Dictionary of standard SI prefixes (as defined in EDF+ standard)"
-    __SIprefixes = {24:'Y', 21:'Z', 18:'E', 15:'P', 12:'T', 9:'G', 6:'M', 3:'K', 2:'H', 1:'D', 0:'', -1:'d', -2:'c', -3:'m', -6:'u', -9:'n', -12:'p', -15:'f', -18:'a', -21:'z', -24:'y'}
+    _SIprefixes = {24:'Y', 21:'Z', 18:'E', 15:'P', 12:'T', 9:'G', 6:'M', 3:'K', 2:'H', 1:'D', 0:'', -1:'d', -2:'c', -3:'m', -6:'u', -9:'n', -12:'p', -15:'f', -18:'a', -21:'z', -24:'y'}
     "Inverted dictionary of standard SI prefixes (as defined in EDF+ standard)"
-    __SIorders   = {'Y':24, 'Z':21, 'E':18, 'P':15, 'T':12,'G': 9,'M': 6,'K': 3,'H': 2,'D': 1, 0:'', 'd':-1, 'c':-2, 'm':-3, 'u':-6, 'n':-9, 'p':-12, 'f':-15, 'a':-18, 'z':21, 'y':-24}
+    _SIorders   = {'Y':24, 'Z':21, 'E':18, 'P':15, 'T':12,'G': 9,'M': 6,'K': 3,'H': 2,'D': 1, 0:'', 'd':-1, 'c':-2, 'm':-3, 'u':-6, 'n':-9, 'p':-12, 'f':-15, 'a':-18, 'z':21, 'y':-24}
 
     def __init__(self):
-        self.__scale = 1.
-        self.__offset= 0.
-        self.__unit  = ""
-        self.__magnitude = 0
-        self.__physMin = self.__MINSHORT
-        self.__physMax = self.__MAXSHORT
-        self.__digMin  = self.__MINSHORT
-        self.__digMax  = self.__MAXSHORT
+        self._scale = 1.
+        self._offset= 0.
+        self._unit  = ""
+        self._magnitude = 0
+        self._physMin = self._MINSHORT
+        self._physMax = self._MAXSHORT
+        self._digMin  = self._MINSHORT
+        self._digMax  = self._MAXSHORT
 
-        self.__frequency = 1
-        self.__name = ""
+        self._frequency = 1
+        self._name = ""
 
-        self.__seqStartTime = []
-        self.__seqSize      = []
+        self._seqStartTime = []
+        self._seqSize      = []
     
-        self.__StartTime    = datetime.min
-        self.__frMultiplier = 1
+        self._startTime    = datetime.min
+        self._frMultiplier = 1
 
-    def GetScale(self): return self.__scale
-    def GetOffset(self): return self.__offset
-    def GetPhysMax(self): return self.__physMax
-    def GetPhysMin(self): return self.__physMin
-    def GetDigMax(self): return self.__digMax
-    def GetDigMin(self): return self.__digMin
+        self._baseChannel  = self
+
+
+    def GetScale(self): return self._scale
+    def GetOffset(self): return self._offset
+    def GetPhysMax(self): return self._physMax
+    def GetPhysMin(self): return self._physMin
+    def GetDigMax(self): return self._digMax
+    def GetDigMin(self): return self._digMin
 
     """Defining new scale and offset. Physical minimum and maximum are recalculated accordingly"""
     def SetScale(self, scale, offset = 0):
@@ -58,10 +70,10 @@ class GenChannel(object):
             raise TypeError(self.__type+": Scale must be integer or float value")
         if not (isinstance(offset, int) or isinstance(offset, float)):
             raise TypeError(self.__type+": Offset must be integer or float value")
-        self.__scale  = scale
-        self.__offset = offset
-        self.__physMin = self.__fromRaw(self.__digMin)
-        self.__physMax = self.__fromRaw(self.__digMax)
+        self._scale  = scale
+        self._offset = offset
+        self._physMin = self._fromRaw(self._digMin)
+        self._physMax = self._fromRaw(self._digMax)
 
     """Defining new physical extrema. The scale and offset are recalculated"""
     def SetPhysicalRange(self, minimum, maximum):
@@ -71,100 +83,101 @@ class GenChannel(object):
             raise TypeError(self.__type+": Physical maximum must be integer or float value")
         if minimum >= maximum:
             raise ValueError(self.__type+": Physical minimum must be lower than maximum")
-        self.__physMin = minimum
-        self.__physMax = maximum
-        self.__calculateOffset()
+        self._physMin = minimum
+        self._physMax = maximum
+        self._calculateScale()
 
     """Defining new digital extrema. The scale and offset are recalculated"""
     def SetDigitalRange(self, minimum, maximum):
         if not (isinstance(minimum, int) ):
-            raise TypeError(self.__type+": Digital mimimum must be integer or float value")
+            raise TypeError(self.__type+": Digital mimimum must be integer value")
         if not (isinstance(maximum, int) ):
-            raise TypeError(self.__type+": Digital maximum must be integer or float value")
+            raise TypeError(self.__type+": Digital maximum must be integer value")
         if minimum >= maximum:
             raise ValueError(self.__type+": Digital minimum must be lower than maximum")
-        if minimum < self.__MINSHORT:
+        if minimum < self._MINSHORT:
             raise ValueError(self.__type+": Digital minimum must be greater than minimum short value")
-        if maximum > self.__MAXSHORT:
+        if maximum > self._MAXSHORT:
             raise ValueError(self.__type+": Digital maximum must be greater than maximum short value")
-        self.__digMin = minimum
-        self.__digMax = maximum
-        self.__calculateOffset()
+        self._digMin = minimum
+        self._digMax = maximum
+        self._calculateScale()
         
     """Recalculates scale and offset according to physical and digital extrema"""
-    def __calculateScale(self):
-        self.__scale = (self.__physMax - self.__physMin)/(self.__digMax - self.__digMin)
-        self.__offset= self.__physMin - self.__scale*self.__digMin
+    def _calculateScale(self):
+        self._scale = (self._physMax - self._physMin)/(self._digMax - self._digMin)
+        self._offset= self._physMin - self._scale*self._digMin
 
     """Transform raw short integer value to the measured one. Input must be integer and in Digital range"""
     def FromRaw(self, value):
         if not (isinstance(value, int)):
             raise TypeError(self.__type+": Value must be an integer")
-        if value > self.__digMax or value < self.__digMin:
-            raise Exception(self.__type+": value "+str(value)+" out of the ranhe ["+str(self.__digMin)+", "+str(self.__digMax)+"]" )
-        return self.__fromRaw(value)
+        if value > self._digMax or value < self._digMin:
+            raise Exception(self.__type+": value "+str(value)+" out of the ranhe ["+str(self._digMin)+", "+str(self._digMax)+"]" )
+        return self._fromRaw(value)
 
     """Transform raw short integer value to the measured one. No checks in value performed"""
-    def __fromRaw(self, value):
-        return value*self.__scale + self.__offset
+    def _fromRaw(self, value):
+        return value*self._scale + self._offset
 
     """Transform measured value to raw short integer. Input must be float and in Physical range"""
     def ToRaw(self, value):
         if not (isinstance(value, int) or isinstance(value, float)):
             raise TypeError(self.__type+": Value must be an integer or float")
-        if value > self.__physMax or value < self.__physMin:
-            raise Exception(self.__type+": value "+str(value)+" out of the ranhe ["+str(self.__physMin)+", "+str(self.__physMax)+"]" )
-        return self.__toRaw(value)
+        if value > self._physMax or value < self._physMin:
+            raise Exception(self.__type+": value "+str(value)+" out of the ranhe ["+str(self._physMin)+", "+str(self._physMax)+"]" )
+        return self._toRaw(value)
 
     """Transform measured value to raw short integer one. No checks in value performed"""
-    def __toRaw(self, value):
-        return int((value - self.__offset)/self.__scale + 0.5)  
+    def _toRaw(self, value):
+        return int((value - self._offset)/self._scale + 0.5)  
+#        return int((value - self._offset)/self._scale)  
 
 
     def SetUnit(self, unit):
         if not (isinstance(unit, str)):
-            raise TypeError(self.__type+": Unit must be a string")
-        self.__unit = unit
+            raise TypeError(self._type+": Unit must be a string")
+        self._unit = unit
 
     def GetUnit(self, wMagnitude = True):
         if wMagnitude:
-            if self.__unit == "":
-                if self.__magnitude == 0: return ""
-                else: return "x10^"+str(self.__magnitude)
-            if self.__magnitude in self.__SIprefixes:
-                return self.__SIprefixes[self.__magnitude]+self.__unit
+            if self._unit == "":
+                if self._magnitude == 0: return ""
+                else: return "x10^"+str(self._magnitude)
+            if self._magnitude in self._SIprefixes:
+                return self._SIprefixes[self._magnitude]+self._unit
             else:
-                magn = min(self.__SIprefixes.keys(),key= lambda k: abs(k-self.__magnitude)
-                return "x10^"+str(self.__magnitude - magn)+" "+self.__SIprefixes[magn]+self.__unit
+                magn = min(self._SIprefixes.keys(),key= lambda k: abs(k-self._magnitude))
+                return "x10^"+str(self._magnitude - magn)+" "+self._SIprefixes[magn]+self._unit
         else:
-            return self.__unit    
+            return self._unit    
 
     """Setting the magnitude to the measured value. This affects scale, offset and physical range"""
     def SetMagnitude(self, magn):
         if not (isinstance(magn, int)):
             raise TypeError(self.__type+": magnitude must be an integer")
-        self.__scale    /= 10**(magn+self.__magn)
-        self.__offset   /= 10**(magn+self.__magn)
-        self.__physMin  /= 10**(magn+self.__magn)
-        self.__physMax  /= 10**(magn+self.__magn)
-        self.__magn     = magnitude
+        self._scale    /= 10**(magn+self._magnitude)
+        self._offset   /= 10**(magn+self._magnitude)
+        self._physMin  /= 10**(magn+self._magnitude)
+        self._physMax  /= 10**(magn+self._magnitude)
+        self._magnitude = magn
 
     def OptimizeMagnitude(self):
-        magn  = math.log10(self.__scale)+self.__magnitude
+        magn  = math.log10(self._scale)+self._magnitude
         if magn < 0 : magn = int(math.floor(magn)/3 - 0.5+1)*3
         else :        magn = int(math.ceil(magn)/3  + 0.5-1)*3
         self.SetMagnitude(magn)
 
     def GetFrequency(self):
-        return self.__frequency
+        return self._frequency
 
     def SetFrequency(self, freq):
         if not isinstance(freq, int):
             raise TypeError(self.__type+": Frequency must be an integer representing Hz")
-        self.__frequency = freq
+        self._frequency = freq
 
     def GetMagnitude(self):
-        return self.__magnitude 
+        return self._magnitude 
 
 
 
@@ -172,41 +185,45 @@ class GenChannel(object):
 
     """Returns number of interupted sequences"""
     def GetNsequences(self):
-        return len(self.__seqStartTime)
+        return len(self._seqStartTime)
 
     """Returns the start time of the ith sequence"""
     def GetSequenceStart(self, seq = 0):
-        return self.__seqStartTime[seq]
+        return self._seqStartTime[seq]
 
     """Returns the size (number of measurements) in given sequence"""
     def GetSequenceSize(self, seq = 0):
-        return self.__seqSize[seq]
+        return self._seqSize[seq]
 
     def SetStartTime(self, start):
         if not isinstance(start, datetime):
             raise TypeError(self.__type+": StartTime must be a datetime object")
-        self.__startTime = datetime
+        self._startTime = datetime
 
     def GetStartTime(self):
-        return self.__startTime
+        return self._startTime
 
     def SetFrequencyMultiplyer(self, frMult):
         if not isinstance(frMult,int):
-            raise TypeError(self.__type+": Frequency multiplyer must be a positif integer")
+            raise TypeError(self._type+": Frequency multiplyer must be a positif integer")
         if frMult <= 0:
-            raise ValueError(self.__type+": Frequency multiplyer must be positif")
-        self.__frMultiplier = frMult
+            raise ValueError(self._type+": Frequency multiplyer must be positif")
+        self._frMultiplier = frMult
 
     def GetFrequencyMultiplyer(self):
-        return self.__frMultiplier
+        return self._frMultiplier
 
     """
     Functions related to the index of a partiular data points.
     Each point can be indexed by global index, common to all channels, given the common time origin, 
     and common frequency, or by local index defined its position in its sequence.
+    Return global index given sequence, local index, reference time and frequency multiplier
     """
-    """Return global index given sequence, local index, reference time and frequency multiplier"""
-    def GetIndex(self, sequence, point,  StartTime = self.____StartTime, freqMultiplier = self.__frMultiplier):
+    def GetIndex(self, sequence, point,  StartTime = None, freqMultiplier = None):
+        if StartTime == None:
+            StartTime = self._startTime
+        if freqMultiplier == None:
+            freqMultiplier = self._frMultiplier
         if not isinstance(StartTime, datetime):
             raise TypeError(self.__type+": StartTime must be datetime object")
         if not (isinstance(freqMultiplier,int) or freqMultiplier > 0):
@@ -215,13 +232,17 @@ class GenChannel(object):
             raise TypeError(self.__type+": sequence and point must be integer")
         if sequence < 0 or sequence >= len(self.__seqStartTime):
             raise IndexError(self.__type+": sequence ("+str(sequence)+")is out of the range")
-        if point < 0 or point >= self.__seqSize[sequence]:
+        if point < 0 or point >= self._seqSize[sequence]:
             raise IndexError(self.__type+": point ("+str(point)+")is out of the range")
-        time = self.__seqStartTime[sequence] - (self.__StartTime - StartTime).total_seconds()
+        time = self._seqStartTime[sequence] - (self._StartTime - StartTime).total_seconds()
         return int((time*self.__frequency+point)*freqMultiplier)
              
     """Returns time of corresponding data point"""
-    def GetTimeIndex(self, index, StartTime = self.__StartTime, freqMultiplier = self.__frMultiplier):
+    def GetTimeIndex(self, index, StartTime = None, freqMultiplier = None):
+        if StartTime == None:
+            StartTime = self._startTime
+        if freqMultiplier == None:
+            freqMultiplier = self._frMultiplier
         if not isinstance(StartTime, datetime):
             raise TypeError(self.__type+": StartTime must be datetime object")
         if not (isinstance(freqMultiplier,int) or freqMultiplier > 0):
@@ -230,10 +251,14 @@ class GenChannel(object):
             raise TypeError(self.__type+": index must be integer")
         if index < 0 :
             raise IndexError(self.__type+": index ("+str(point)+")is out of the range")
-        return StartTime+index/(self.__frequency*freqMultiplier)
+        return StartTime+index/(self._frequency*freqMultiplier)
 
     """Returns the (sequence, loc_index) for given data point. If there no valid sequence/index, corresponding value will be -1"""
-    def GetLocalIndex(self, index, StartTime = self.__StartTime, freqMultiplier = self.__frMultiplier):
+    def GetLocalIndex(self, index, StartTime = None, freqMultiplier = None):
+        if StartTime == None:
+            StartTime = self._startTime
+        if freqMultiplier == None:
+            freqMultiplier = self._frMultiplier
         if not isinstance(StartTime, datetime):
             raise TypeError(self.__type+": StartTime must be datetime object")
         if not (isinstance(freqMultiplier,int) or freqMultiplier > 0):
@@ -243,21 +268,46 @@ class GenChannel(object):
         if index < 0 :
             raise IndexError(self.__type+": index ("+str(point)+")is out of the range")
         index = math.floor(index/freqMultiplier)
-        index -= (self.__seqStartTime[0] - StartTime).total_seconds()*self.__frequency
+        index -= (self._seqStartTime[0] - StartTime).total_seconds()*self._frequency
         if index < 0 :
             return (-1,-1)
         seq = 0
-        while seq < len(self.__seqStartTime):
-            if index < self.__seqSize[seq]:
+        while seq < len(self._seqStartTime):
+            if index < self._seqSize[seq]:
                 return (seq, index)
             seq += 1
-            index -= (self.__seqStartTime[seq] - self.__seqStartTime[seq - 1])*self.__frequency  
+            index -= (self._seqStartTime[seq] - self._seqStartTime[seq - 1])*self._frequency  
             if index < 0:
                 return (seq,-1)
 
     """Pure virtual functions for retrieving data"""
     def GetValue(self, point, sequence = None, raw = False):
-        return 0.
+        if sequence != None:
+            return self.GetValue(self.GetIndex(point, sequence), raw = raw)
+        if self._baseChannel == self:
+            return self.__getValue__(point, sequence, raw)
+        else:
+            return self._baseChannel.GetValue(point, sequence, raw)
 
-    def GetValueVector(self, timeStart, timeEnd, default=0, freq_mult = 1, raw = False):
+    def __getValue__(point, sequence, raw):
+        if raw:
+            return 0
+        else:
+            return 0.
+
+    def GetValueVector(self, timeStart, timeEnd, default=0, freq_mult = None, raw = False):
+        if freq_mult == None:
+            freq_mult = self._frMultiplier
+        if self._baseChannel == self:
+            return self.__getValueVector__(timeStart, timeEnd, default, freq_mult, raw)
+        else:
+            return self._baseChannel.GetValueVector(timeStart, timeEnd, default, freq_mult, raw)
+
+    def __getValueVector__(self, timeStart, timeEnd, default, freq_mult, raw):
         return []
+
+    """< operator for sorting functions"""
+    def __lt__(self, other):
+        if type(other) != type(self):
+            raise TypeError(self.__class__+": Comparaison arguments must be of the same class")
+        return self._name < other._name

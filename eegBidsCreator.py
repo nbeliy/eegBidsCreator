@@ -11,6 +11,7 @@ from DataStructure.Record import ParceRecording
 from DataStructure.BrainVision.BrainVision import BrainVision
 
 from DataStructure.EDF.EDF import EDF
+from DataStructure.EDF.EDF import Channel as EDFChannel
 
 import shutil
 
@@ -277,6 +278,7 @@ try:
             if parameters["DATATREATMENT"]['DropChannels'] != "":
                 to_drop = [p.strip() for p in parameters['DATATREATMENT']['DropChannels'].split(',')]
                 channels = [ch for ch in channels if ch.ChannName not in to_drop]
+            channels.sort()
             ch_dict = dict()
             
             for c in channels:
@@ -503,9 +505,8 @@ try:
         outData.WriteEvents()
             
         for ch in channels:
-            outData.AddChannel(ch.ChannName, ch.Scale(), ch.Unit(), "", int(ch.DBLsampling), ch.SigMainType)
-            outData.Channels[-1].SetDigExtrema (ch.GetDigitalExtrema()[0], ch.GetDigitalExtrema()[1],  do_prefix = False)
-            outData.Channels[-1].SetPhysExtrema(ch.GetPhysicalExtrema()[0],ch.GetPhysicalExtrema()[1], do_prefix = False)
+            outData.Channels.append(EDFChannel(Base = ch, Type = ch.SigMainType, 
+                Specs = ch.SigMainType+"-"+ch.SigSubType, Filter = ""))
         outData.WriteHeader()
         t_e = t_ref
         t_step = 3600
@@ -526,7 +527,7 @@ try:
             Logger.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
             l_data = []
             for ch in channels:
-                l_data.append(ch.getValueVector(t_s, t_e, raw = True ))
+                l_data.append(ch.GetValueVector(t_s, t_e, raw = True ))
             outData.WriteDataBlock(l_data, t_s)
         outData.Close()
 
