@@ -1,75 +1,33 @@
 from datetime import datetime, date, timedelta
 import struct, math
+from DataStructure.Generic.Channel import GenChannel
 
 from fractions import Fraction
 from decimal   import Decimal
 
-class Channel(object):
-    __slots__ = ["Type", "Specification", "Unit", "Filter", "Frequency", "__phMin", "__phMax", "__digMin", "__digMax"]
-    __prefixes = {24:'Y', 21:'Z', 18:'E', 15:'P', 12:'T', 9:'G', 6:'M', 3:'K', 2:'H', 1:'D', 0:'', -1:'d', -2:'c', -3:'m', -6:'u', -9:'n', -12:'p', -15:'f', -18:'a', -21:'z', -24:'y'}
-    __orders   = {'Y':24, 'Z':21, 'E':18, 'P':15, 'T':12,'G': 9,'M': 6,'K': 3,'H': 2,'D': 1, 0:'', 'd':-1, 'c':-2, 'm':-3, 'u':-6, 'n':-9, 'p':-12, 'f':-15, 'a':-18, 'z':21, 'y':-24}
-    __MAXINT = 32767
-    __MININT = -32768
+class Channel(GenChannel):
+    __slots__ = ["_type", "_specification", "_filter"]
     
-    def __init__(self, name, resolution, unit, comments, frequency, Type):
-        #dec = Fraction(Decimal(str(resolution)))
-        self.Type = Type
-        self.Specification = name
-        if "°" in unit:
-            unit = unit[:unit.index("°")]+"deg"+ unit[unit.index("°")+1:]
-        self.Unit = unit
-        self.__digMin = self.__MININT
-        self.__digMax =  self.__MAXINT
-        self.__phMin  = -( self.__digMax - self.__digMin)*resolution/2
-        self.__phMax  = -self.__phMin 
-        self.Filter = comments
-        self.Frequency = frequency
-
-    def GetPhysExtrema(self):
-        return (self.__phMin, self.__phMax)
-
-    def GetDigExtrema(self):
-        return (self.__digMin, self.__digMax)
-
-    def SetPhysExtrema(self, minimum, maximum, do_prefix = True):
-        if minimum >= maximum:
-            raise Exception("EDF: Phisical min {} must be less tham max {}".format(minimum, maximum))
-        self.__phMin = minimum
-        self.__phMax = maximum
-        if do_prefix: self.UpdateUnit()
-
-    def SetDigExtrema(self, minimum, maximum, do_prefix = True):
-        if minimum >= maximum:
-            raise Exception("EDF: Digital min {} must be less tham max {}".format(minimum, maximum))
-        if minimum < self.__MININT:
-            raise Exception("EDF: Digital min {} is less than possible minimal value for short int".format(minimum))
-        if maximum > self.__MAXINT:
-            raise Exception("EDF: Digital max {} is more than possible maximal value for short int".format(maximum))
-        self.__digMin = minimum
-        self.__digMax = maximum
-        if do_prefix: self.UpdateUnit()
-
-    def UpdateUnit(self):
-        if self.Unit != "":
-            scale = (self.__phMax - self.__phMin)/(self.__digMax - self.__digMin)
-            base = 0
-            if len(self.Unit) == 2 and self.Unit[0] in self.__orders:
-                base = self.__orders[self.Unit[0]]
-                self.Unit = self.Unit[1:]
-            magn  = math.floor(math.log10(scale))/3
-            if magn > 0 : magn = int(magn-0.5)*3
-            else: magn = int(magn+0.5)*3
-            self.Unit = self.__prefixes[magn+base]+self.Unit
-            self.__phMin /= 10**magn
-            self.__phMax /= 10**magn
-         
-        
+    def __init__(self, Base = None, Type = "", Specs = "", Filter = ""):
+        if isinstance(Base, GenChannel): 
+            super(Channel, self).__copy__(Base)
+            self._type = Type
+            self._specification = Specs
+            self._filter = Filter
+            if "°" in self._unit:
+                self._unit = self._unit[:self._unit.index("°")]+"deg"+ self._unit[self._unit.index("°")+1:]
 
     def Label(self):
-        if (self.Type in ["EEG", "ECG", "EOG", "ERG", "EMG", "MEG", "MCG"]):
-            return self.Type+" "+self.Specification
+        if (self._type in ["EEG", "ECG", "EOG", "ERG", "EMG", "MEG", "MCG"]):
+            return self._type+" "+self._name
         else:
-            return self.Specification
+            return self._name
+
+    def GetTransducer(self):
+        return self._specification
+
+    def GetFilter(self):
+        return self._filter
 
 class EDF(object):
     __slots__ = ["Type", "Patient", "Record", "StartTime", "RecordDuration", "Channels", "Annotations", "Data", "__file", "__path", "__prefix","__records"]
@@ -166,35 +124,35 @@ class EDF(object):
         #[80] Transducer type
         self.__file.write("{:<80s}".format(" ").encode("ascii")[:80])
         for ch in self.Channels:
-            self.__file.write("{:<80s}".format(" ").encode("ascii")[:80])
+            self.__file.write("{:<80s}".format(ch.GetTransducer()).encode("ascii")[:80])
         #[8]    Physical dimensions (i.e. units)
         self.__file.write("{:<8s}".format(" ").encode("ascii"))
         for ch in self.Channels:
-            self.__file.write("{:<8s}".format(ch.Unit).encode("ascii")[:8])
+            self.__file.write("{:<8s}".format(ch.GetUnit()).encode("ascii")[:8])
         #[8]    Physical minimum
         self.__file.write("{:<8d}".format(-32768).encode("ascii"))
         for ch in self.Channels:
-            self.__file.write("{:<8f}".format(ch.GetPhysExtrema()[0]).encode("ascii")[:8])
+            self.__file.write("{:<8f}".format(ch.GetPhysMin()).encode("ascii")[:8])
         #[8]    Physical maximum
         self.__file.write("{:<8d}".format(32767).encode("ascii"))
         for ch in self.Channels:
-            self.__file.write("{:<8f}".format(ch.GetPhysExtrema()[1]).encode("ascii")[:8])
+            self.__file.write("{:<8f}".format(ch.GetPhysMax()).encode("ascii")[:8])
         #[8]    Digital Minimum
         self.__file.write("{:<8d}".format(-32768).encode("ascii"))
         for ch in self.Channels:
-            self.__file.write("{:<8d}".format(ch.GetDigExtrema()[0]).encode("ascii"))
+            self.__file.write("{:<8d}".format(ch.GetDigMin()).encode("ascii"))
         #[8]    Digital maximum
         self.__file.write("{:<8d}".format(32767).encode("ascii"))
         for ch in self.Channels:
-            self.__file.write("{:<8d}".format(ch.GetDigExtrema()[1]).encode("ascii"))
+            self.__file.write("{:<8d}".format(ch.GetDigMax()).encode("ascii"))
         #[80]   Prefiltering 
         self.__file.write("{:<80s}".format(" ").encode("ascii"))
         for ch in self.Channels:
-            self.__file.write("{:<80s}".format(" ").encode("ascii")[:80])
+            self.__file.write("{:<80s}".format(ch.GetFilter()).encode("ascii")[:80])
         #[8]    Number of samples per record: Recor duration*Frequency
         self.__file.write("{:<8s}".format("8").encode("ascii")) 
         for ch in self.Channels:
-            self.__file.write("{:<8d}".format(int(ch.Frequency*self.RecordDuration)).encode("ascii")[:8]) 
+            self.__file.write("{:<8d}".format(int(ch.GetFrequency()*self.RecordDuration)).encode("ascii")[:8]) 
         #[32]   Reserved
         self.__file.write("{:<32s}".format(" ").encode("ascii"))
         for ch in self.Channels:
@@ -229,14 +187,14 @@ class EDF(object):
     def WriteDataBlock(self, data, start):
         if len(data) != len(self.Channels):
             raise Exception("EDF: mismuch data array dimensions")
-        records = int(len(data[0])/(self.RecordDuration*self.Channels[0].Frequency))
+        records = int(len(data[0])/(self.RecordDuration*self.Channels[0].GetFrequency()))
         dt = (start - self.StartTime).total_seconds()
         for r in range(0, records):
             t_stamp = "{:+13}".format(dt+r*self.RecordDuration).encode("utf_8").strip()+b'\x14\x14\x00'
             t_stamp += b'\x00'*(16 - len(t_stamp))
             self.__file.write(t_stamp)
             for d,ch in zip(data,self.Channels):
-                block_size = int(self.RecordDuration*ch.Frequency)
+                block_size = int(self.RecordDuration*ch.GetFrequency())
                 #if records != len(d)/block_size:
                 #self.__file.write(struct.pack("<"+"h"*block_size, *d[0:block_size]))
                 self.__file.write(struct.pack("<"+"h"*block_size, *d[r*block_size:(r+1)*block_size]))

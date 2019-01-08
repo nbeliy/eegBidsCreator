@@ -1,6 +1,8 @@
 import struct, math, io
 from datetime import datetime, timedelta
 
+from DataStructure.Generic.Channel import GenChannel
+
 #Values: ['Field name', 'data size in words, 0 if unknown, not fixed', 'parcing word, c if it is text',  'encoding string']
 
 class Field(object):
@@ -43,7 +45,7 @@ Marks = {
     b'\x8a\x00\x00\x00' : Field("RateCorr", "d", Unique = True),
     b'\x8b\x00\x00\x00' : Field("RawRange", "d", Unique = True),
     b'\x8c\x00\x00\x00' : Field("TransRange", "d", Unique = True),
-    b'\x8d\x00\x00\x00' : Field("Channel_32", "h", Unique = True),
+    b'\x8d\x00\x00\x00' : Field("Channel_32", "H", Unique = True),
 
     b'\x90\x00\x00\x00' : Field("ChannName", "x", IsText = True, Unique = True),
     b'\x95\x00\x00\x00' : Field("DMask_16", "h"),
@@ -76,17 +78,21 @@ Marks = {
     b'\x74\x00\x00\x03' : Field("SigSubType", "h", IsText = True, Unique = True),
    } 
 
-class Channel(object):
+class Channel(GenChannel):
     """ Class containing all information retrieved from ebm file. The data instead to be loaded in the memory, are readed directly from file """
-    __slots__ = [x.Name for x in list(Marks.values())]+["Endian", "Wide", "_stream", "_seqStart", "_seqSize", "_totSize", "_dataSize", "__scale", "__offset", "__unit", "__DigRange"]
+    __slots__ = [x.Name for x in list(Marks.values())]+["Endian", "Wide", "_stream", "_seqStart", "_totSize", "_dataSize"]
     #Minimum and maximum values for short integer
-    __MAXINT = 32767
-    __MININT = -32767
-    __prefixes = {24:'Y', 21:'Z', 18:'E', 15:'P', 12:'T', 9:'G', 6:'M', 3:'K', 2:'H', 1:'D', 0:'', -1:'d', -2:'c', -3:'m', -6:'u', -9:'n', -12:'p', -15:'f', -18:'a', -21:'z', -24:'y'}
+    _MAXINT = 32767
+    _MININT = -32767
     def __init__(self, filename):
+        super(Channel, self).__init__()
         for f in self.__slots__:
-            if f[0:2] != "__":
+            if f[0:1] != "_":
                 setattr(self, f, [])
+
+        self._seqStart = []
+        self._totSize  = 0
+        self._dataSize = 0
 
         self._stream = open(filename, "rb")
         if not isinstance(self._stream, (io.RawIOBase, io.BufferedIOBase)):
@@ -135,33 +141,32 @@ class Channel(object):
             if(index == b''):break
             size = self._stream.read(4)
             size = struct.unpack("<L", size)[0]
-            #data = self._stream.read(size)
-            self.__read(index, size)
+            self._read(index, size)
         self._totSize = sum(self._seqSize)
 
-        v = max(abs(self.RawRange[1]), abs(self.RawRange[0]))
+    
+        #Finalizing initialization
+        self._name         = self.ChannName
+        self._unit         = self.CalUnit
+        self._seqStartTime = self.Time
+        self._frequency    = int(self.DBLsampling)
+        self._startTime    = self._seqStartTime[0]
+
+
+        self._digMin = self._MININT
+        self._digMax = self._MAXINT
+
         if (self.RawRange[2] == 0.):
-            self.__scale = v/self.__MAXINT
+            if (abs(self.RawRange[1]) !=  abs(self.RawRange[0])):
+                self.SetScale(max(abs(self.RawRange[1]), abs(self.RawRange[0])/self._digMax))
+            else:
+                self.SetPhysicalRange(self.RawRange[0], self.RawRange[1])
         else:
-            self.__scale    = self.RawRange[2]
+            self._digMin = int(self.RawRange[0]/self.RawRange[2])
+            self._digMax = int(self.RawRange[1]/self.RawRange[2])
+            self.SetScale(self.RawRange[2])
             
-        self.__offset   = 0
-        self.__DigRange = (int(self.RawRange[0]/self.__scale), int(self.RawRange[1]/self.__scale))
-#            self.__scale = (self.RawRange[1] - self.RawRange[0])/(self.__DigRange[0] - self.__DigRange[1])
-#            self.__offset= self.RawRange[0] - self.__DigRange[0]*self.__scale
-        self.__unit = self.CalUnit
-        magn  = math.log10(self.__scale)
-        if magn < 0 : magn = int(math.floor(magn)/3 - 0.5+1)*3
-        else :        magn = int(math.ceil(magn)/3  + 0.5-1)*3
-        self.__scale /= 10**magn
-        self.__offset /= 10**magn
-        self.RawRange[0] /= 10**magn
-        self.RawRange[1] /= 10**magn
-        if self.CalUnit != "":
-            self.__unit = self.__prefixes[magn]+self.CalUnit
-        elif magn != 0:
-            self.__unit = "x10^"+str(magn)
-            
+        self.OptimizeMagnitude()
     
     def __str__(self):
         string = ""
@@ -185,7 +190,7 @@ class Channel(object):
     def __del__(self):
         self._stream.close()
 
-    def __read(self, marker, size):
+    def _read(self, marker, size):
         dtype = Marks[marker]
         try:
             fname = dtype.Name 
@@ -240,53 +245,25 @@ class Channel(object):
         except Exception as e:
             raise Exception("{}: Unamble to parce {}: {}".format(self._stream.name, dtype.Name, e))
 
-    def Scale(self):  return self.__scale
-    def Offset(self): return self.__offset
-    def Unit(self):   return self.__unit
-    def GetPhysicalExtrema(self): return (self.RawRange[0], self.RawRange[1])
-    def GetDigitalExtrema(self):  return self.__DigRange    
-    
-    def getSize(self, sequence = None):
-        """ Returns total size (nmb. of measure points) of dataset """
-        if sequence == None:
-            return self._totSize
-        else:
-            return self._seqSize[sequence]
-
-    def getValue(self, point, sequence = None, raw = False):
+    def __GetValue__(self, point, sequence, raw):
         """ Returns value of given measure point. If sequance is given, the point should be in correspondent sequance. If no suequance is given, the point is interpreted as global one """
         if sequence == None:
             point, sequence = self.getRelPoint(point)
 
         self._stream.seek(self._seqStart[sequence] + (point)*self._dataSize)
         val = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, self._stream.read(self._dataSize))[0]
-        if val > self.__DigRange[1]:
-            val = self.__DigRange[1]
-        if val < self.__DigRange[0]:
-            val = self.__DigRange[0]
+        if val > self._digMax:
+            val = self._digMax
+        if val < self._digMin:
+            val = self._digMin
         if raw :
             return val
         else:
-            return val*self.__scale + self.__offset
+            return val*self._scale + self._offset
 
-    def getRelPoint(self, point):
-        """ Returns a tuple (point, sequance) for absolute point index """
-        for sequence in range(0, len(self._seqSize)):
-            if point >= self._seqSize[sequence]:
-                point = point - self._seqSize[sequence]    
-            else : break
-        return (point, sequence)
-
-    def getTime(self, point, sequence = None):
-        """ If sequance given, returns nmb. of seconds passed cince the start of sequence, or secons scince the start of recording (first sequence) """
-        if sequence == None:
-            point, seq = self.getRelPoint(point)
-            t = self.Time[seq] + timedelta(seconds = point/self.DBLsampling)
-            return (t - self.Time[0]).total_seconds()
-        else : 
-            return(point/self.DBLsampling)
-
-    def getValueVector(self, timeStart, timeEnd, default=0, freq_mult = 1, raw = False):
+    def __getValueVector__(self, timeStart, timeEnd, default, freq_mult, raw):
+        if freq_mult == None:
+            freq_mult = self._frMultiplier
         if timeStart > timeEnd:
             raise Exception("Starting time must be lower than ending time")
         if type(freq_mult) != int or freq_mult <= 0:
@@ -297,13 +274,13 @@ class Channel(object):
         dt = (timeEnd - timeStart).total_seconds()
         points = int(dt*self.DBLsampling)
         #resulting list of size point*freq_mult
-        res = [default]*int(dt*self.DBLsampling*freq_mult)
+        res = [default]*int(dt*self._frequency*freq_mult)
 
-        for  seq_start, seq_size, seq_time in zip(self._seqStart, self._seqSize, self.Time):
+        for  seq_start, seq_size, seq_time in zip(self._seqStart, self._seqSize, self._seqStartTime):
             #Sequance starts after end time
             if seq_time >= timeEnd: break
             #offset of sequance start relative to start time
-            offset = int((timeStart - seq_time).total_seconds()*self.DBLsampling)
+            offset = int((timeStart - seq_time).total_seconds()*self._frequency)
             if (offset) >= seq_size: #Sequence ends before time start
                 continue
 
@@ -336,13 +313,21 @@ class Channel(object):
             for i in range (0, to_read ):
 #                res[index] = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, data[i:i+self._dataSize])[0]
                 res[index] = d[i]
-                if res[index] > self.__DigRange[1]: res[index] = self.__DigRange[1]
-                if res[index] < self.__DigRange[0]: res[index] = self.__DigRange[0]
+                if res[index] > self._digMax: res[index] = self._digMax
+                if res[index] < self._digMin: res[index] = self._digMin
                 if not raw:
-                    res[index] = res[index]*self.__scale + self.__offset
+                    res[index] = res[index]*self._scale + self._offset
                 #filling the interpoint space with previous value
                 for j in range(index+1, index+freq_mult):
                     res[j] = res[index]
                 index += freq_mult
 
         return res
+
+
+    def __lt__(self, other):
+        if type(other) != type(self):
+            raise TypeError(self.__class__+": Comparaison arguments must be of the same class")
+        if self.Channel_32[1] < other.Channel_32[1]: return True
+        if self.Channel_32[1] > other.Channel_32[1]: return False
+        return self.Channel_32[0] < other.Channel_32[0]
