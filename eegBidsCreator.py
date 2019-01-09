@@ -244,7 +244,7 @@ try:
     try:
         os.makedirs(eegPath)
     except OSError:
-        Logger.warning("Directory already exists. Contents will be eraised.")
+        Logger.warning("Directory already exists. Contents will be erased.")
         rmdir(eegPath)
         
     Logger.info("Creating output directory {}".format(srcPath))
@@ -497,7 +497,7 @@ try:
         outData.Record["StartDate"] = metadata["RecordingInfo"]["StartTime"] 
         outData.Record["Code"]  = metadata["RecordingInfo"]["Type"]
         outData.Record["Equipment"] = metadata["Device"]["DeviceID"]
-        outData.StartTime = t_ref
+        outData.SetStartTime(t_ref)
         outData.RecordDuration = 10.
 
         for ev in events:

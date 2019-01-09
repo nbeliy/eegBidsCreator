@@ -50,6 +50,9 @@ class EDF(object):
         if self.__file != None:
             self.__file.close()
 
+    def SetStartTime(self, starttime):
+        self.StartTime = starttime.replace(microsecond=0)
+
     def AddChannel(self, name, resolution = 1, unit = '', comments = '', frequency = 1 , Type = ""):
         self.Channels.append(Channel(name, resolution, unit, comments, frequency, Type))
 
@@ -65,7 +68,10 @@ class EDF(object):
         elif type(self.Record["StartDate"]) == date:
             self.Record["StartDate"].strftime("%d-%b-%Y")
         else: d = "X"
-        return (self.Patient["Code"].replace(" ","_")+" "+self.Patient["Sex"]+" "+d+" " + self.Patient["Name"].replace(" ","_"))[:80]
+        name = self.Patient["Name"]
+        if name == self.Patient["Code"]:
+            name = "X"
+        return (self.Patient["Code"].replace(" ","_")+" "+self.Patient["Sex"]+" "+d+" " + name.replace(" ","_"))[:80]
 
     def RecordId(self):
         d = ""

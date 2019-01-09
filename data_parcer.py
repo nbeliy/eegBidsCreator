@@ -9,7 +9,8 @@ from glob import glob
 
 #ch = [Channel(c) for c in glob("data_example/embla_data/*.ebm")]
 #ch = [Channel(c) for c in glob("../data_test/EEG/BL/c6902c41-642b-4dd2-88b2-81e03feba944/*.ebm")]
-ch = [Channel(c) for c in glob("../data_test/EEG/ECG/fd068a73-0527-428f-aeed-9e04fb55ed4b/*.ebm")]
+ch = [Channel(c) for c in glob("../data_test/EEG/ECG/fd068a73-0527-428f-aeed-9e04fb55ed4b/*.ebm")].sort()
+
 
 def GetExtrema(channel, sequence, raw = False):
     v_min = sys.maxsize

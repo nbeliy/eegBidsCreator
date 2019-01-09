@@ -165,6 +165,13 @@ class Channel(GenChannel):
             self._digMin = int(self.RawRange[0]/self.RawRange[2])
             self._digMax = int(self.RawRange[1]/self.RawRange[2])
             self.SetScale(self.RawRange[2])
+        if self.CalFunc != "":
+            #God help us all
+            x = self.GetPhysMin()
+            new_min = eval(self.CalFunc)
+            x = self.GetPhysMax()
+            new_max = eval(self.CalFunc)
+            self.SetPhysicalRange(new_min, new_max)
             
         self.OptimizeMagnitude()
     
