@@ -110,8 +110,8 @@ class Parcel(object):
                 print(offset+str(c)+"<"+str(c.read())+">")
 
 
-from DataStructure.Event import ReadEvents
-from DataStructure.Event import ReadEventsStartTime
+from DataStructure.Embla.Event import ReadEvents
+from DataStructure.Embla.Event import ReadEventsStartTime
 
 class Entry(object):
     """A wrapper of a generic data"""
