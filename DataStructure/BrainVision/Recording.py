@@ -12,16 +12,6 @@ class Header(object):
         self.__path = path
         self.__prefix = prefix
         
-    def AddChannel(self, name, reference = '', resolution = 1., unit = '', comments = ''):
-        ch = Channel(name)
-        ch.Reference = reference
-        ch.Resolution= resolution
-        ch.Unit     = unit
-        ch.Comments = comments
-        self.Channels.append(ch)
-        self.CommonInfo.NumberOfChannels = len(self.Channels)
-        
-
     def write(self):
         self.CommonInfo.NumberOfChannels  = len(self.Channels)
         self.CommonInfo.SamplingInterval = 1e6/self.CommonInfo.GetFrequency()
@@ -50,13 +40,11 @@ class Header(object):
 
         f.write("\n\n[Channel Infos]\n")
         c_count = 1
-        for ch in self.Channels:
-            f.write("Ch{}={}\n".format(c_count, ch.printout()))
-            c_count = c_count+1
-
-        if self.Comment != "":
-            f.write("\n\n[Comment]\n")
-            f.write(self.Comment)
+        for i,ch in enumerate(self.Channels):
+            scale = ch.GetScale()
+            if self.BinaryInfo.BinaryFormat == "IEEE_FLOAT_32":
+                scale = 1.
+            f.write("Ch{}={},{},{},{},{}\n".format(i+1, ch.GetName(), ch.GetReference(),ch.GetScale(),ch.GetUnit(),ch.GetComments() ))
 
         f.close()
 
@@ -123,19 +111,6 @@ class AsciiInfo(object):
 
     def printout(self):
         res = "\n".join([df+"="+str(getattr(self, df)) for df in self.__slots__ if not df.startswith('_')])
-        return res
-
-class Channel(object):
-    __slots__ = ["Name", "Reference", "Resolution", "Unit", "Comments"]
-    def __init__(self, name):
-        self.Name       = name
-        self.Reference  = ''
-        self.Resolution = 1.
-        self.Unit       = ''
-        self.Comments   = ''
-
-    def printout(self):
-        res = ",".join([str(getattr(self, df)) for df in self.__slots__ if not df.startswith('_')])
         return res
 
 class BinaryInfo(object):
