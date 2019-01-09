@@ -5,12 +5,14 @@ import tempfile
 from datetime import datetime, timedelta
 import time as tm
 
+from  Parcel.parcel import Parcel
 from DataStructure.Generic.Record import Record as GRecord
 
 from DataStructure.Embla.Record  import ParceRecording
 from DataStructure.Embla.Channel import EbmChannel
 
 from DataStructure.BrainVision.BrainVision import BrainVision
+from DataStructure.BrainVision.Channel  import BvChannel
 
 from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
@@ -286,32 +288,26 @@ try:
                 Logger.debug("Channel {}, type {}, Sampling {} Hz".format(c.ChannName, c.SigType, int(c.DBLsampling)))
 
                 if c.SigSubType in ch_dict:
-                    Logger.warning("Channel {} has same sub-type {} as channel {}".format(c.ChannName, c.SigSubType, ch_dict[c.SigSubType].ChannName ))
+                    Logger.warning("Channel {} has same sub-type {} as channel {}".format(c.GetName(), c.SigSubType, ch_dict[c.SigSubType].GetName() ))
                 else:
                     ch_dict[c.SigSubType] = c
-                l = [c.ChannName, c.SigType, c.CalUnit, c.Header, int(c.DBLsampling), c.SigRef, "", "", "", "", ""]
-                for field in l:
-                    if type(field) is list:
-                        field = str.join(" ", field)
-                    if field == "":
-                        field = "n/a"
-                    print(field, end = '\t', file=f)
-                print("", file = f)
+                l = [c.GetName(Void = "n/a"), c.GetType(Void = "n/a"), str(c.GetUnit()), c.GetDescription(Void = "n/a"), str(c.GetFrequency()), c.GetReference(Void = "n/a"), "n/a", "n/a", "n/a", "n/a", "n/a"]
+                print(str.join("\t", l), file = f)
                 if t_ref != None:
                     if t_ref != c.Time[0]:
-                        Logger.warning("Channel '{}': Starts {} sec later than recording {}".format(c.ChannName, (c.Time[0] - t_ref).total_seconds(), t_ref.isoformat()))
+                        Logger.warning("Channel '{}': Starts {} sec later than recording {}".format(c.GetName(), (c.Time[0] - t_ref).total_seconds(), t_ref.isoformat()))
                 if c.Time[0] < t_min:
                     t_min = c.Time[0]
                     Logger.debug("New t_min {}".format(t_min.isoformat()))
                 elif c.Time[0] != t_min:
-                    Logger.warning("Channel '{}': Starts {} sec later than other channels".format(c.ChannName, (c.Time[0] - t_min).total_seconds()))
-                if c.Time[-1]+timedelta(0, c._seqSize[-1]*c.DBLsampling, 0) > t_max:
-                    t_max = c.Time[-1]+timedelta(0, c._seqSize[-1]/c.DBLsampling, 0) 
+                    Logger.warning("Channel '{}': Starts {} sec later than other channels".format(c.GetName(), (c.Time[0] - t_min).total_seconds()))
+                if c.Time[-1]+timedelta(0, c._seqSize[-1]*c.GetFrequency(), 0) > t_max:
+                    t_max = c.Time[-1]+timedelta(0, c._seqSize[-1]/c.GetFrequency(), 0) 
                     Logger.debug("New t_max {}".format(t_max.isoformat()))
-                if int(c.DBLsampling) != recording.Frequency:
-                    Logger.debug("Channel '{}': Mismatch common sampling frequency {} Hz".format(c.ChannName, recording.Frequency))
+                if int(c.GetFrequency()) != recording.Frequency:
+                    Logger.debug("Channel '{}': Mismatch common sampling frequency {} Hz".format(c.GetName(), recording.Frequency))
                     fr = recording.Frequency
-                    recording.AddFrequency(int(c.DBLsampling))
+                    recording.AddFrequency(c.GetFrequency())
                     if fr != recording.Frequency:
                         Logger.info("Updated common sampling frequency to {} Hz".format(recording.Frequency))
                     
@@ -339,7 +335,6 @@ try:
     events = []
     Logger.info("Reading events info")
     if eegform == "embla":
-        from  Parcel.parcel import Parcel
         evfile = glob.glob(parameters['GENERAL']['Path']+"/*.esedb")[0]
         esedb = olefile.OleFileIO(evfile).openstream('Event Store/Events')
         root = Parcel(esedb)
@@ -400,6 +395,10 @@ try:
     if parameters.getboolean("DATATREATMENT","IgnoreOutOfTimeEvents"):
         events = [ev for ev in events if (ev["Time"] >= t_ref and ev["Time"] <= t_end) ]
 
+    #Updating channels frequency multiplier and starting time
+    for c in channels:
+        c.SetFrequencyMultiplyer(int(recording.Frequency/c.GetFrequency()))
+        c.SetStartTime(t_ref)
     Logger.info("Creating events.tsv file")     
     with open(eegPath+"/"+recording.Prefix()+"_events.tsv", "w") as f:
         print("onset", "duration", "trial_type", "responce_time", "value", "sample", sep='\t', file = f)
@@ -407,7 +406,10 @@ try:
             dt = (ev["Time"] - t_ref).total_seconds()
             print("%.3f\t%.2f\t%s\tn/a\tn/a"% (dt, ev["Span"], ev["Name"]), file = f, end="")
             if ev["Channel"] >= 0 :
-                print("\t%d"%int(dt*channels[ev["Channel"]].DBLsampling), file = f )
+                #This writes index with channel proper frequency
+                #print("\t{}".format(channels[ev["Channel"]].GetIndexTime(ev["Time"], freqMultiplier = 1)), file = f)
+                #This writes index with common frequency
+                print("\t{}".format(channels[ev["Channel"]].GetIndexTime(ev["Time"])), file = f)
             else : 
                 print("\tn/a", file = f )
             
@@ -444,7 +446,7 @@ try:
 
         Logger.info("Creating eeg.vhdr header file")
         for ch in channels:
-            outData.AddChannel(ch.ChannName, '', ch.Scale(), ch.Unit(), "{} at {}".format(ch.SigMainType, ch.SigSubType ))
+            outData.Header.Channels.append(BvChannel(Base = ch, Comments = ch.SigMainType+"-"+ch.SigSubType,))
         outData.Header.write()
         
         Logger.info("Creating eeg.vmrk markers file")
@@ -471,10 +473,11 @@ try:
             l_data = []
             for ch in channels:
                 if outData.Header.BinaryInfo.BinaryFormat == "IEEE_FLOAT_32":
-                    l_data.append(ch.getValueVector(t_s, t_e, freq_mult=int(outData.GetFrequency()/ch.DBLsampling)))
+                    l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=int(outData.GetFrequency()/ch.DBLsampling)))
                 else:
                     l_data.append(ch.getValueVector(t_s, t_e, freq_mult=int(outData.GetFrequency()/ch.DBLsampling), raw = True ))
             outData.DataFile.WriteBlock(l_data)
+    #EDF part
     elif parameters['GENERAL']['Conversion'] == "EDF":
         Logger.info("Converting to EDF+ format")
         Logger.info("Creating events.edf file")

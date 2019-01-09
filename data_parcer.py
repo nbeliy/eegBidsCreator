@@ -2,14 +2,13 @@ import struct, math
 from datetime import datetime, timedelta
 import sys
 
-from DataStructure.Channel import Channel
-from DataStructure.Channel import Marks
+from DataStructure.Embla.Channel import EbmChannel
 
 from glob import glob
 
-#ch = [Channel(c) for c in glob("data_example/embla_data/*.ebm")]
-#ch = [Channel(c) for c in glob("../data_test/EEG/BL/c6902c41-642b-4dd2-88b2-81e03feba944/*.ebm")]
-ch = [Channel(c) for c in glob("../data_test/EEG/ECG/fd068a73-0527-428f-aeed-9e04fb55ed4b/*.ebm")].sort()
+#ch = [EbmChannel(c) for c in glob("data_example/embla_data/*.ebm")]
+#ch = [EbmChannel(c) for c in glob("../data_test/EEG/BL/c6902c41-642b-4dd2-88b2-81e03feba944/*.ebm")]
+ch = sorted([EbmChannel(c) for c in glob("../data_test/EEG/ECG/fd068a73-0527-428f-aeed-9e04fb55ed4b/*.ebm")])
 
 
 def GetExtrema(channel, sequence, raw = False):

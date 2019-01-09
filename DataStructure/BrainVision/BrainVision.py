@@ -31,14 +31,9 @@ class BrainVision(object):
     def AddFrequency(self, freq):
         if type(freq) != int:
             raise Exception("BrainVision: Only integer frequency is supported")
-        self.Header.AddFrequency(freq)
+        self.Header.CommonInfo.AddFrequency(freq)
     def GetFrequency(self):
         return self.Header.CommonInfo.GetFrequency()
-
-    def AddChannel(self, name, reference = '', resolution = 1., unit = '', comments = '' ):
-        if self.Header.BinaryInfo.BinaryFormat == "IEEE_FLOAT_32":
-            resolution = 1.
-        self.Header.AddChannel(name, reference, resolution, unit, comments)
 
     def SetEndian(self, useLittle):
         if useLittle:

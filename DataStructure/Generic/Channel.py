@@ -12,6 +12,9 @@ class GenChannel(object):
         "_seqSize",
         "_frequency",
         "_name",
+        "_type",
+        "_description",
+        "_reference",
 
         "_startTime",
         "_frMultiplier",
@@ -47,6 +50,9 @@ class GenChannel(object):
 
         self._frequency = 1
         self._name = ""
+        self._type = ""
+        self._description = ""
+        self._reference   = ""
 
         self._seqStartTime = []
         self._seqSize      = []
@@ -133,10 +139,47 @@ class GenChannel(object):
         return int((value - self._offset)/self._scale + 0.5)  
 #        return int((value - self._offset)/self._scale)  
 
+    def SetName(self, name):
+        if not (isinstance(name, str)):
+            raise TypeError(self.__class__+": Name must be a string")
+        self._name = name
+    def GetName(self, Void = ""):
+        if self._name != "":
+            return self._name
+        else:
+            return Void
+
+    def SetType(self, name):
+        if not (isinstance(name, str)):
+            raise TypeError(self.__class__+": Type must be a string")
+        self._type = name
+    def GetType(self, Void = ""):
+        if self._type != "":
+            return self._type
+        else:
+            return Void
+    def SetDescription(self, name):
+        if not (isinstance(name, str)):
+            raise TypeError(self.__class__+": Description must be a string")
+        self._description = name
+    def GetDescription(self, Void = ""):
+        if self._description != "":
+            return self._description
+        else:
+            return Void
+    def SetReference(self, name):
+        if not (isinstance(name, str)):
+            raise TypeError(self.__class__+": Reference must be a string")
+        self._reference = name
+    def GetReference(self, Void = ""):
+        if self._reference != "":
+            return self._reference
+        else:
+            return Void
 
     def SetUnit(self, unit):
         if not (isinstance(unit, str)):
-            raise TypeError(self._type+": Unit must be a string")
+            raise TypeError(self.__class__+": Unit must be a string")
         self._unit = unit
 
     def GetUnit(self, wMagnitude = True):
@@ -198,7 +241,7 @@ class GenChannel(object):
     def SetStartTime(self, start):
         if not isinstance(start, datetime):
             raise TypeError(self.__class__+": StartTime must be a datetime object")
-        self._startTime = datetime
+        self._startTime = start
 
     def GetStartTime(self):
         return self._startTime
@@ -217,6 +260,8 @@ class GenChannel(object):
     Functions related to the index of a partiular data points.
     Each point can be indexed by global index, common to all channels, given the common time origin, 
     and common frequency, or by local index defined its position in its sequence.
+    """
+    """
     Return global index given sequence, local index, reference time and frequency multiplier
     """
     def GetIndex(self, sequence, point,  StartTime = None, freqMultiplier = None):
@@ -252,6 +297,21 @@ class GenChannel(object):
         if index < 0 :
             raise IndexError(self.__class__+": index ("+str(point)+")is out of the range")
         return StartTime+index/(self._frequency*freqMultiplier)
+
+    """Returns index of corresponding time """
+    def GetIndexTime(self, time, StartTime = None, freqMultiplier = None):
+        if StartTime == None:
+            StartTime = self._startTime
+        if freqMultiplier == None:
+            freqMultiplier = self._frMultiplier
+        if not isinstance(StartTime, datetime):
+            raise TypeError(self.__class__+": StartTime must be datetime object")
+        if not (isinstance(freqMultiplier,int) or freqMultiplier > 0):
+            raise TypeError(self.__class__+": freqMultiplier must be a positive integer") 
+        if not isinstance(time, datetime):
+            raise TypeError(self.__class__+": time must be datetime object")
+        return int((time - StartTime).total_seconds()*(self._frequency*freqMultiplier))
+
 
     """Returns the (sequence, loc_index) for given data point. If there no valid sequence/index, corresponding value will be -1"""
     def GetLocalIndex(self, index, StartTime = None, freqMultiplier = None):

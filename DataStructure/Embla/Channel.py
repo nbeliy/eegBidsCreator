@@ -149,6 +149,11 @@ class EbmChannel(GenChannel):
     
         #Finalizing initialization
         self._name         = self.ChannName
+        self._type         = self.SigType
+        self._description  = self.SigMainType
+        if self.SigSubType != "":
+            self._description += "-"+self.SigSubType
+        self._reference    = self.SigRef
         self._unit         = self.CalUnit
         self._seqStartTime = self.Time
         self._frequency    = int(self.DBLsampling)
