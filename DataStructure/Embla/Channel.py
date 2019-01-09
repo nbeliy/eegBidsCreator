@@ -32,60 +32,62 @@ class Field(object):
     def IsUnique(self):
         return (self.Entries == 1)
 
-""" A dictionary of fields in the ebm file, each entry will create a corresponding field in channel class  """
-Marks = {
-    b'\x80\x00\x00\x00' : Field("Version", "B", Size = 2, Unique = True),
-    b'\x81\x00\x00\x00' : Field("Header", "x", IsText = True, Unique = True),
-    b'\x84\x00\x00\x00' : Field("Time", "HBBBBBB", Size = 1),
-    b'\x85\x00\x00\x00' : Field("Channel", "h", Unique = True),
-    b'\x86\x00\x00\x00' : Field("Sampling", "L", Unique = True),
-    b'\x87\x00\x00\x00' : Field("Gain", "L", Unique = True),
-    b'\x88\x00\x00\x00' : Field("SCount", "I", Unique = True),
-    b'\x89\x00\x00\x00' : Field("DBLsampling", "d", Unique = True),
-    b'\x8a\x00\x00\x00' : Field("RateCorr", "d", Unique = True),
-    b'\x8b\x00\x00\x00' : Field("RawRange", "d", Unique = True),
-    b'\x8c\x00\x00\x00' : Field("TransRange", "d", Unique = True),
-    b'\x8d\x00\x00\x00' : Field("Channel_32", "H", Unique = True),
 
-    b'\x90\x00\x00\x00' : Field("ChannName", "x", IsText = True, Unique = True),
-    b'\x95\x00\x00\x00' : Field("DMask_16", "h"),
-    b'\x96\x00\x00\x00' : Field("SignData", "B", Unique = True, Size = 1),
-    b'\x98\x00\x00\x00' : Field("CalFunc", "x", IsText = True, Unique = True),
-    b'\x99\x00\x00\x00' : Field("CalUnit", "h", IsText=True, Unique = True),
-    b'\x9A\x00\x00\x00' : Field("CalPoint", "h"),
-    
-    b'\xa0\x00\x00\x00' : Field("Event", "h"),
-    
-    b'\xc0\x00\x00\x00' : Field("SerialNumber", "x", IsText = True, Unique = True),
-    b'\xc1\x00\x00\x00' : Field("DeviceType", "x", IsText = True, Unique = True),
-    
-    b'\xd0\x00\x00\x00' : Field("SubjectName", "x", IsText = True, Unique = True),
-    b'\xd1\x00\x00\x00' : Field("SubjectId", "x", IsText = True, Unique = True),
-    b'\xd2\x00\x00\x00' : Field("SubjectGroup", "x", IsText = True, Unique = True),
-    b'\xd3\x00\x00\x00' : Field("SubjectAtten", "x", IsText = True, Unique = True),
-    
-    b'\xe0\x00\x00\x00' : Field("FilterSet", "h"),
-    
-    b'\x20\x00\x00\x00' : Field("Data", "f"),
-    
-    b'\x30\x00\x00\x00' : Field("DataGuId", "x", IsText = True, Unique = True),
-    b'\x40\x00\x00\x00' : Field("RecGuId", "x", IsText = True, Unique = True),
-    
-    b'\xA0\x00\x00\x02' : Field("SigType", "h", IsText = True, Unique = True),
-    b'\x20\x00\x00\x04' : Field("LowHight", "d", Unique = True),
-    b'\x70\x00\x00\x03' : Field("SigRef", "h", IsText = True, Unique = True),
-    b'\x72\x00\x00\x03' : Field("SigMainType", "h", IsText = True, Unique = True),
-    b'\x74\x00\x00\x03' : Field("SigSubType", "h", IsText = True, Unique = True),
-   } 
-
-class Channel(GenChannel):
+class EbmChannel(GenChannel):
     """ Class containing all information retrieved from ebm file. The data instead to be loaded in the memory, are readed directly from file """
-    __slots__ = [x.Name for x in list(Marks.values())]+["Endian", "Wide", "_stream", "_seqStart", "_totSize", "_dataSize"]
     #Minimum and maximum values for short integer
     _MAXINT = 32767
     _MININT = -32767
+    """ A dictionary of fields in the ebm file, each entry will create a corresponding field in channel class  """
+    _Marks = {
+        b'\x80\x00\x00\x00' : Field("Version", "B", Size = 2, Unique = True),
+        b'\x81\x00\x00\x00' : Field("Header", "x", IsText = True, Unique = True),
+        b'\x84\x00\x00\x00' : Field("Time", "HBBBBBB", Size = 1),
+        b'\x85\x00\x00\x00' : Field("Channel", "h", Unique = True),
+        b'\x86\x00\x00\x00' : Field("Sampling", "L", Unique = True),
+        b'\x87\x00\x00\x00' : Field("Gain", "L", Unique = True),
+        b'\x88\x00\x00\x00' : Field("SCount", "I", Unique = True),
+        b'\x89\x00\x00\x00' : Field("DBLsampling", "d", Unique = True),
+        b'\x8a\x00\x00\x00' : Field("RateCorr", "d", Unique = True),
+        b'\x8b\x00\x00\x00' : Field("RawRange", "d", Unique = True),
+        b'\x8c\x00\x00\x00' : Field("TransRange", "d", Unique = True),
+        b'\x8d\x00\x00\x00' : Field("Channel_32", "H", Unique = True),
+
+        b'\x90\x00\x00\x00' : Field("ChannName", "x", IsText = True, Unique = True),
+        b'\x95\x00\x00\x00' : Field("DMask_16", "h"),
+        b'\x96\x00\x00\x00' : Field("SignData", "B", Unique = True, Size = 1),
+        b'\x98\x00\x00\x00' : Field("CalFunc", "x", IsText = True, Unique = True),
+        b'\x99\x00\x00\x00' : Field("CalUnit", "h", IsText=True, Unique = True),
+        b'\x9A\x00\x00\x00' : Field("CalPoint", "h"),
+        
+        b'\xa0\x00\x00\x00' : Field("Event", "h"),
+        
+        b'\xc0\x00\x00\x00' : Field("SerialNumber", "x", IsText = True, Unique = True),
+        b'\xc1\x00\x00\x00' : Field("DeviceType", "x", IsText = True, Unique = True),
+        
+        b'\xd0\x00\x00\x00' : Field("SubjectName", "x", IsText = True, Unique = True),
+        b'\xd1\x00\x00\x00' : Field("SubjectId", "x", IsText = True, Unique = True),
+        b'\xd2\x00\x00\x00' : Field("SubjectGroup", "x", IsText = True, Unique = True),
+        b'\xd3\x00\x00\x00' : Field("SubjectAtten", "x", IsText = True, Unique = True),
+        
+        b'\xe0\x00\x00\x00' : Field("FilterSet", "h"),
+        
+        b'\x20\x00\x00\x00' : Field("Data", "f"),
+        
+        b'\x30\x00\x00\x00' : Field("DataGuId", "x", IsText = True, Unique = True),
+        b'\x40\x00\x00\x00' : Field("RecGuId", "x", IsText = True, Unique = True),
+        
+        b'\xA0\x00\x00\x02' : Field("SigType", "h", IsText = True, Unique = True),
+        b'\x20\x00\x00\x04' : Field("LowHight", "d", Unique = True),
+        b'\x70\x00\x00\x03' : Field("SigRef", "h", IsText = True, Unique = True),
+        b'\x72\x00\x00\x03' : Field("SigMainType", "h", IsText = True, Unique = True),
+        b'\x74\x00\x00\x03' : Field("SigSubType", "h", IsText = True, Unique = True),
+    } 
+    __slots__ = [x.Name for x in list(_Marks.values())]+["Endian", "Wide", "_stream", "_seqStart", "_totSize", "_dataSize"]
+
+
     def __init__(self, filename):
-        super(Channel, self).__init__()
+        super(EbmChannel, self).__init__()
         for f in self.__slots__:
             if f[0:1] != "_":
                 setattr(self, f, [])
@@ -125,10 +127,10 @@ class Channel(GenChannel):
                 self._stream.seek(32 - 6,1)
          
         if self.Wide:
-            Marks[b'\x20\x00\x00\x00'].Format = 'h'
+            self._Marks[b'\x20\x00\x00\x00'].Format = 'h'
             self._dataSize = 2
         else:
-            Marks[b'\x20\x00\x00\x00'].Format = 'b'
+            self._Marks[b'\x20\x00\x00\x00'].Format = 'b'
             self._dataSize = 1
         
         while True:
@@ -198,7 +200,7 @@ class Channel(GenChannel):
         self._stream.close()
 
     def _read(self, marker, size):
-        dtype = Marks[marker]
+        dtype = self._Marks[marker]
         try:
             fname = dtype.Name 
             fsize = dtype.Size 
@@ -258,7 +260,7 @@ class Channel(GenChannel):
             point, sequence = self.getRelPoint(point)
 
         self._stream.seek(self._seqStart[sequence] + (point)*self._dataSize)
-        val = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, self._stream.read(self._dataSize))[0]
+        val = struct.unpack(self.Endian+self._Marks[b'\x20\x00\x00\x00'].Format, self._stream.read(self._dataSize))[0]
         if val > self._digMax:
             val = self._digMax
         if val < self._digMin:
@@ -316,9 +318,9 @@ class Channel(GenChannel):
                 raise Exception("Unexpected end of stream for channel {}, expected {}*{} data, read {}".format(self.ChannName, self._dataSize,to_read, len(data)))
             if len(res) < index+to_read*freq_mult:
                 raise Exception("Unexpected end of list for channel {}. Need {}+{}*{} cells, got {}".format(self.ChannName, index, to_read,freq_mult, len(res)))
-            d = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format*to_read, data)
+            d = struct.unpack(self.Endian+self._Marks[b'\x20\x00\x00\x00'].Format*to_read, data)
             for i in range (0, to_read ):
-#                res[index] = struct.unpack(self.Endian+Marks[b'\x20\x00\x00\x00'].Format, data[i:i+self._dataSize])[0]
+#                res[index] = struct.unpack(self.Endian+self._Marks[b'\x20\x00\x00\x00'].Format, data[i:i+self._dataSize])[0]
                 res[index] = d[i]
                 if res[index] > self._digMax: res[index] = self._digMax
                 if res[index] < self._digMin: res[index] = self._digMin

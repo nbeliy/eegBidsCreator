@@ -1,7 +1,7 @@
 import struct
 from datetime import datetime
 
-class Event(object):
+class EbmEvent(object):
     """Structure for Event-type data"""
     __slots__ = ["LocationIdx", 
                 "AuxDataID", 
@@ -49,7 +49,7 @@ def ReadEvents(data):
         raise Exception("Data size is not multiple of 112, events record is corrupted")
     array = []
     for pos in range(0, len(data), 112):
-        array.append(Event(data[pos:pos+112]))
+        array.append(EbmEvent(data[pos:pos+112]))
     return array
 
 def ReadEventsStartTime(data):

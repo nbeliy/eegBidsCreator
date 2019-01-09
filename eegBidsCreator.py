@@ -7,7 +7,9 @@ import time as tm
 
 from DataStructure.Generic.Record import Record as GRecord
 
-from DataStructure.Record import ParceRecording
+from DataStructure.Embla.Record  import ParceRecording
+from DataStructure.Embla.Channel import EbmChannel
+
 from DataStructure.BrainVision.BrainVision import BrainVision
 
 from DataStructure.EDF.EDF import EDF
@@ -271,8 +273,7 @@ try:
     Logger.info("Creating channels.tsv file")
     with open(eegPath+"/"+recording.Prefix()+"_channels.tsv", "w") as f:
         if eegform == "embla":
-            from DataStructure.Channel import Channel
-            channels = [Channel(c) for c in glob.glob(parameters['GENERAL']['Path']+"/*.ebm")]
+            channels = [EbmChannel(c) for c in glob.glob(parameters['GENERAL']['Path']+"/*.ebm")]
             print("name", "type", "units", "description", "sampling_frequency", "reference", 
                 "low_cutoff", "high_cutoff", "notch", "status", "status_description", sep='\t', file = f)
             if parameters["DATATREATMENT"]['DropChannels'] != "":
