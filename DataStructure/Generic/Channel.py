@@ -182,10 +182,10 @@ class GenChannel(object):
             raise TypeError(self.__class__+": Unit must be a string")
         self._unit = unit
 
-    def GetUnit(self, wMagnitude = True):
+    def GetUnit(self, wMagnitude = True, Void = ""):
         if wMagnitude:
             if self._unit == "":
-                if self._magnitude == 0: return ""
+                if self._magnitude == 0: return Void
                 else: return "x10^"+str(self._magnitude)
             if self._magnitude in self._SIprefixes:
                 return self._SIprefixes[self._magnitude]+self._unit
@@ -193,7 +193,8 @@ class GenChannel(object):
                 magn = min(self._SIprefixes.keys(),key= lambda k: abs(k-self._magnitude))
                 return "x10^"+str(self._magnitude - magn)+" "+self._SIprefixes[magn]+self._unit
         else:
-            return self._unit    
+            if self._unit == "": return Void
+            else: return self._unit    
 
     """Setting the magnitude to the measured value. This affects scale, offset and physical range"""
     def SetMagnitude(self, magn):

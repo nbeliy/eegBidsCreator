@@ -3,13 +3,13 @@
 A script to convert embla files to the BID standard
 It creates the required folders: `sub-<participant_label>/[ses-<session_label>/]eeg`,  which will contain acquisition information, and `source/sub-<participant_label>/[ses-<session_label>/]eeg`, where the original raw data will be copied. If subfolder eeg already exists, the content will be **erased**
 
-It also creates channels.tsv file, containing the list of all channels. Information that I managed to retrieve are the name, units(may be not accurate), type, description(if it is provided by embla), and sampling frequency. Remaining fields are filled with "n/a".
+It also creates channels.tsv file, containing the list of all channels. Information that I managed to retrieve are the name, units, type, description (if it is provided by embla), and sampling frequency. Remaining fields are filled with "n/a".
 
 Extracted events are stored in events.tsv file with its onset time, duration, type, and corresponding sample (i.e. the number of data point of corresponding time, onset\*sampling) 
 
 I didn't found the task/acquisition/session/run id in the files, so they must be passed to script via options `-t, -a, -s, -r`. Only task option is mandatory.
 
-If an additional command `BrainVision` is provided, the source files will be converted into BrainVision format
+If an additional command `BrainVision` or `EDF` is provided, the source files will be converted into BrainVision/EDF+ format.
 
 ## Usage
 
@@ -18,9 +18,10 @@ usage: eegBidsCreator.py [-h] [-t, --task taskId] [-a, --acquisition acqId]
                          [-s, --session sesId] [-r, --run, runId]
                          [-j, --json eegJson] [-o, --output OUTDIR]
                          [-c, --config [CONFIG_FILE]] [--logfile [log.out]]
+                         [-q,--quiet]
                          [--log {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
                          [--version]
-                         eegfile {BrainVision} ...
+                         eegfile {BrainVision,EDF} ...
 
 Converts EEG file formats to BID standard
 
@@ -39,13 +40,15 @@ optional arguments:
   -c, --config [CONFIG_FILE]
                         Path to configuration file
   --logfile [log.out]   log file destination
+  -q,--quiet            Supress standard output
   --log {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         logging level
   --version             show program's version number and exit
 
 conversions:
-  {BrainVision}         do <command --help> for additional help
+  {BrainVision,EDF}     do <command --help> for additional help
     BrainVision         Conversion to BrainVision format
+    EDF                 Conversion to EDF format
 ```
 ```
 usage: eegBidsCreator.py eegfile BrainVision [-h] [--encoding {UTF-8,ANSI}]
@@ -62,8 +65,9 @@ optional arguments:
 ```
 
 ### Config File
+
 Several options are accessible by the configuration file, which is loaded by `-c <configuration file>`.
-The file follows a standard `ini` structture, with parameters and possible values are explained in the example file `eegBidsCreator.conf`. The parameters specification priority are as follows: `default < conf < cmd line`
+The file follows a standard `ini` structture, with parameters and possible values are explained in the example file `eegBidsCreator.ini`. The parameters specification priority are as follows: `default < conf < cmd line`
 
 ### Example
 
@@ -76,19 +80,24 @@ The file follows a standard `ini` structture, with parameters and possible value
 ### Dependencies
 
 It runs only with python3, and need following standard modules installed:
-- struct (need to convert binary data to various number formats)
-- datetime
-- sys
-- olefile (need to unpack esedb, formatted in ole2)
-- argparse
-- logging
-- argparce
-- os
-- io
+
+- olefile
 - json
-- xml.etree.ElementTree
 - glob
+- traceback
+- struct
+- os
+- sys
+- io
+- math
 - shutil
+- tempfile
+- logging
+- argparse
+- configparser
+- datetime
+- time
+
 
 ## Conversion into BrainVision
 
@@ -102,16 +111,32 @@ If a given channel has a missing value at given time (i.e. the acquisition start
 
 Finally, the BrainVision format can store the values in float as well as in short with a scale factor. Storage in float remove the need of scale value, but increase size of data file by a factor of 2.
 
+## Conversion into EDF+
+
+The [EDF+ format](https://www.edfplus.info/specs/index.html) contain all channels data in the same file. However, due to the organisation of the data it supports multiple frequencies, so there no need for oversampling. 
+
+The EDF+ format also supports the storage of the events in the same file, but it is difficult to estimate correctly the needed space for the events, so the `eegBidsCreator` stores all the events in separate edf file.
+
+The file is composed of 3 parts: 
+
+- upper block of header, containing a metadata, like subject information, enregistrement information, starting time, duration etc.
+- lower block of header, containing description of all channels. In the EDF+ format first channel is reserved for the time stamps of records
+- data block, which is organized in records of fixed durations (1 - 10 seconds), containing 2 bit signed short integers as data.
+
+EDF+ supports discontinious data storage, but it is not yet implemented.
+Unlike the BrainVision format, the conversion from short to measured value is not performed via the scale but via the precision of physical and digital extrema. Thus allowing the incorporation of not only a scale of signal but also an offset.
+
+EDF+ supports also encoding of data using logaritmic scale, which is used if the constant relative precision is nessesary. As original Embla format works with ranges, this feature wasn't implemented.
 
 ## Known issues
 
 - Some events don't have an associated type, they will appear as "n/a" in events.tsv file
 - For some channels, the names in esedb and in emb files mismach, thus can't determine the corect `sample` value -- **fixed**
-- `sample` value can be not an integer, if corresponding event happened between two measures
+- `sample` value can be not an integer, if corresponding event happened between two measures -- **fixed**
 
 ## Need help!
 
-I have only 3 (now 4, thanks Vinchenzo) embla folders, so my tests are limited. Also I never tested the script on Windows/Mac machine.
+**TEST** **TEST** **TEST** 
 
 So I need maindeuvre for extensive testing on existing data. You can run the script on your embla data, and verify that the retrieved information is correct and it is correctly formatted. 
 
@@ -121,6 +146,10 @@ Other corrections/suggestions/spell corections can be reported as issues on gitl
 
 ## Future plans
 
-- Transform the embla format to brainproducts
-- Retrieve and control the information from json file
-- Understand the filter and calibration entries
+- Transform the embla format to brainproducts -- **done**
+- Transform the embla format to EDF+ -- **done**
+- Implement segmented data
+- Implement version check for ebm
+- Retrieve and control the information from json file -- **done**
+- Understand the filter
+- Understand the Calibration -- **done**
