@@ -1,4 +1,4 @@
-VERSION = '0.5'
+VERSION = '0.6'
 
 import logging, argparse, os, json, glob, olefile, traceback, struct, configparser
 import tempfile
@@ -88,6 +88,7 @@ parameters.optionxform = lambda option: option
 parameters['GENERAL'] = {"TaskId":"", "AcquisitionId":"", "SessionId":"", "RunId":"",
                         "JsonFile":"",
                         "OutputFolder":".", 
+                        "LogFile" : "",
                         "LogLevel":"INFO", 
                         "Quiet":"no",
                         "Conversion":""}
@@ -103,13 +104,14 @@ if args.config_file != None:
     parameters.read(args.config_file)
 
 #Overloading values by command-line arguments
-if args.task != None : parameters['GENERAL']['TaskId']          = args.task
-if args.acq  != None : parameters['GENERAL']['AcquisitionId']   = args.acq
-if args.ses  != None : parameters['GENERAL']['SessionId']       = args.ses
-if args.run  != None : parameters['GENERAL']['RunId']           = args.run
+if args.task    != None : parameters['GENERAL']['TaskId']       = args.task
+if args.acq     != None : parameters['GENERAL']['AcquisitionId']= args.acq
+if args.ses     != None : parameters['GENERAL']['SessionId']    = args.ses
+if args.run     != None : parameters['GENERAL']['RunId']        = args.run
 if args.eegJson  != None: parameters['GENERAL']['JsonFile']     = args.eegJson
 if args.loglevel != None: parameters['GENERAL']['LogLevel']     = args.loglevel
-if args.quiet == True : parameters['GENERAL']['Quiet']          = 'yes'
+if args.logfile  != None: parameters['GENERAL']['LogFile']      = args.logfile
+if args.quiet == True   : parameters['GENERAL']['Quiet']        = 'yes'
 if args.command != None : parameters['GENERAL']['Conversion']   = args.command
 if args.infile  != None : parameters['GENERAL']['Path']         = os.path.realpath(args.infile[0])
 if args.outdir  !=None  : parameters['GENERAL']['OutputFolder'] = os.path.realpath(args.outdir[0])
@@ -136,6 +138,12 @@ Logger.setLevel(getattr(logging, parameters['GENERAL']['LogLevel'], None))
 fileHandler = logging.FileHandler(tmpDir+"/logfile")
 fileHandler.setFormatter(logFormatter)
 Logger.addHandler(fileHandler)
+
+if parameters['GENERAL']['LogFile'] != "":
+    fileHandler2 = logging.FileHandler(parameters['GENERAL']['LogFile'])
+    fileHandler2.setFormatter(logFormatter)
+    Logger.addHandler(fileHandler2)
+    
 
 if not parameters['GENERAL'].getboolean('Quiet'):
     consoleHandler = logging.StreamHandler()
@@ -418,10 +426,10 @@ try:
         recording.UpdateJSON()
         counter = {"EEGChannelCount":0, "EOGChannelCount":0, "ECGChannelCount":0, "EMGChannelCount":0, "MiscChannelCount":0}
         for ch in channels:
-           if   ch.SigType == "EEG": counter["EEGChannelCount"] += 1
-           elif ch.SigType == "EOG": counter["EOGChannelCount"] += 1
-           elif ch.SigType == "ECG": counter["ECGChannelCount"] += 1
-           elif ch.SigType == "EMG": counter["EMGChannelCount"] += 1
+           if   "EEG" in ch.SigType: counter["EEGChannelCount"] += 1
+           elif "EOG" in ch.SigType: counter["EOGChannelCount"] += 1
+           elif "ECG" in ch.SigType: counter["ECGChannelCount"] += 1
+           elif "EMG" in ch.SigType: counter["EMGChannelCount"] += 1
            else: counter["MiscChannelCount"] += 1
         recording.JSONdata.update(counter)
         res = recording.CheckJSON()
