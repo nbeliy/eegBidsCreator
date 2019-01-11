@@ -298,7 +298,7 @@ def main(argv):
                         Logger.warning("Channel {} has same sub-type {} as channel {}".format(c.GetName(), c.SigSubType, ch_dict[c.SigSubType].GetName() ))
                     else:
                         ch_dict[c.SigSubType] = c
-                    l = [c.GetName(Void = "n/a"), c.GetType(Void = "n/a"), str(c.GetUnit()), c.GetDescription(Void = "n/a"), str(c.GetFrequency()), c.GetReference(Void = "n/a"), "n/a", "n/a", "n/a", "n/a", "n/a"]
+                        l = [c.GetName(Void = "n/a"), c.GetType(Void = "n/a"), c.GetUnit(Void = "n/a"), c.GetDescription(Void = "n/a"), str(c.GetFrequency()), c.GetReference(Void = "n/a"), "n/a", "n/a", "n/a", "n/a", "n/a"]
                     print(str.join("\t", l), file = f)
                     if t_ref != None:
                         if t_ref != c.Time[0]:
@@ -406,6 +406,7 @@ def main(argv):
         for c in channels:
             c.SetFrequencyMultiplyer(int(recording.Frequency/c.GetFrequency()))
             c.SetStartTime(t_ref)
+
         Logger.info("Creating events.tsv file")     
         with open(eegPath+"/"+recording.Prefix()+"_events.tsv", "w") as f:
             print("onset", "duration", "trial_type", "responce_time", "value", "sample", sep='\t', file = f)
@@ -450,10 +451,11 @@ def main(argv):
             outData.SetDataFormat(parameters['BRAINVISION']['DataFormat'])
             outData.SetEndian(parameters['BRAINVISION']['Endian'] == "Little")
             outData.AddFrequency(recording.Frequency)
+            print(outData.GetFrequency())
 
             Logger.info("Creating eeg.vhdr header file")
             for ch in channels:
-                outData.Header.Channels.append(BvChannel(Base = ch, Comments = ch.SigMainType+"-"+ch.SigSubType,))
+                outData.Header.Channels.append(BvChannel(Base = ch, Comments = ch.SigMainType+"-"+ch.SigSubType))
             outData.Header.write()
             
             Logger.info("Creating eeg.vmrk markers file")
@@ -470,19 +472,22 @@ def main(argv):
             outData.DataFile.SetEndian(outData.Header.BinaryInfo.UseBigEndianOrder)
             outData.DataFile.OpenFile()
             t_e = t_ref
+            t_step = 3600
             while True:
                 t_s = t_e
-                t_e = t_e + timedelta(0,3600,0)
+                t_e = t_e + timedelta(0,t_step,0)
                 if t_s >= t_end: break
-                if t_e > t_end: t_e = t_end
+                if t_e > t_end: 
+                    t_e = t_end
+                    t_step = (t_e - t_s).total_seconds()
                 Logger.info("Timepoint: {}".format(t_s.isoformat()))
                 Logger.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
                 l_data = []
                 for ch in channels:
                     if outData.Header.BinaryInfo.BinaryFormat == "IEEE_FLOAT_32":
-                        l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=int(outData.GetFrequency()/ch.DBLsampling)))
+                        l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer()))
                     else:
-                        l_data.append(ch.getValueVector(t_s, t_e, freq_mult=int(outData.GetFrequency()/ch.DBLsampling), raw = True ))
+                        l_data.append(ch.getValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer(), raw = True ))
                 outData.DataFile.WriteBlock(l_data)
         #EDF part
         elif parameters['GENERAL']['Conversion'] == "EDF":
