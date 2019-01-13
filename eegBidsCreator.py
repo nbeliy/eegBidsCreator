@@ -1,12 +1,14 @@
 VERSION = '0.6'
 
 import logging, argparse, os, json, glob, olefile, traceback, struct, configparser
-import tempfile
+import tempfile, bisect
 from datetime import datetime, timedelta
 import time as tm
 
 from  Parcel.parcel import Parcel
 from DataStructure.Generic.Record import Record as GRecord
+from DataStructure.Generic.Event  import GenEvent
+
 
 from DataStructure.Embla.Record  import ParceRecording
 from DataStructure.Embla.Channel import EbmChannel
@@ -386,7 +388,12 @@ def main(argv):
                 else:
                     ch_index = 0
                     continue
-                events.append({"Name": name,  "Time":time, "Channel": ch_index, "Span": ev.TimeSpan, "Location": ch_id})
+                ev = GenEvent(Name = name, Time = time, Duration = ev.TimeSpan)
+                ev.AddChannel(ch_id)
+                if not ev in events:
+                    bisect.insort(events,ev)
+                else :
+                    events[events.index(ev)].AddChannel(ch_id)
 
                 if parameters["DATATREATMENT"]["StartEvent"] == name and time > t_ref and time < t_ev_min:
                     t_ev_min = time
@@ -405,11 +412,20 @@ def main(argv):
         if parameters.getboolean("DATATREATMENT","IncludeSegmentStart"):
             for i, ch in enumerate(channels):
                 for t in ch.Time:
-                    events.append({"Name": "New Segment", "Time":t, "Channel": i, "Span":0., "Location":""})
-        events.sort(key=lambda a: a["Time"])
-        events.insert(0,{"Name": "New Segment", "Time":t_ref, "Channel": -1, "Span":0., "Location":""})
+                    ev = GenEvent(Name = "New Segment", Time = t, Duration = 0)
+                    ev.AddChannel(ch.Id())
+                    if not ev in events:
+                        bisect.insort(events,ev)
+                    else :
+                        events[events.index(ev)].AddChannel(ch_id)
+        ev = GenEvent(Name = "New Segment", Time = t_ref, Duration = 0)
+        if not ev in events:
+            bisect.insort(events,ev)
+        else :
+            events[events.index(ev)].RemoveChannel()
+        
         if parameters.getboolean("DATATREATMENT","IgnoreOutOfTimeEvents"):
-            events = [ev for ev in events if (ev["Time"] >= t_ref and ev["Time"] <= t_end) ]
+            events = [ev for ev in events if (ev.GetTime() >= t_ref and ev.GetTime() <= t_end) ]
 
         #Updating channels frequency multiplier and starting time
         for c in channels:
@@ -420,17 +436,17 @@ def main(argv):
         with open(eegPath+"/"+recording.Prefix()+"_events.tsv", "w") as f:
             print("onset", "duration", "trial_type", "responce_time", "value", "sample", sep='\t', file = f)
             for ev in events:
-                dt = (ev["Time"] - t_ref).total_seconds()
-                print("%.3f\t%.2f\t%s\tn/a\tn/a"% (dt, ev["Span"], ev["Name"]), file = f, end="")
-                if ev["Channel"] >= 0 :
-                    #This writes index with channel proper frequency
-                    #print("\t{}".format(channels[ev["Channel"]].GetIndexTime(ev["Time"], freqMultiplier = 1)), file = f)
-                    #This writes index with common frequency
-                    print("\t{}".format(channels[ev["Channel"]].GetIndexTime(ev["Time"])), file = f)
-                else : 
-                    print("\tn/a", file = f )
+                if ev.GetChannelsSize() == 0:
+                    print("%.3f\t%.2f\t%s\tn/a\tn/a\t%d" %(ev.GetOffset(t_ref), ev.GetDuration(), ev.GetName(), ev.GetOffset(t_ref)*recording.Frequency), file = f )
+                else :
+                    for c_id in ev.GetChannels():
+                        print("%.3f\t%.2f\t%s\tn/a\tn/a"% (ev.GetOffset(t_ref), ev.GetDuration(), ev.GetName()), file = f, end="")
+                        #This writes index with channel proper frequency
+                        #print("\t{}".format(channels[ev["Channel"]].GetIndexTime(ev["Time"], freqMultiplier = 1)), file = f)
+                        #This writes index with common frequency
+                        print("\t{}".format(ch_dict[c_id].GetIndexTime(ev.GetTime())), file = f)
                 
-        logging.info("Creating eeg.json file")
+        Logger.info("Creating eeg.json file")
         with open(eegPath+"/"+recording.Prefix()+"_eeg.json", "w") as f:
             recording.UpdateJSON()
             counter = {"EEGChannelCount":0, "EOGChannelCount":0, "ECGChannelCount":0, "EMGChannelCount":0, "MiscChannelCount":0}
@@ -443,13 +459,13 @@ def main(argv):
             recording.JSONdata.update(counter)
             res = recording.CheckJSON()
             if len(res[0]) > 0:
-                logging.warning("JSON: Missing next required fields: "+ str(res[0]))
+                Logger.warning("JSON: Missing next required fields: "+ str(res[0]))
             if len(res[1]) > 0:
-                logging.info("JSON: Missing next recomennded fields: "+ str(res[1]))
+                Logger.info("JSON: Missing next recomennded fields: "+ str(res[1]))
             if len(res[2]) > 0:
-                logging.debug("JSON: Missing next optional fields: "+ str(res[2]))
+                Logger.debug("JSON: Missing next optional fields: "+ str(res[2]))
             if len(res[3]) > 0:
-                logging.warning("JSON: Contains next non BIDS fields: "+ str(res[3]))
+                Logger.warning("JSON: Contains next non BIDS fields: "+ str(res[3]))
             json.dump(recording.JSONdata, f, skipkeys=False, indent="  ", separators=(',',':'))
 
         outData = None
@@ -473,7 +489,11 @@ def main(argv):
             outData.MarkerFile.SetStartTime(t_ref)
             Logger.info("Writting proper events")
             for ev in events:
-                outData.MarkerFile.AddMarker(ev["Name"], ev["Time"], ev["Span"], ev["Channel"], "")
+                if (ev.GetChannelsSize() == 0):
+                    outData.MarkerFile.AddMarker(ev.GetName(), ev.GetTime(), ev.GetDuration(), -1, "")
+                else:
+                    for c in ev.GetChannels():
+                        outData.MarkerFile.AddMarker(ev.GetName(), ev.GetTime(), ev.GetDuration(), channels.index(ch_dict[c]), "")
             outData.MarkerFile.Write()
 
             Logger.info("Creating eeg data file")
@@ -526,7 +546,11 @@ def main(argv):
             outData.RecordDuration = 10.
 
             for ev in events:
-                outData.AddEvent(ev["Name"], ev["Time"], ev["Span"], ev["Channel"], "")
+                if (ev.GetChannelsSize() == 0):
+                    outData.AddEvent(ev.GetName(), ev.GetTime(), ev.GetDuration(), -1, "")
+                else:
+                    for c in ev.GetChannels():
+                        outData.AddEvent(ev.GetName(), ev.GetTime(), ev.GetDuration(), channels.index(ch_dict[c]), "")
             outData.WriteEvents()
                 
             for ch in channels:

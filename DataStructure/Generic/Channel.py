@@ -1,4 +1,4 @@
-import datetime, math
+import math
 from datetime import datetime
 
 class GenChannel(object):
