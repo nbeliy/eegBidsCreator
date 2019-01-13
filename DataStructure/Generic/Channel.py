@@ -15,6 +15,7 @@ class GenChannel(object):
         "_type",
         "_description",
         "_reference",
+        "_id",
 
         "_startTime",
         "_frMultiplier",
@@ -61,7 +62,10 @@ class GenChannel(object):
         self._frMultiplier = 1
 
         self._baseChannel  = self
+        self._id = -1
 
+    def GetId(self): return self._id
+    def SetId(self, Id): self._id = Id
 
     def GetScale(self): return self._scale
     def GetOffset(self): return self._offset

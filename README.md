@@ -130,7 +130,7 @@ EDF+ supports also encoding of data using logaritmic scale, which is used if the
 
 ## Known issues
 
-- Some events don't have an associated type, they will appear as "n/a" in events.tsv file
+- Some events don't have an associated type, they will appear as "n/a" in events.tsv file -- **fixed**
 - For some channels, the names in esedb and in emb files mismach, thus can't determine the corect `sample` value -- **fixed**
 - `sample` value can be not an integer, if corresponding event happened between two measures -- **fixed**
 

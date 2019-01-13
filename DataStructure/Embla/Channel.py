@@ -150,6 +150,7 @@ class EbmChannel(GenChannel):
         #Finalizing initialization
         self._name         = self.ChannName
         self._type         = self.SigType
+        self._id           = self.SigMainType+"_"+self.SigSubType
         self._description  = self.SigMainType
         if self.SigSubType != "":
             self._description += "-"+self.SigSubType
@@ -345,3 +346,4 @@ class EbmChannel(GenChannel):
         if self.Channel_32[1] < other.Channel_32[1]: return True
         if self.Channel_32[1] > other.Channel_32[1]: return False
         return self.Channel_32[0] < other.Channel_32[0]
+
