@@ -295,10 +295,10 @@ def main(argv):
                     Logger.debug("Channel {}, type {}, Sampling {} Hz".format(c.ChannName, c.SigType, int(c.DBLsampling)))
 
                     if c.SigSubType in ch_dict:
-                        Logger.warning("Channel {} has same sub-type {} as channel {}".format(c.GetName(), c.SigSubType, ch_dict[c.SigSubType].GetName() ))
+                        Logger.warning("Channel {} has same Id {} as channel {}".format(c.GetName(), c.GetId(), ch_dict[c.GetId()].GetName() ))
                     else:
-                        ch_dict[c.SigSubType] = c
-                        l = [c.GetName(Void = "n/a"), c.GetType(Void = "n/a"), c.GetUnit(Void = "n/a"), c.GetDescription(Void = "n/a"), str(c.GetFrequency()), c.GetReference(Void = "n/a"), "n/a", "n/a", "n/a", "n/a", "n/a"]
+                        ch_dict[c.GetId()] = c
+                    l = [c.GetName(Void = "n/a"), c.GetType(Void = "n/a"), c.GetUnit(Void = "n/a"), c.GetDescription(Void = "n/a"), str(c.GetFrequency()), c.GetReference(Void = "n/a"), "n/a", "n/a", "n/a", "n/a", "n/a"]
                     print(str.join("\t", l), file = f)
                     if t_ref != None:
                         if t_ref != c.Time[0]:
@@ -347,37 +347,40 @@ def main(argv):
             root = Parcel(esedb)
             evs     = root.get("Events")
             aux_l   = root.getlist("Aux Data")[0]
-            grp_l   = root.getlist("Event Groups")[0]
+            grp_l   = root.getlist("Event Types")[0].getlist()
             times   = root.getlist("EventsStartTimes")[0]
             locat   = root.get("Locations", 0)
                 
             for ev,time in zip(evs, times):
                 Logger.debug("Event {}, at {}, loc. {}, aux. {} ".format(ev.EventID, time.strftime("%d/%m/%Y %H:%M:%S.%f"), ev.LocationIdx, ev.AuxDataID))
+                ev_id = -1
+                ch_id = locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("MainType")
+                ch_id += "_"+locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("SubType")
                 try :
-                    loc = locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("SubType") 
-                    ch  = ch_dict[loc]
+                    ch  = ch_dict[ch_id]
                     dt = (time - ch.Time[0]).total_seconds()
                 except:
-                    Logger.warning("Channel '{}' not in the list of channels".format(loc))
+                    Logger.warning("Channel Id '{}' not in the list of channels".format(ch_id))
                     ch = None
                     dt = float(ev.LocationIdx) 
 
                 dt = (time - t_ref).total_seconds()
 
                 try:
-                    aux = aux_l.get("Aux", ev.AuxDataID).get("Sub Classification History").get("1")
-                    name = aux.get("type")
+                    name = grp_l[ev.GroupTypeIdx]
                 except:
-                    Logger.warning("Can't get event name for index {}".format(ev.AuxDataID))
-                    aux = None
-                    name = "n/a"
+                    try:
+                        name = aux_l.get("Aux", ev.AuxDataID).get("Sub Classification History").get("1").get("type")
+                    except:
+                        Logger.warning("Can't get event name for index {}".format(ev.AuxDataID))
+                        name = "n/a"
 
                 if ch != None:
-                    ch_id = channels.index(ch)
+                    ch_index = channels.index(ch)
                 else:
-                    ch_id = 0
+                    ch_index = 0
                     continue
-                events.append({"Name": name,  "Time":time, "Channel": ch_id, "Span": ev.TimeSpan, "Location": loc})
+                events.append({"Name": name,  "Time":time, "Channel": ch_index, "Span": ev.TimeSpan, "Location": ch_id})
 
                 if parameters["DATATREATMENT"]["StartEvent"] == name and time > t_ref and time < t_ev_min:
                     t_ev_min = time

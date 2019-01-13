@@ -18,12 +18,12 @@ for fname in args.infiles:
 
     events  = root.get("Events")
     aux     = root.getlist("Aux Data")[0]
-    grp     = root.getlist("Event Groups")[0]
+    grp     = root.getlist("Event Types")[0].getlist()
     times   = root.getlist("EventsStartTimes")[0]
     for ev,time in zip(events, times):
         try:
-            ev_type = aux.get("Aux",ev.AuxDataID).getlist("Sub Classification History")[0].get("1").get('type')
+            ev_type = grp[ev.GroupTypeIdx]
         except:
-            ev_type = grp.get("Event Group Type", ev.GroupTypeIdx).get("Group Type")
+            ev_type = aux.get("Aux",ev.AuxDataID).getlist("Sub Classification History")[0].get("1").get('type')
         print (ev_type, '-', "{0}.{1:03d}".format(time.strftime("%m/%d/%Y %H:%M:%S"),int(time.microsecond/1000 + 0.5)), "({} s)".format(int(ev.TimeSpan)))
     #    print (ev_type, '-', datetime.fromtimestamp(ev.StartTime).strftime("%m/%d/%Y %H:%M:%S.%f"), "({} s)".format(ev.TimeSpan))
