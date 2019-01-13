@@ -5,9 +5,14 @@ class BvChannel(GenChannel):
     __slots__ = ["_reference", "_comments"]
 
     def __init__(self, Base = None, Reference = "", Comments = ""):
-        super(BvChannel, self).__init__()
-        self._reference  = Reference
-        self._comments   = Comments
+        if isinstance(Base, GenChannel):
+            super(BvChannel, self).__copy__(Base)
+            self._comments = Comments
+            self._reference = Reference
+        else:
+            super(BvChannel, self).__init__()
+            self._reference  = Reference
+            self._comments   = Comments
 
     def GetReference(self):
         return self._reference
@@ -15,5 +20,3 @@ class BvChannel(GenChannel):
     def GetComments(self):
         return self._comments
 
-    def GetName(self):
-        return self._name

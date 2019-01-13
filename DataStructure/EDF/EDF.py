@@ -16,6 +16,11 @@ class Channel(GenChannel):
             self._filter = Filter
             if "°" in self._unit:
                 self._unit = self._unit[:self._unit.index("°")]+"deg"+ self._unit[self._unit.index("°")+1:]
+        else :
+            super(Channel, self).__init__()
+            self._type = ""
+            self._specification = ""
+            self._filter = ""
 
     def Label(self):
         if (self._type in ["EEG", "ECG", "EOG", "ERG", "EMG", "MEG", "MCG"]):
