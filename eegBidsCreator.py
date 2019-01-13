@@ -279,6 +279,12 @@ def main(argv):
         t_ev_min= datetime.max
         t_ev_max= datetime.min
 
+        if t_ref == datetime.min:
+            Logger.warning("Unable to get StartTime of record. Will be set to first data point.")
+        if t_end == datetime.min:
+            Logger.warning("Unable to get EndTime of record. Will be set to last data point.")
+
+
         Logger.info("Creating channels.tsv file")
         with open(eegPath+"/"+recording.Prefix()+"_channels.tsv", "w") as f:
             if eegform == "embla":
@@ -300,7 +306,7 @@ def main(argv):
                         ch_dict[c.GetId()] = c
                     l = [c.GetName(Void = "n/a"), c.GetType(Void = "n/a"), c.GetUnit(Void = "n/a"), c.GetDescription(Void = "n/a"), str(c.GetFrequency()), c.GetReference(Void = "n/a"), "n/a", "n/a", "n/a", "n/a", "n/a"]
                     print(str.join("\t", l), file = f)
-                    if t_ref != None:
+                    if t_ref != datetime.min:
                         if t_ref != c.Time[0]:
                             Logger.warning("Channel '{}': Starts {} sec later than recording {}".format(c.GetName(), (c.Time[0] - t_ref).total_seconds(), t_ref.isoformat()))
                     if c.Time[0] < t_min:
