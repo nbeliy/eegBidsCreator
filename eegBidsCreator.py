@@ -437,10 +437,10 @@ def main(argv):
             print("onset", "duration", "trial_type", "responce_time", "value", "sample", sep='\t', file = f)
             for ev in events:
                 if ev.GetChannelsSize() == 0:
-                    print("%.3f\t%.2f\t%s\tn/a\tn/a\t%d" %(ev.GetOffset(t_ref), ev.GetDuration(), ev.GetName(), ev.GetOffset(t_ref)*recording.Frequency), file = f )
+                    print("%.3f\t%.2f\t%s\tn/a\tn/a\t%d" %(ev.GetOffset(t_ref), ev.GetDuration(), ev.GetName(Void = "n/a", ToReplace=("\t"," ")), ev.GetOffset(t_ref)*recording.Frequency), file = f )
                 else :
                     for c_id in ev.GetChannels():
-                        print("%.3f\t%.2f\t%s\tn/a\tn/a"% (ev.GetOffset(t_ref), ev.GetDuration(), ev.GetName()), file = f, end="")
+                        print("%.3f\t%.2f\t%s\tn/a\tn/a"% (ev.GetOffset(t_ref), ev.GetDuration(), ev.GetName(Void = "n/a", ToReplace=("\t"," "))), file = f, end="")
                         #This writes index with channel proper frequency
                         #print("\t{}".format(channels[ev["Channel"]].GetIndexTime(ev["Time"], freqMultiplier = 1)), file = f)
                         #This writes index with common frequency
@@ -490,10 +490,10 @@ def main(argv):
             Logger.info("Writting proper events")
             for ev in events:
                 if (ev.GetChannelsSize() == 0):
-                    outData.MarkerFile.AddMarker(ev.GetName(), ev.GetTime(), ev.GetDuration(), -1, "")
+                    outData.MarkerFile.AddMarker(ev.GetName(ToReplace = (",","\1")), ev.GetTime(), ev.GetDuration(), -1, "")
                 else:
                     for c in ev.GetChannels():
-                        outData.MarkerFile.AddMarker(ev.GetName(), ev.GetTime(), ev.GetDuration(), channels.index(ch_dict[c]), "")
+                        outData.MarkerFile.AddMarker(ev.GetName(ToReplace = (",","\1")), ev.GetTime(), ev.GetDuration(), channels.index(ch_dict[c]), "")
             outData.MarkerFile.Write()
 
             Logger.info("Creating eeg data file")
