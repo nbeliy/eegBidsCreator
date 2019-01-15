@@ -133,6 +133,11 @@ EDF+ supports also encoding of data using logaritmic scale, which is used if the
 - Some events don't have an associated type, they will appear as "n/a" in events.tsv file -- **fixed**
 - For some channels, the names in esedb and in emb files mismach, thus can't determine the corect `sample` value -- **fixed**
 - `sample` value can be not an integer, if corresponding event happened between two measures -- **fixed**
+- Some Embla files contains several events files, need to read all and remove duplicates
+- If 2 Emblas treats same subjects, one overrides other, need to fix it
+- Interpreting Calibration function produces sometimes a error `eval() arg 1 must be a string, bytes or code object`
+- Error `File "DataStructure/Embla/Channel.py", line 209 in _read: b'\xff\xff\xff\xff'`
+- Error `"Parcel/parcel.py", line 158 in read: I/O operation on closed file.`
 
 ## Need help!
 
@@ -153,3 +158,7 @@ Other corrections/suggestions/spell corections can be reported as issues on gitl
 - Retrieve and control the information from json file -- **done**
 - Understand the filter
 - Understand the Calibration -- **done**
+- Option to not copy the original data to source
+- Log file is appending, make it rotaing/new?
+- A task given in ini or cli can contain non alphanumeric characters, need to check and produce warning/error
+- Difficult distinguish start of nes bidsifier form end of old
