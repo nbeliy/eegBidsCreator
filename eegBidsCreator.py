@@ -262,7 +262,7 @@ def main(argv):
             Logger.debug("Output directory already exists")
             flist = glob.glob(eegPath+"/"+recording.Prefix()+"*")
             if len(flist) != 0:
-                Logger.warning("Found {} files with same identification. They will be removed.")
+                Logger.warning("Found {} files with same identification. They will be removed.".format(len(flist)))
                 for f in flist:
                     rmdir(f)
         else: 

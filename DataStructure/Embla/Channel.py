@@ -90,7 +90,7 @@ class EbmChannel(GenChannel):
         super(EbmChannel, self).__init__()
         for f in self.__slots__:
             if f[0:1] != "_":
-                setattr(self, f, [])
+                setattr(self, f, None)
 
         self._seqStart = []
         self._totSize  = 0
@@ -173,7 +173,7 @@ class EbmChannel(GenChannel):
             self._digMin = int(self.RawRange[0]/self.RawRange[2])
             self._digMax = int(self.RawRange[1]/self.RawRange[2])
             self.SetScale(self.RawRange[2])
-        if self.CalFunc != "":
+        if isinstance(self.CalFunc, str) and self.CalFunc != "":
             #God help us all
             x = self.GetPhysMin()
             new_min = eval(self.CalFunc)
@@ -212,6 +212,8 @@ class EbmChannel(GenChannel):
             fsize = dtype.Size 
             ftype = dtype.Format 
             fenc  = dtype.Encoding 
+            if getattr(self, fname) == None and not dtype.IsUnique():
+                setattr(self, fname, [])
             #tsize represents the a size of the entry, for text it is fixed to 1
             if dtype.IsText:
                 tsize = 1
