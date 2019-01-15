@@ -1,8 +1,9 @@
 import struct, math, io
 from datetime import datetime, timedelta
+import logging
 
 from DataStructure.Generic.Channel import GenChannel
-
+Logger = logging.getLogger(__name__)
 #Values: ['Field name', 'data size in words, 0 if unknown, not fixed', 'parcing word, c if it is text',  'encoding string']
 
 class Field(object):
@@ -82,6 +83,7 @@ class EbmChannel(GenChannel):
         b'\x70\x00\x00\x03' : Field("SigRef", "h", IsText = True, Unique = True),
         b'\x72\x00\x00\x03' : Field("SigMainType", "h", IsText = True, Unique = True),
         b'\x74\x00\x00\x03' : Field("SigSubType", "h", IsText = True, Unique = True),
+        b'\xff\xff\xff\xff' : Field("UnknownType", "h")
     } 
     __slots__ = [x.Name for x in list(_Marks.values())]+["Endian", "Wide", "_stream", "_seqStart", "_totSize", "_dataSize"]
 
@@ -143,7 +145,11 @@ class EbmChannel(GenChannel):
             if(index == b''):break
             size = self._stream.read(4)
             size = struct.unpack("<L", size)[0]
-            self._read(index, size)
+            readed = self._read(index, size)
+            if (readed != size):
+                Logger.warning('In file "{}" at {}'.format(self._stream.name, start))
+                Logger.warning("Readed {} bytes, {} expected. File seems to be corrupted".format(readed, size))
+                self._stream.seek(0,2)
         self._totSize = sum(self._seqSize)
 
     
@@ -206,61 +212,68 @@ class EbmChannel(GenChannel):
         self._stream.close()
 
     def _read(self, marker, size):
+        start = self._stream.tell()
+        if not marker in self._Marks:
+            raise KeyError("Marker {} not in the list for channel from {}".format(marker, self._stream.name))
         dtype = self._Marks[marker]
-        try:
-            fname = dtype.Name 
-            fsize = dtype.Size 
-            ftype = dtype.Format 
-            fenc  = dtype.Encoding 
-            if getattr(self, fname) == None and not dtype.IsUnique():
-                setattr(self, fname, [])
-            #tsize represents the a size of the entry, for text it is fixed to 1
-            if dtype.IsText:
-                tsize = 1
-            else:
-                tsize = int(struct.calcsize(self.Endian+ftype))
-            dsize = size #Lenth of the field
-            nwords = int(dsize/tsize) #Number of entries in the field
- 
-            if fsize > 0 and nwords != fsize:
-                raise Exception("Field contains {} words, {} requested".format(nwords, fsize))
+        fname = dtype.Name 
+        fsize = dtype.Size 
+        ftype = dtype.Format 
+        fenc  = dtype.Encoding 
+        if getattr(self, fname) == None and not dtype.IsUnique():
+            setattr(self, fname, [])
+        #tsize represents the a size of the entry, for text it is fixed to 1
+        if dtype.IsText:
+            tsize = 1
+        else:
+            tsize = int(struct.calcsize(self.Endian+ftype))
+        dsize = size #Lenth of the field
+        nwords = int(dsize/tsize) #Number of entries in the field
 
-            if dtype.IsText:
-                text = self._stream.read(size).decode(fenc).strip('\0')
-                if dtype.IsUnique():
-                    setattr(self, fname, text)
-                else:
-                    setattr(self, fname, getattr(self, fname)+[text])
+        if fsize > 0 and nwords != fsize:
+            raise Exception("Field contains {} words, {} requested".format(nwords, fsize))
+
+        if dtype.IsText:
+            text = self._stream.read(size).decode(fenc).strip('\0')
+            if dtype.IsUnique():
+                setattr(self, fname, text)
             else:
-                if fname == "Data":
-                    self._seqStart.append(self._stream.tell())
-                    self._seqSize.append(nwords)
-                    self._stream.seek(size, 1)
-                    return
-                dec = self.Endian + ftype*nwords + 'x'*(dsize - tsize*nwords)
-                unpacked = struct.unpack(dec, self._stream.read(size))
-                if fname == "Version":
-                    if self.Endian == '>':
-                        big, small = unpacked
-                    else:
-                        small, big = unpacked
-                    if small > 100: small = small/100
-                    else: small = small/10
-                    self.Version = big + small/10
-                elif fname == "Time":
-                    year, mon, day, h, m, s, us = unpacked
-                    time = datetime(year, mon, day, h, m, s, us*10000)
-                    self.Time = self.Time+[time]
+                setattr(self, fname, getattr(self, fname)+[text])
+        else:
+            if fname == "UnknownType":
+                #Put warning here: unknown size, corrupted file?
+                Logger.warning("Unknown data type")
+                #Jumping to EOF
+                return self._stream.tell() - start
+            if fname == "Data":
+                self._seqStart.append(self._stream.tell())
+                self._seqSize.append(nwords)
+                self._stream.seek(size, 1)
+                return self._stream.tell() - start
+            dec = self.Endian + ftype*nwords + 'x'*(dsize - tsize*nwords)
+            unpacked = struct.unpack(dec, self._stream.read(size))
+            if fname == "Version":
+                if self.Endian == '>':
+                    big, small = unpacked
                 else:
-                    if dtype.IsUnique():
-                        if len(unpacked) == 1:
-                            setattr(self, fname, unpacked[0])
-                        else:
-                            setattr(self, fname, list(unpacked))
+                    small, big = unpacked
+                if small > 100: small = small/100
+                else: small = small/10
+                self.Version = big + small/10
+            elif fname == "Time":
+                year, mon, day, h, m, s, us = unpacked
+                time = datetime(year, mon, day, h, m, s, us*10000)
+                self.Time = self.Time+[time]
+            else:
+                if dtype.IsUnique():
+                    if len(unpacked) == 1:
+                        setattr(self, fname, unpacked[0])
                     else:
-                        setattr(self, fname, getattr(self, fname)+[list(unpacked)])
-        except Exception as e:
-            raise Exception("{}: Unamble to parce {}: {}".format(self._stream.name, dtype.Name, e))
+                        setattr(self, fname, list(unpacked))
+                else:
+                    setattr(self, fname, getattr(self, fname)+[list(unpacked)])
+        return self._stream.tell() - start
+    
 
     def __GetValue__(self, point, sequence, raw):
         """ Returns value of given measure point. If sequance is given, the point should be in correspondent sequance. If no suequance is given, the point is interpreted as global one """
