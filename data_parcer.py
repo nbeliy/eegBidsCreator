@@ -1,15 +1,28 @@
 import struct, math
 from datetime import datetime, timedelta
-import sys
-
+import os,sys
 from DataStructure.Embla.Channel import EbmChannel
-
 from glob import glob
+import argparse
 
-#ch = [EbmChannel(c) for c in glob("data_example/embla_data/*.ebm")]
-#ch = [EbmChannel(c) for c in glob("../data_test/EEG/BL/c6902c41-642b-4dd2-88b2-81e03feba944/*.ebm")]
-ch = sorted([EbmChannel(c) for c in glob("../data_test/EEG/ECG/fd068a73-0527-428f-aeed-9e04fb55ed4b/*.ebm")])
 
+
+def main(argv):
+    parser = argparse.ArgumentParser(description='Reads embla channel files (.emb) from given folder and printout the retrieved information')
+    parser.add_argument('infiles', default="../data_test/EEG/ECG/fd068a73-0527-428f-aeed-9e04fb55ed4b",
+        metavar='file1',
+        help='input folder')
+    args = parser.parse_args(argv[1:])
+    ch = GetChannels(args.infiles)
+    for c in ch:
+        print("####################")
+        print(c)
+        print()
+    return 0
+
+def GetChannels(path):
+    ch = [EbmChannel(c) for c in glob(path+"/*.ebm")]
+    return ch
 
 def GetExtrema(channel, sequence, raw = False):
     v_min = sys.maxsize
@@ -22,3 +35,7 @@ def GetExtrema(channel, sequence, raw = False):
             v_max = v 
         
     return (v_min, v_max)
+
+
+if __name__ == "__main__":
+    exit(main(os.sys.argv))

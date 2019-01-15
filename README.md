@@ -137,7 +137,9 @@ EDF+ supports also encoding of data using logaritmic scale, which is used if the
 - If 2 Emblas treats same subjects, one overrides other, need to fix it -- **fixed**
 - Interpreting Calibration function produces sometimes a error `eval() arg 1 must be a string, bytes or code object`
 - Error `File "DataStructure/Embla/Channel.py", line 209 in _read: b'\xff\xff\xff\xff'`
-- Error `"Parcel/parcel.py", line 158 in read: I/O operation on closed file.`
+- Error `"Parcel/parcel.py", line 158 in read: I/O operation on closed file.` -- **fixed**
+  - If channel has signed data, it has no CalFunction, producing error above
+  - Need to treat signed data
 
 ## Need help!
 
