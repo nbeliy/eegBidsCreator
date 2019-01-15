@@ -154,6 +154,10 @@ def main(argv):
         consoleHandler.setFormatter(logFormatter)
         Logger.addHandler(consoleHandler)
 
+    Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
+    Logger.info("Starting new bidsifier")
+    Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
+
     Logger.debug(str(os.sys.argv))
     Logger.debug("Temporary directory: "+tmpDir)
     with open(tmpDir+"/configuration", 'w') as configfile: parameters.write(configfile)
@@ -254,13 +258,18 @@ def main(argv):
         recording.ResetPrefix()
         recording.ResetPath()
         eegPath = parameters['GENERAL']['OutputFolder']+"/"+ recording.Path()
-        Logger.info("Creating output directory {}".format(eegPath))
-        try:
+        if os.path.exists(eegPath):
+            Logger.debug("Output directory already exists")
+            flist = glob.glob(eegPath+"/"+recording.Prefix()+"*")
+            if len(flist) != 0:
+                Logger.warning("Found {} files with same identification. They will be removed.")
+                for f in flist:
+                    rmdir(f)
+        else: 
+            Logger.info("Creating output directory {}".format(eegPath))
             os.makedirs(eegPath)
-        except OSError:
-            Logger.warning("Directory already exists. Contents will be erased.")
-            rmdir(eegPath)
-            
+        Logger.info("EEG will be saved in "+eegPath)
+
         if parameters['GENERAL'].getboolean('CopySource'):
             srcPath = parameters['GENERAL']['OutputFolder']+"/source/"+ recording.Path()
             if os.path.exists(srcPath):
@@ -597,7 +606,6 @@ def main(argv):
             Logger.error('File "'+l[0]+'", line '+str(l[1])+" in "+l[2]+":")
         Logger.error(e)
         #traceback.print_exc()
-        Logger.info("Took {} seconds".format(tm.process_time()))
 
         ex_code = 1
 
@@ -610,6 +618,9 @@ def main(argv):
         Logger.error("Unable to copy files to working directory. See in "+tmpDir+"/logfile for more details.")
         ex_code = 1
 
+    Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
+    Logger.info("Took {} seconds".format(tm.process_time()))
+    Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
     return(ex_code)
 
 if __name__ == "__main__":
