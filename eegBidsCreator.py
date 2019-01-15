@@ -1,4 +1,4 @@
-VERSION = '0.6'
+VERSION = '0.6r1'
 
 import logging, argparse, os, json, glob, olefile, traceback, struct, configparser
 import tempfile, bisect
@@ -502,6 +502,7 @@ def main(argv):
             outData.MarkerFile.SetFrequency(outData.GetFrequency())
             outData.MarkerFile.SetStartTime(t_ref)
             Logger.info("Writting proper events")
+            outData.MarkerFile.AddMarker("New Segment", t_ref, 0, -1, "")
             for ev in events:
                 if (ev.GetChannelsSize() == 0):
                     outData.MarkerFile.AddMarker(ev.GetName(ToReplace = (",","\1")), ev.GetTime(), ev.GetDuration(), -1, "")
