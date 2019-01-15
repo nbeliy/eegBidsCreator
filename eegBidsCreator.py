@@ -415,8 +415,7 @@ def main(argv):
                     if parameters["DATATREATMENT"]["EndEvent"]   == name and time < t_end and time > t_ev_max:
                         t_ev_max = time
                         Logger.info("Updated end time {} from event {}".format(time, name))
-                    esedb.close()
-                #Need to clean up from duplicated events
+                esedb.close()
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
 
@@ -433,11 +432,11 @@ def main(argv):
                         bisect.insort(events,ev)
                     else :
                         events[events.index(ev)].AddChannel(ch_id)
-        ev = GenEvent(Name = "New Segment", Time = t_ref, Duration = 0)
-        if not ev in events:
-            bisect.insort(events,ev)
-        else :
-            events[events.index(ev)].RemoveChannel()
+        #ev = GenEvent(Name = "New Segment", Time = t_ref, Duration = 0)
+        #if not ev in events:
+        #    bisect.insort(events,ev)
+        #else :
+        #    events[events.index(ev)].RemoveChannel()
         
         if parameters.getboolean("DATATREATMENT","IgnoreOutOfTimeEvents"):
             events = [ev for ev in events if (ev.GetTime() >= t_ref and ev.GetTime() <= t_end) ]
