@@ -92,7 +92,8 @@ def main(argv):
                             "LogFile" : "",
                             "LogLevel":"INFO", 
                             "Quiet":"no",
-                            "Conversion":""}
+                            "Conversion":"",
+                            "CopySource":"yes"}
     parameters['DATATREATMENT'] = {"DropChannels":"", "StartTime":"", "EndTime":"", 
                                     "StartEvent":"","EndEvent":"",
                                     "IgnoreOutOfTimeEvents":"yes",
@@ -102,7 +103,9 @@ def main(argv):
 
     #Reading configuration file
     if args.config_file != None:
-        parameters.read(args.config_file)
+        readed = parameters.read(args.config_file)
+        if len(readed) == 0:
+            raise FileNotFoundError("Unable to open file "+args.config_file)
 
     #Overloading values by command-line arguments
     if args.task    != None : parameters['GENERAL']['TaskId']       = args.task
@@ -151,9 +154,6 @@ def main(argv):
         consoleHandler.setFormatter(logFormatter)
         Logger.addHandler(consoleHandler)
 
-
-
-
     Logger.debug(str(os.sys.argv))
     Logger.debug("Temporary directory: "+tmpDir)
     with open(tmpDir+"/configuration", 'w') as configfile: parameters.write(configfile)
@@ -164,15 +164,15 @@ def main(argv):
     if parameters['GENERAL']['AcquisitionId'] != '' :
         Logger.info("Acquisition: {}".format(parameters['GENERAL']['AcquisitionId']))
     Logger.info("File: {}".format(parameters['GENERAL']['Path']))
+    basename = os.path.basename(parameters['GENERAL']['Path'])
+    extension= os.path.splitext(basename)[1]
     try:
-        dirName = ""
         if not os.path.exists(parameters['GENERAL']['Path']):
             raise Exception("Path {} is not valid".format(parameters['GENERAL']['Path']))       
         if os.path.isdir(parameters['GENERAL']['Path']):
-            dirName = os.path.basename(parameters['GENERAL']['Path'])
             if len(glob.glob(parameters['GENERAL']['Path']+'/*.ebm')) > 0:
                 eegform = "embla"
-        elif os.path.splitext(parameters['GENERAL']['Path'])[0] == '.edf':
+        elif extension == '.edf':
             eegform = "edf"
         else:
             raise Exception("Unable determine eeg format")
@@ -182,7 +182,7 @@ def main(argv):
             parameters['GENERAL']['JsonFile'] = os.path.realpath(parameters['GENERAL']['JsonFile'])
             Logger.info("JSON File: {}".format(parameters['GENERAL']['JsonFile']))
             if not os.path.isfile(parameters['GENERAL']['JsonFile']):
-                raise Exception("File {} don't exists".format(parameters['GENERAL']['JsonFile']))
+                raise FileNotFoundError(parameters['GENERAL']['JsonFile'])
             with open(parameters['GENERAL']['JsonFile']) as f:
                  JSONdata = json.load(f)
             t = JSONdata["TaskName"]
@@ -211,8 +211,10 @@ def main(argv):
         
         if eegform == "embla":
             Logger.info("Detected {} format".format(eegform))
-            if len(glob.glob(parameters['GENERAL']['Path']+'/Recording.esrc')) != 1 or len (glob.glob(parameters['GENERAL']['Path']+'/*.esedb')) != 1:
-                raise Exception("Embla folder should contain exacly 1 Recording.escr and 1 events .esedb files")
+            if len(glob.glob(parameters['GENERAL']['Path']+'/Recording.esrc')) != 1: 
+                raise FileNotFoundError("Couldn't find Recording.escr file, needed for recording proprieties")
+            if len (glob.glob(parameters['GENERAL']['Path']+'/*.esedb')) == 0:
+                Logger.warning("No .esedb files containing events found. Event list will be empty.")
             #Reading metadata
             esrc = olefile.OleFileIO(parameters['GENERAL']['Path']+'/Recording.esrc').openstream('RecordingXML')
             xml  = esrc.read().decode("utf_16_le")[2:-1]
@@ -252,7 +254,6 @@ def main(argv):
         recording.ResetPrefix()
         recording.ResetPath()
         eegPath = parameters['GENERAL']['OutputFolder']+"/"+ recording.Path()
-        srcPath = parameters['GENERAL']['OutputFolder']+"/source/"+ recording.Path()
         Logger.info("Creating output directory {}".format(eegPath))
         try:
             os.makedirs(eegPath)
@@ -260,19 +261,22 @@ def main(argv):
             Logger.warning("Directory already exists. Contents will be erased.")
             rmdir(eegPath)
             
-        Logger.info("Creating output directory {}".format(srcPath))
-        try:
-            os.makedirs(srcPath)
-        except OSError:
-            Logger.warning("Directory already exists. Contents will be erased.")
-            rmdir(srcPath)
-        
-        Logger.info("Copiyng data to folders")
-        if dirName != "":
-            shutil.copytree(parameters['GENERAL']['Path'], srcPath+"/"+dirName)
-        else:
-            shutil.copy2(parameters['GENERAL']['Path'], srcPath)
-        with open(eegPath+"/"+recording.Prefix()+".conf", 'w') as configfile: parameters.write(configfile)
+        if parameters['GENERAL'].getboolean('CopySource'):
+            srcPath = parameters['GENERAL']['OutputFolder']+"/source/"+ recording.Path()
+            if os.path.exists(srcPath):
+                if os.path.exists(srcPath+"/"+basename):
+                    Logger.warning('"{}" exists in source directory. It will be eraised.'.format(basename))
+                    rmdir(srcPath+"/"+parameters['GENERAL']['Path'])
+            else:
+                Logger.info("Creating output directory {}".format(srcPath))
+                os.makedirs(srcPath)
+            Logger.info("Copiyng original data to source folder")
+            if extension == "":
+                shutil.copytree(parameters['GENERAL']['Path'], srcPath+"/"+parameters['GENERAL']['Path'])
+            else:
+                shutil.copy2(parameters['GENERAL']['Path'], srcPath+"/"+basename)
+
+        with open(eegPath+"/"+recording.Prefix()+".ini", 'w') as configfile: parameters.write(configfile)
 
         t_ref   = recording.StartTime
         t_end   = recording.StopTime
@@ -350,58 +354,60 @@ def main(argv):
         events = []
         Logger.info("Reading events info")
         if eegform == "embla":
-            evfile = glob.glob(parameters['GENERAL']['Path']+"/*.esedb")[0]
-            esedb = olefile.OleFileIO(evfile).openstream('Event Store/Events')
-            root = Parcel(esedb)
-            evs     = root.get("Events")
-            aux_l   = root.getlist("Aux Data")[0]
-            grp_l   = root.getlist("Event Types")[0].getlist()
-            times   = root.getlist("EventsStartTimes")[0]
-            locat   = root.get("Locations", 0)
-                
-            for ev,time in zip(evs, times):
-                Logger.debug("Event {}, at {}, loc. {}, aux. {} ".format(ev.EventID, time.strftime("%d/%m/%Y %H:%M:%S.%f"), ev.LocationIdx, ev.AuxDataID))
-                ev_id = -1
-                ch_id = locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("MainType")
-                ch_id += "_"+locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("SubType")
-                try :
-                    ch  = ch_dict[ch_id]
-                    dt = (time - ch.Time[0]).total_seconds()
-                except:
-                    Logger.warning("Channel Id '{}' not in the list of channels".format(ch_id))
-                    ch = None
-                    dt = float(ev.LocationIdx) 
-
-                dt = (time - t_ref).total_seconds()
-
-                try:
-                    name = grp_l[ev.GroupTypeIdx]
-                except:
-                    try:
-                        name = aux_l.get("Aux", ev.AuxDataID).get("Sub Classification History").get("1").get("type")
+            for evfile in glob.glob(parameters['GENERAL']['Path']+"/*.esedb"):
+#            evfile = glob.glob(parameters['GENERAL']['Path']+"/*.esedb")[0]
+                esedb = olefile.OleFileIO(evfile).openstream('Event Store/Events')
+                root = Parcel(esedb)
+                evs     = root.get("Events")
+                aux_l   = root.getlist("Aux Data")[0]
+                grp_l   = root.getlist("Event Types")[0].getlist()
+                times   = root.getlist("EventsStartTimes")[0]
+                locat   = root.get("Locations", 0)
+                    
+                for ev,time in zip(evs, times):
+                    Logger.debug("Event {}, at {}, loc. {}, aux. {} ".format(ev.EventID, time.strftime("%d/%m/%Y %H:%M:%S.%f"), ev.LocationIdx, ev.AuxDataID))
+                    ev_id = -1
+                    ch_id = locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("MainType")
+                    ch_id += "_"+locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("SubType")
+                    try :
+                        ch  = ch_dict[ch_id]
+                        dt = (time - ch.Time[0]).total_seconds()
                     except:
-                        Logger.warning("Can't get event name for index {}".format(ev.AuxDataID))
-                        name = "n/a"
+                        Logger.warning("Channel Id '{}' not in the list of channels".format(ch_id))
+                        ch = None
+                        dt = float(ev.LocationIdx) 
 
-                if ch != None:
-                    ch_index = channels.index(ch)
-                else:
-                    ch_index = 0
-                    continue
-                ev = GenEvent(Name = name, Time = time, Duration = ev.TimeSpan)
-                ev.AddChannel(ch_id)
-                if not ev in events:
-                    bisect.insort(events,ev)
-                else :
-                    events[events.index(ev)].AddChannel(ch_id)
+                    dt = (time - t_ref).total_seconds()
 
-                if parameters["DATATREATMENT"]["StartEvent"] == name and time > t_ref and time < t_ev_min:
-                    t_ev_min = time
-                    Logger.info("Updated start time {} from event {}".format(time, name))
-                if parameters["DATATREATMENT"]["EndEvent"]   == name and time < t_end and time > t_ev_max:
-                    t_ev_max = time
-                    Logger.info("Updated end time {} from event {}".format(time, name))
-                
+                    try:
+                        name = grp_l[ev.GroupTypeIdx]
+                    except:
+                        try:
+                            name = aux_l.get("Aux", ev.AuxDataID).get("Sub Classification History").get("1").get("type")
+                        except:
+                            Logger.warning("Can't get event name for index {}".format(ev.AuxDataID))
+                            name = "n/a"
+
+                    if ch != None:
+                        ch_index = channels.index(ch)
+                    else:
+                        ch_index = 0
+                        continue
+                    ev = GenEvent(Name = name, Time = time, Duration = ev.TimeSpan)
+                    ev.AddChannel(ch_id)
+                    if not ev in events:
+                        bisect.insort(events,ev)
+                    else :
+                        events[events.index(ev)].AddChannel(ch_id)
+
+                    if parameters["DATATREATMENT"]["StartEvent"] == name and time > t_ref and time < t_ev_min:
+                        t_ev_min = time
+                        Logger.info("Updated start time {} from event {}".format(time, name))
+                    if parameters["DATATREATMENT"]["EndEvent"]   == name and time < t_end and time > t_ev_max:
+                        t_ev_max = time
+                        Logger.info("Updated end time {} from event {}".format(time, name))
+                    esedb.close()
+                #Need to clean up from duplicated events
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
 
@@ -585,8 +591,12 @@ def main(argv):
         Logger.info("All done. Took {} secons".format(tm.process_time()))
 
     except Exception as e:
+        exc_type, exc_value, exc_traceback = os.sys.exc_info()
+        tr = traceback.extract_tb(exc_traceback)
+        for l in tr:
+            Logger.error('File "'+l[0]+'", line '+str(l[1])+" in "+l[2]+":")
         Logger.error(e)
-        traceback.print_exc()
+        #traceback.print_exc()
         Logger.info("Took {} seconds".format(tm.process_time()))
 
         ex_code = 1
