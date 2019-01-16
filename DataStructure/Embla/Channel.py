@@ -164,6 +164,11 @@ class EbmChannel(GenChannel):
         self._unit         = self.CalUnit
         self._seqStartTime = self.Time
         self._frequency    = int(self.DBLsampling)
+        if (self.DBLsampling != self._frequency):
+            Logger.warning("{}: Sample frequency is not integer. Correction factor is 1{:+}".format(self.GetName(),self.DBLsampling/self._frequency-1))
+        if (self.RateCorr != None and self.RateCorr != 0):
+            Logger.warning("{}: Sample frequency is not integer. Correction factor is 1{:+}".format(self.GetName(),self.RateCorr))
+            
         self._startTime    = self._seqStartTime[0]
 
 
@@ -302,7 +307,7 @@ class EbmChannel(GenChannel):
         #getting list of sequences
         #Points = number of data points to read
         dt = (timeEnd - timeStart).total_seconds()
-        points = int(dt*self.DBLsampling)
+        points = int(dt*self._frequency)
         #resulting list of size point*freq_mult
         res = [default]*int(dt*self._frequency*freq_mult)
 

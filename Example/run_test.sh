@@ -1,5 +1,5 @@
 #!/bin/bash
-n_parralel=4 
+n_parralel=5 
 count=0
 
 def_path='/media/beliy/KINGSTON/Memodyn/ForTest/Emb'

@@ -166,3 +166,4 @@ Other corrections/suggestions/spell corections can be reported as issues on gitl
 - Log file is appending, make it rotaing/new?
 - A task given in ini or cli can contain non alphanumeric characters, need to check and produce warning/error
 - Difficult distinguish start of next bidsifier form end of old -- **done**
+- Treat Frequency correction (how?)

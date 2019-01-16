@@ -604,7 +604,7 @@ def main(argv):
         tr = traceback.extract_tb(exc_traceback)
         for l in tr:
             Logger.error('File "'+l[0]+'", line '+str(l[1])+" in "+l[2]+":")
-        Logger.error(e)
+        Logger.error(type(e).__name__+": "+str(e))
         #traceback.print_exc()
 
         ex_code = 1
@@ -614,13 +614,13 @@ def main(argv):
         shutil.copy2(tmpDir+"/configuration", eegPath+"/"+recording.Prefix()+".conf") 
         rmdir(tmpDir)
         shutil.rmtree(tmpDir)
+        Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
+        Logger.info("Took {} seconds".format(tm.process_time()))
+        Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
     except:
         Logger.error("Unable to copy files to working directory. See in "+tmpDir+"/logfile for more details.")
         ex_code = 1
 
-    Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
-    Logger.info("Took {} seconds".format(tm.process_time()))
-    Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
     return(ex_code)
 
 if __name__ == "__main__":
