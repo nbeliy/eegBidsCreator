@@ -22,6 +22,7 @@ def main(argv):
 
 def GetChannels(path):
     ch = [EbmChannel(c) for c in glob(path+"/*.ebm")]
+    ch.sort()
     return ch
 
 def GetExtrema(channel, sequence, raw = False):
