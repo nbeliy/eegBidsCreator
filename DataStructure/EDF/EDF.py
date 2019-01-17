@@ -1,12 +1,10 @@
 from datetime import datetime, date, timedelta
 import struct, math
-from decimal import Decimal, getcontext
 
 
 from DataStructure.Generic.Channel import GenChannel
 
 from fractions import Fraction
-from decimal   import Decimal
 
 class Channel(GenChannel):
     __slots__ = ["_type", "_specification", "_filter"]
@@ -217,8 +215,7 @@ class EDF(object):
         start_pos = self.__file.tell()
         for r in range(0, records):
             s = self.__file.tell()
-            t_stamp = "{:+13}".format(Decimal(self.RecordDuration).fma(r, Decimal(dt))).encode("utf_8").strip()[0:13]
-            #t_stamp = "{:+13}".format(dt+r*self.RecordDuration).encode("utf_8").strip()[0:13]
+            t_stamp  = format(self.RecordDuration*r +dt, '+13f').encode("utf_8").strip()[0:13]
             t_stamp += b'\x14\x14\x00'+b'\x00'*(16 - len(t_stamp) - 3)
             self.__file.write(t_stamp)
             for d, block_size, ch in zip(data, blocks, self.Channels):

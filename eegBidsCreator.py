@@ -329,7 +329,7 @@ def main(argv):
                         Logger.debug("New t_min {}".format(t_min.isoformat()))
                     elif c.Time[0] != t_min:
                         Logger.warning("Channel '{}': Starts {} sec later than other channels".format(c.GetName(), (c.Time[0] - t_min).total_seconds()))
-                    if c.Time[-1]+timedelta(0, c._seqSize[-1]*c.GetFrequency(), 0) > t_max:
+                    if c.Time[-1]+timedelta(0, c._seqSize[-1]/c.GetFrequency(), 0) > t_max:
                         t_max = c.Time[-1]+timedelta(0, c._seqSize[-1]/c.GetFrequency(), 0) 
                         Logger.debug("New t_max {}".format(t_max.isoformat()))
                     if int(c.GetFrequency()) != recording.Frequency:
