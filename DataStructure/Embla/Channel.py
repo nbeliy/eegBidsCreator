@@ -163,7 +163,7 @@ class EbmChannel(GenChannel):
         self._reference    = self.SigRef
         self._unit         = self.CalUnit
         self._seqStartTime = self.Time
-        self._frequency    = int(self.DBLsampling)
+        self._frequency    = int(self.DBLsampling+0.5)
         if (self.DBLsampling != self._frequency):
             Logger.warning("{}: Sample frequency is not integer. Correction factor is 1{:+}".format(self.GetName(),self.DBLsampling/self._frequency-1))
         if (self.RateCorr != None and self.RateCorr != 0):
@@ -298,7 +298,7 @@ class EbmChannel(GenChannel):
 
     def __getValueVector__(self, timeStart, timeEnd, default, freq_mult, raw):
         if freq_mult == None:
-            freq_mult = self._frMultiplier
+            freq_mult = 1
         if timeStart > timeEnd:
             raise Exception("Starting time must be lower than ending time")
         if type(freq_mult) != int or freq_mult <= 0:
