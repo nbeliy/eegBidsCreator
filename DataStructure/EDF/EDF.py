@@ -1,5 +1,8 @@
 from datetime import datetime, date, timedelta
 import struct, math
+from decimal import Decimal, getcontext
+
+
 from DataStructure.Generic.Channel import GenChannel
 
 from fractions import Fraction
@@ -199,17 +202,38 @@ class EDF(object):
         if len(data) != len(self.Channels):
             raise Exception("EDF: mismuch data array dimensions")
         records = int(len(data[0])/(self.RecordDuration*self.Channels[0].GetFrequency()))
+        total_block_size = 8
+        blocks = list()
+        for i,c in enumerate(self.Channels):
+            if records != int(len(data[i])/(self.RecordDuration*c.GetFrequency())):
+                raise Exception(
+                        "EDF: {}: number of records ({}) different from other channels ({})".format(
+                        c.GetName(), int(len(data[i])/(self.RecordDuration*c.GetFrequency(), records))
+                        ))
+            blocks.append(int(self.RecordDuration*c.GetFrequency()))
+            total_block_size += blocks[-1]
+
         dt = (start - self.StartTime).total_seconds()
+        start_pos = self.__file.tell()
         for r in range(0, records):
-            t_stamp = "{:+13}".format(dt+r*self.RecordDuration).encode("utf_8").strip()+b'\x14\x14\x00'
-            t_stamp += b'\x00'*(16 - len(t_stamp))
+            s = self.__file.tell()
+            t_stamp = "{:+13}".format(Decimal(self.RecordDuration).fma(r, Decimal(dt))).encode("utf_8").strip()[0:13]
+            #t_stamp = "{:+13}".format(dt+r*self.RecordDuration).encode("utf_8").strip()[0:13]
+            t_stamp += b'\x14\x14\x00'+b'\x00'*(16 - len(t_stamp) - 3)
             self.__file.write(t_stamp)
-            for d,ch in zip(data,self.Channels):
-                block_size = int(self.RecordDuration*ch.GetFrequency())
-                #if records != len(d)/block_size:
-                #self.__file.write(struct.pack("<"+"h"*block_size, *d[0:block_size]))
+            for d, block_size, ch in zip(data, blocks, self.Channels):
                 self.__file.write(struct.pack("<"+"h"*block_size, *d[r*block_size:(r+1)*block_size]))
             self.__records += 1
+            written = self.__file.tell() - s
+            if written != total_block_size*2:
+                raise Exception("EDF: Record {} (at {}sec)Written {} bytes, expected to write {}".format(r, dt, written, total_block_size*2))
+
+
+        written = self.__file.tell() - start_pos
+        if written != records*total_block_size*2:
+            raise Exception("EDF: Written {} bytes, expected to write {}".format(
+                    written, records*total_block_size*2))
+        return written
                         
     def Close(self):
         self.__file.seek(236)

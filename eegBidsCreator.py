@@ -1,4 +1,4 @@
-VERSION = '0.6r1'
+VERSION = '0.6r2'
 
 import logging, argparse, os, json, glob, olefile, traceback, struct, configparser
 import tempfile, bisect
@@ -591,7 +591,7 @@ def main(argv):
                 Logger.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
                 l_data = []
                 for ch in channels:
-                    l_data.append(ch.GetValueVector(t_s, t_e, raw = True ))
+                    l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=1, raw = True ))
                 outData.WriteDataBlock(l_data, t_s)
             outData.Close()
 
@@ -610,13 +610,13 @@ def main(argv):
         ex_code = 1
 
     try:
+        Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
+        Logger.info("Took {} seconds".format(tm.process_time()))
+        Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
         shutil.copy2(tmpDir+"/logfile", eegPath+"/"+recording.Prefix()+".log") 
         shutil.copy2(tmpDir+"/configuration", eegPath+"/"+recording.Prefix()+".conf") 
         rmdir(tmpDir)
         shutil.rmtree(tmpDir)
-        Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
-        Logger.info("Took {} seconds".format(tm.process_time()))
-        Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
     except:
         Logger.error("Unable to copy files to working directory. See in "+tmpDir+"/logfile for more details.")
         ex_code = 1
