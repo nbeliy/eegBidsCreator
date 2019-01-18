@@ -118,6 +118,9 @@ class Record(object):
         path += "/eeg"
         self.__path = path
         return path
+
+    def SetRun(self,run):
+        self.__run = str(run)
         
     @property
     def Frequency(self): return self.__Frequency

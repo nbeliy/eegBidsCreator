@@ -46,9 +46,6 @@ def main(argv):
     parser.add_argument('-s, --session',
         metavar='sesId', dest='ses',
         help = 'Id of the session' )
-    parser.add_argument('-r, --run,',
-        metavar='runId', dest='run',
-        help = 'Id of the run' )
     parser.add_argument('-j, --json', 
         metavar='eegJson', dest='eegJson',
         help = "A json file with task description"
@@ -93,12 +90,14 @@ def main(argv):
                             "LogLevel":"INFO", 
                             "Quiet":"no",
                             "Conversion":"",
-                            "CopySource":"yes"}
+                            "CopySource":"yes",
+                            "SplitRuns":"no"}
     parameters['DATATREATMENT'] = {"DropChannels":"", "StartTime":"", "EndTime":"", 
                                     "StartEvent":"","EndEvent":"",
                                     "IgnoreOutOfTimeEvents":"yes",
                                     "MergeCommonEvents":"yes",
                                     "IncludeSegmentStart":"no"}
+    parameters['RUNS'] = {"MainChannel":"", "MinSpan":"0"}
     parameters['BRAINVISION']   = {"Encoding":"UTF-8", "DataFormat":"IEEE_FLOAT_32", "Endian":"Little"}
 
     #Reading configuration file
@@ -111,7 +110,6 @@ def main(argv):
     if args.task    != None : parameters['GENERAL']['TaskId']       = args.task
     if args.acq     != None : parameters['GENERAL']['AcquisitionId']= args.acq
     if args.ses     != None : parameters['GENERAL']['SessionId']    = args.ses
-    if args.run     != None : parameters['GENERAL']['RunId']        = args.run
     if args.eegJson  != None: parameters['GENERAL']['JsonFile']     = args.eegJson
     if args.loglevel != None: parameters['GENERAL']['LogLevel']     = args.loglevel
     if args.logfile  != None: parameters['GENERAL']['LogFile']      = args.logfile
@@ -135,8 +133,8 @@ def main(argv):
     tmpDir = tempfile.mkdtemp(prefix=argv[0]+"_")
 
     #logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
-    logFormatter = logging.Formatter("%(levelname)s:%(asctime)s:%(funcName)s %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
-    Logger = logging.getLogger()
+    logFormatter = logging.Formatter("[%(levelname)-7.7s]:%(asctime)s:%(name)s %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
+    Logger = logging.getLogger("Main")
     Logger.setLevel(getattr(logging, parameters['GENERAL']['LogLevel'], None))
 
     fileHandler = logging.FileHandler(tmpDir+"/logfile")
@@ -204,7 +202,7 @@ def main(argv):
         recording = GRecord(task = parameters['GENERAL']['TaskId'], 
                             session = parameters['GENERAL']['SessionId'], 
                             acquisition = parameters['GENERAL']['AcquisitionId'],
-                            run = parameters['GENERAL']['RunId'])
+                            run = "")
         eegPath = "/"
         srcPath = "/"
         if parameters['GENERAL']['JsonFile'] != "":
@@ -285,8 +283,6 @@ def main(argv):
             else:
                 shutil.copy2(parameters['GENERAL']['Path'], srcPath+"/"+basename)
 
-        with open(eegPath+"/"+recording.Prefix()+".ini", 'w') as configfile: parameters.write(configfile)
-
         t_ref   = recording.StartTime
         t_end   = recording.StopTime
         t_min   = datetime.max
@@ -300,52 +296,50 @@ def main(argv):
             Logger.warning("Unable to get EndTime of record. Will be set to last data point.")
 
 
-        Logger.info("Creating channels.tsv file")
-        with open(eegPath+"/"+recording.Prefix()+"_channels.tsv", "w") as f:
-            if eegform == "embla":
-                channels = [EbmChannel(c) for c in glob.glob(parameters['GENERAL']['Path']+"/*.ebm")]
-                print("name", "type", "units", "description", "sampling_frequency", "reference", 
-                    "low_cutoff", "high_cutoff", "notch", "status", "status_description", sep='\t', file = f)
-                if parameters["DATATREATMENT"]['DropChannels'] != "":
-                    to_drop = [p.strip() for p in parameters['DATATREATMENT']['DropChannels'].split(',')]
-                    channels = [ch for ch in channels if ch.ChannName not in to_drop]
-                channels.sort()
-                ch_dict = dict()
-                
-                for c in channels:
-                    Logger.debug("Channel {}, type {}, Sampling {} Hz".format(c.ChannName, c.SigType, int(c.DBLsampling)))
+        Logger.info("Reading chammels")
+        if eegform == "embla":
+            channels = [EbmChannel(c) for c in glob.glob(parameters['GENERAL']['Path']+"/*.ebm")]
+            if parameters["DATATREATMENT"]['DropChannels'] != "":
+                to_drop = [p.strip() for p in parameters['DATATREATMENT']['DropChannels'].split(',')]
+                channels = [ch for ch in channels if ch.GetName() not in to_drop]
+            channels.sort()
+            ch_dict = dict()
+            
+            for c in channels:
+                Logger.debug("Channel {}, type {}, Sampling {} Hz".format(c.GetName(), c.GetId(), int(c.GetFrequency())))
 
-                    if c.SigSubType in ch_dict:
-                        Logger.warning("Channel {} has same Id {} as channel {}".format(c.GetName(), c.GetId(), ch_dict[c.GetId()].GetName() ))
-                    else:
-                        ch_dict[c.GetId()] = c
-                    l = [c.GetName(Void = "n/a"), c.GetType(Void = "n/a"), c.GetUnit(Void = "n/a"), c.GetDescription(Void = "n/a"), str(c.GetFrequency()), c.GetReference(Void = "n/a"), "n/a", "n/a", "n/a", "n/a", "n/a"]
-                    print(str.join("\t", l), file = f)
-                    if t_ref != datetime.min:
-                        if t_ref != c.Time[0]:
-                            Logger.warning("Channel '{}': Starts {} sec later than recording {}".format(c.GetName(), (c.Time[0] - t_ref).total_seconds(), t_ref.isoformat()))
-                    if c.Time[0] < t_min:
-                        t_min = c.Time[0]
-                        Logger.debug("New t_min {}".format(t_min.isoformat()))
-                    elif c.Time[0] != t_min:
-                        Logger.warning("Channel '{}': Starts {} sec later than other channels".format(c.GetName(), (c.Time[0] - t_min).total_seconds()))
-                    if c.Time[-1]+timedelta(0, c._seqSize[-1]/c.GetFrequency(), 0) > t_max:
-                        t_max = c.Time[-1]+timedelta(0, c._seqSize[-1]/c.GetFrequency(), 0) 
-                        Logger.debug("New t_max {}".format(t_max.isoformat()))
-                    if int(c.GetFrequency()) != recording.Frequency:
-                        Logger.debug("Channel '{}': Mismatch common sampling frequency {} Hz".format(c.GetName(), recording.Frequency))
-                        fr = recording.Frequency
-                        recording.AddFrequency(c.GetFrequency())
-                        if fr != recording.Frequency:
-                            Logger.info("Updated common sampling frequency to {} Hz".format(recording.Frequency))
-                        
-            else:
-                raise Exception("EEG format {} not implemented (yet)".format(eegform))
+                if c.SigSubType in ch_dict:
+                    Logger.warning("Channel {} has same Id {} as channel {}".format(c.GetName(), c.GetId(), ch_dict[c.GetId()].GetName() ))
+                else:
+                    ch_dict[c.GetId()] = c
+                if t_ref != datetime.min:
+                    if t_ref != c.Time[0]:
+                        Logger.warning("Channel '{}': Starts {} sec later than recording {}".format(c.GetName(), (c.Time[0] - t_ref).total_seconds(), t_ref.isoformat()))
+                if c.Time[0] < t_min:
+                    t_min = c.Time[0]
+                    Logger.debug("New t_min {}".format(t_min.isoformat()))
+                elif c.Time[0] != t_min:
+                    Logger.warning("Channel '{}': Starts {} sec later than other channels".format(c.GetName(), (c.Time[0] - t_min).total_seconds()))
+                if c.Time[-1]+timedelta(0, c._seqSize[-1]/c.GetFrequency(), 0) > t_max:
+                    t_max = c.Time[-1]+timedelta(0, c._seqSize[-1]/c.GetFrequency(), 0) 
+                    Logger.debug("New t_max {}".format(t_max.isoformat()))
+                if int(c.GetFrequency()) != recording.Frequency:
+                    Logger.debug("Channel '{}': Mismatch common sampling frequency {} Hz".format(c.GetName(), recording.Frequency))
+                    fr = recording.Frequency
+                    recording.AddFrequency(c.GetFrequency())
+                    if fr != recording.Frequency:
+                        Logger.info("Updated common sampling frequency to {} Hz".format(recording.Frequency))
+                    
+        else:
+            raise Exception("EEG format {} not implemented (yet)".format(eegform))
 
         if t_ref == datetime.min:
             t_ref = t_min
         if t_end == datetime.min or t_end < t_max:
             t_end = t_max
+
+        
+       
         Logger.info("Start time: {}, Stop time: {}".format(t_ref.isoformat(), t_end.isoformat()))
         Logger.info("Earliest time: {}, Latest time: {}".format(t_min.isoformat(), t_max.isoformat()))
         if parameters['DATATREATMENT']['StartTime'] != '':
@@ -364,7 +358,6 @@ def main(argv):
         Logger.info("Reading events info")
         if eegform == "embla":
             for evfile in glob.glob(parameters['GENERAL']['Path']+"/*.esedb"):
-#            evfile = glob.glob(parameters['GENERAL']['Path']+"/*.esedb")[0]
                 esedb = olefile.OleFileIO(evfile).openstream('Event Store/Events')
                 root = Parcel(esedb)
                 evs     = root.get("Events")
@@ -395,7 +388,7 @@ def main(argv):
                             name = aux_l.get("Aux", ev.AuxDataID).get("Sub Classification History").get("1").get("type")
                         except:
                             Logger.warning("Can't get event name for index {}".format(ev.AuxDataID))
-                            name = "n/a"
+                            name = ""
 
                     if ch != None:
                         ch_index = channels.index(ch)
@@ -432,172 +425,200 @@ def main(argv):
                         bisect.insort(events,ev)
                     else :
                         events[events.index(ev)].AddChannel(ch_id)
-        #ev = GenEvent(Name = "New Segment", Time = t_ref, Duration = 0)
-        #if not ev in events:
-        #    bisect.insort(events,ev)
-        #else :
-        #    events[events.index(ev)].RemoveChannel()
         
         if parameters.getboolean("DATATREATMENT","IgnoreOutOfTimeEvents"):
             events = [ev for ev in events if (ev.GetTime() >= t_ref and ev.GetTime() <= t_end) ]
 
         #Updating channels frequency multiplier and starting time
+        time_limits = list()
         for c in channels:
             c.SetFrequencyMultiplyer(int(recording.Frequency/c.GetFrequency()))
             c.SetStartTime(t_ref)
-
-        Logger.info("Creating events.tsv file")     
-        with open(eegPath+"/"+recording.Prefix()+"_events.tsv", "w") as f:
-            print("onset", "duration", "trial_type", "responce_time", "value", "sample", sep='\t', file = f)
-            for ev in events:
-                if ev.GetChannelsSize() == 0:
-                    print("%.3f\t%.2f\t%s\tn/a\tn/a\t%d" %(ev.GetOffset(t_ref), ev.GetDuration(), ev.GetName(Void = "n/a", ToReplace=("\t"," ")), ev.GetOffset(t_ref)*recording.Frequency), file = f )
-                else :
-                    for c_id in ev.GetChannels():
-                        print("%.3f\t%.2f\t%s\tn/a\tn/a"% (ev.GetOffset(t_ref), ev.GetDuration(), ev.GetName(Void = "n/a", ToReplace=("\t"," "))), file = f, end="")
-                        #This writes index with channel proper frequency
-                        #print("\t{}".format(channels[ev["Channel"]].GetIndexTime(ev["Time"], freqMultiplier = 1)), file = f)
-                        #This writes index with common frequency
-                        print("\t{}".format(ch_dict[c_id].GetIndexTime(ev.GetTime())), file = f)
-                
-        Logger.info("Creating eeg.json file")
-        with open(eegPath+"/"+recording.Prefix()+"_eeg.json", "w") as f:
-            recording.UpdateJSON()
-            counter = {"EEGChannelCount":0, "EOGChannelCount":0, "ECGChannelCount":0, "EMGChannelCount":0, "MiscChannelCount":0}
-            for ch in channels:
-               if   "EEG" in ch.SigType: counter["EEGChannelCount"] += 1
-               elif "EOG" in ch.SigType: counter["EOGChannelCount"] += 1
-               elif "ECG" in ch.SigType: counter["ECGChannelCount"] += 1
-               elif "EMG" in ch.SigType: counter["EMGChannelCount"] += 1
-               else: counter["MiscChannelCount"] += 1
-            recording.JSONdata.update(counter)
-            res = recording.CheckJSON()
-            if len(res[0]) > 0:
-                Logger.warning("JSON: Missing next required fields: "+ str(res[0]))
-            if len(res[1]) > 0:
-                Logger.info("JSON: Missing next recomennded fields: "+ str(res[1]))
-            if len(res[2]) > 0:
-                Logger.debug("JSON: Missing next optional fields: "+ str(res[2]))
-            if len(res[3]) > 0:
-                Logger.warning("JSON: Contains next non BIDS fields: "+ str(res[3]))
-            json.dump(recording.JSONdata, f, skipkeys=False, indent="  ", separators=(',',':'))
-
-        outData = None
-        if  parameters['GENERAL']['Conversion'] == "BrainVision":
-            Logger.info("Converting to BrainVision format")
-            outData = BrainVision(eegPath, recording.Prefix())
-            outData.SetEncoding(parameters['BRAINVISION']['Encoding'])
-            outData.SetDataFormat(parameters['BRAINVISION']['DataFormat'])
-            outData.SetEndian(parameters['BRAINVISION']['Endian'] == "Little")
-            outData.AddFrequency(recording.Frequency)
-            print(outData.GetFrequency())
-
-            Logger.info("Creating eeg.vhdr header file")
-            for ch in channels:
-                outData.Header.Channels.append(BvChannel(Base = ch, Comments = ch.SigMainType+"-"+ch.SigSubType))
-            outData.Header.write()
+            if parameters.getboolean("GENERAL","SplitRuns"):
+                if c.GetName() == parameters["RUNS"]["MainChannel"]:
+                    for i in range(0, c.GetNsequences()):
+                        span = c.GetSequenceSize(i)/c.GetFrequency()
+                        if (span/60) > float(parameters["RUNS"]["MinSpan"]):
+                            ts = max(c.GetSequenceStart(i), t_ref)
+                            te = min(c.GetSequenceStart(i) + timedelta(0,span,0), t_end)
+                            if t_ref < te:
+                                time_limits.append([ts, te])
+        if len(time_limits) == 0:
+            if parameters.getboolean("GENERAL","SplitRuns"):
+                raise Exception("Unable to find main channel '{}', needed to split into runs".format(parameters["RUNS"]["MainChannel"]))
+            time_limits.append([t_ref, t_end])
+        
+        for count,t in enumerate(time_limits):
+            t_ref = t[0]
+            t_end = t[1]
+            if parameters.getboolean("GENERAL","SplitRuns"):
+                recording.SetRun(count+1)
+                recording.ResetPrefix()
             
-            Logger.info("Creating eeg.vmrk markers file")
-            outData.MarkerFile.OpenFile(outData.GetEncoding())
-            outData.MarkerFile.SetFrequency(outData.GetFrequency())
-            outData.MarkerFile.SetStartTime(t_ref)
-            Logger.info("Writting proper events")
-            outData.MarkerFile.AddMarker("New Segment", t_ref, 0, -1, "")
-            for ev in events:
-                if (ev.GetChannelsSize() == 0):
-                    outData.MarkerFile.AddMarker(ev.GetName(ToReplace = (",","\1")), ev.GetTime(), ev.GetDuration(), -1, "")
-                else:
-                    for c in ev.GetChannels():
-                        outData.MarkerFile.AddMarker(ev.GetName(ToReplace = (",","\1")), ev.GetTime(), ev.GetDuration(), channels.index(ch_dict[c]), "")
-            outData.MarkerFile.Write()
+            Logger.info("Creating channels.tsv file")
+            with open(eegPath+"/"+recording.Prefix()+"_channels.tsv", "w") as f:
+                print("name", "type", "units", "description", "sampling_frequency", "reference", 
+                    "low_cutoff", "high_cutoff", "notch", "status", "status_description", 
+                    sep='\t', file = f)
+                for c in channels:
+                    print(c.GetName(Void = "n/a"), c.GetType(Void = "n/a"), c.GetUnit(Void = "n/a"),
+                            c.GetDescription(Void = "n/a"), c.GetFrequency(), c.GetReference(Void = "n/a"),
+                            "n/a", "n/a", "n/a", "n/a", "n/a", sep = "\t", file = f)
 
-            Logger.info("Creating eeg data file")
-            outData.DataFile.SetDataFormat(outData.Header.BinaryInfo.BinaryFormat)
-            outData.DataFile.SetEndian(outData.Header.BinaryInfo.UseBigEndianOrder)
-            outData.DataFile.OpenFile()
-            t_e = t_ref
-            t_step = 3600
-            while True:
-                t_s = t_e
-                t_e = t_e + timedelta(0,t_step,0)
-                if t_s >= t_end: break
-                if t_e > t_end: 
-                    t_e = t_end
-                    t_step = (t_e - t_s).total_seconds()
-                Logger.info("Timepoint: {}".format(t_s.isoformat()))
-                Logger.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
-                l_data = []
+
+
+            Logger.info("Creating events.tsv file")     
+            with open(eegPath+"/"+recording.Prefix()+"_events.tsv", "w") as f:
+                print("onset", "duration", "trial_type", "responce_time", "value", "sample", sep='\t', file = f)
+                for ev in events:
+                    if ev.GetChannelsSize() == 0:
+                        print("%.3f\t%.2f\t%s\tn/a\tn/a\t%d" %(ev.GetOffset(t_ref), ev.GetDuration(), ev.GetName(Void = "n/a", ToReplace=("\t"," ")), ev.GetOffset(t_ref)*recording.Frequency), file = f )
+                    else :
+                        for c_id in ev.GetChannels():
+                            print("%.3f\t%.2f\t%s\tn/a\tn/a"% (ev.GetOffset(t_ref), ev.GetDuration(), ev.GetName(Void = "n/a", ToReplace=("\t"," "))), file = f, end="")
+                            #This writes index with channel proper frequency
+                            #print("\t{}".format(channels[ev["Channel"]].GetIndexTime(ev["Time"], freqMultiplier = 1)), file = f)
+                            #This writes index with common frequency
+                            print("\t{}".format(ch_dict[c_id].GetIndexTime(ev.GetTime())), file = f)
+                    
+            Logger.info("Creating eeg.json file")
+            with open(eegPath+"/"+recording.Prefix()+"_eeg.json", "w") as f:
+                recording.UpdateJSON()
+                counter = {"EEGChannelCount":0, "EOGChannelCount":0, "ECGChannelCount":0, "EMGChannelCount":0, "MiscChannelCount":0}
                 for ch in channels:
-                    if outData.Header.BinaryInfo.BinaryFormat == "IEEE_FLOAT_32":
-                        l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer()))
+                   if   "EEG" in ch.SigType: counter["EEGChannelCount"] += 1
+                   elif "EOG" in ch.SigType: counter["EOGChannelCount"] += 1
+                   elif "ECG" in ch.SigType: counter["ECGChannelCount"] += 1
+                   elif "EMG" in ch.SigType: counter["EMGChannelCount"] += 1
+                   else: counter["MiscChannelCount"] += 1
+                recording.JSONdata.update(counter)
+                res = recording.CheckJSON()
+                if len(res[0]) > 0:
+                    Logger.warning("JSON: Missing next required fields: "+ str(res[0]))
+                if len(res[1]) > 0:
+                    Logger.info("JSON: Missing next recomennded fields: "+ str(res[1]))
+                if len(res[2]) > 0:
+                    Logger.debug("JSON: Missing next optional fields: "+ str(res[2]))
+                if len(res[3]) > 0:
+                    Logger.warning("JSON: Contains next non BIDS fields: "+ str(res[3]))
+                json.dump(recording.JSONdata, f, skipkeys=False, indent="  ", separators=(',',':'))
+
+            outData = None
+            if  parameters['GENERAL']['Conversion'] == "BrainVision":
+                Logger.info("Converting to BrainVision format")
+                outData = BrainVision(eegPath, recording.Prefix())
+                outData.SetEncoding(parameters['BRAINVISION']['Encoding'])
+                outData.SetDataFormat(parameters['BRAINVISION']['DataFormat'])
+                outData.SetEndian(parameters['BRAINVISION']['Endian'] == "Little")
+                outData.AddFrequency(recording.Frequency)
+                print(outData.GetFrequency())
+
+                Logger.info("Creating eeg.vhdr header file")
+                for ch in channels:
+                    outData.Header.Channels.append(BvChannel(Base = ch, Comments = ch.SigMainType+"-"+ch.SigSubType))
+                outData.Header.write()
+                
+                Logger.info("Creating eeg.vmrk markers file")
+                outData.MarkerFile.OpenFile(outData.GetEncoding())
+                outData.MarkerFile.SetFrequency(outData.GetFrequency())
+                outData.MarkerFile.SetStartTime(t_ref)
+                Logger.info("Writting proper events")
+                outData.MarkerFile.AddMarker("New Segment", t_ref, 0, -1, "")
+                for ev in events:
+                    if (ev.GetChannelsSize() == 0):
+                        outData.MarkerFile.AddMarker(ev.GetName(ToReplace = (",","\1")), ev.GetTime(), ev.GetDuration(), -1, "")
                     else:
-                        l_data.append(ch.getValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer(), raw = True ))
-                outData.DataFile.WriteBlock(l_data)
-        #EDF part
-        elif parameters['GENERAL']['Conversion'] == "EDF":
-            Logger.info("Converting to EDF+ format")
-            Logger.info("Creating events.edf file")
-            outData = EDF(eegPath, recording.Prefix())
-            Logger.info("Creating events.edf file")
-            outData.Patient["Code"] = metadata["PatientInfo"]["ID"]
-            if "Gender" in metadata["PatientInfo"]:
-                outData.Patient["Sex"] = "F" if metadata["PatientInfo"]["Gender"] == 1 else "M"
-            if "DateOfBirth" in metadata["PatientInfo"]:
-                outData.Patient["Birthdate"] = metadata["PatientInfo"]["DateOfBirth"].date()
+                        for c in ev.GetChannels():
+                            outData.MarkerFile.AddMarker(ev.GetName(ToReplace = (",","\1")), ev.GetTime(), ev.GetDuration(), channels.index(ch_dict[c]), "")
+                outData.MarkerFile.Write()
 
-            name = ""
-            if "FirstName" in metadata["PatientInfo"] and metadata["PatientInfo"]["FirstName"] != None:
-                name += metadata["PatientInfo"]["FirstName"]+" "
-            if "MiddleName" in metadata["PatientInfo"] and metadata["PatientInfo"]["MiddleName"] != None:
-                name += metadata["PatientInfo"]["MiddleName"]+" "
-            if "LastName" in metadata["PatientInfo"] and metadata["PatientInfo"]["LastName"] != None:
-                name += metadata["PatientInfo"]["LastName"]+" "
-            outData.Patient["Name"] = name.strip()
-            
-            outData.Record["StartDate"] = metadata["RecordingInfo"]["StartTime"] 
-            outData.Record["Code"]  = metadata["RecordingInfo"]["Type"]
-            outData.Record["Equipment"] = metadata["Device"]["DeviceID"]
-            outData.SetStartTime(t_ref)
-            outData.RecordDuration = 10.
+                Logger.info("Creating eeg data file")
+                outData.DataFile.SetDataFormat(outData.Header.BinaryInfo.BinaryFormat)
+                outData.DataFile.SetEndian(outData.Header.BinaryInfo.UseBigEndianOrder)
+                outData.DataFile.OpenFile()
+                t_e = t_ref
+                t_step = 3600
+                while True:
+                    t_s = t_e
+                    t_e = t_e + timedelta(0,t_step,0)
+                    if t_s >= t_end: break
+                    if t_e > t_end: 
+                        t_e = t_end
+                        t_step = (t_e - t_s).total_seconds()
+                    Logger.info("Timepoint: {}".format(t_s.isoformat()))
+                    Logger.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
+                    l_data = []
+                    for ch in channels:
+                        if outData.Header.BinaryInfo.BinaryFormat == "IEEE_FLOAT_32":
+                            l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer()))
+                        else:
+                            l_data.append(ch.getValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer(), raw = True ))
+                    outData.DataFile.WriteBlock(l_data)
+            #EDF part
+            elif parameters['GENERAL']['Conversion'] == "EDF":
+                Logger.info("Converting to EDF+ format")
+                Logger.info("Creating events.edf file")
+                outData = EDF(eegPath, recording.Prefix())
+                Logger.info("Creating events.edf file")
+                outData.Patient["Code"] = metadata["PatientInfo"]["ID"]
+                if "Gender" in metadata["PatientInfo"]:
+                    outData.Patient["Sex"] = "F" if metadata["PatientInfo"]["Gender"] == 1 else "M"
+                if "DateOfBirth" in metadata["PatientInfo"]:
+                    outData.Patient["Birthdate"] = metadata["PatientInfo"]["DateOfBirth"].date()
 
-            for ev in events:
-                if (ev.GetChannelsSize() == 0):
-                    outData.AddEvent(ev.GetName(), ev.GetTime(), ev.GetDuration(), -1, "")
-                else:
-                    for c in ev.GetChannels():
-                        outData.AddEvent(ev.GetName(), ev.GetTime(), ev.GetDuration(), channels.index(ch_dict[c]), "")
-            outData.WriteEvents()
+                name = ""
+                if "FirstName" in metadata["PatientInfo"] and metadata["PatientInfo"]["FirstName"] != None:
+                    name += metadata["PatientInfo"]["FirstName"]+" "
+                if "MiddleName" in metadata["PatientInfo"] and metadata["PatientInfo"]["MiddleName"] != None:
+                    name += metadata["PatientInfo"]["MiddleName"]+" "
+                if "LastName" in metadata["PatientInfo"] and metadata["PatientInfo"]["LastName"] != None:
+                    name += metadata["PatientInfo"]["LastName"]+" "
+                outData.Patient["Name"] = name.strip()
                 
-            for ch in channels:
-                outData.Channels.append(EDFChannel(Base = ch, Type = ch.SigMainType, 
-                    Specs = ch.SigMainType+"-"+ch.SigSubType, Filter = ""))
-            outData.WriteHeader()
-            t_e = t_ref
-            t_step = 3600
-            if t_step%outData.RecordDuration != 0:
-                t_step = outData.RecordDuration*(t_step//outData.RecordDuration+1)
-            while True:
-                t_s = t_e
-                t_e = t_e + timedelta(0,t_step,0)
-                if t_s >= t_end: break
-                if t_e > t_end: 
-                    t_e = t_end
-                    t_step = (t_e - t_s).total_seconds()
-                    if t_step%outData.RecordDuration != 0:
-                        t_step = outData.RecordDuration*(t_step//outData.RecordDuration+1)
-                        t_e = t_s + timedelta(0,t_step,0)
+                outData.Record["StartDate"] = metadata["RecordingInfo"]["StartTime"] 
+                outData.Record["Code"]  = metadata["RecordingInfo"]["Type"]
+                outData.Record["Equipment"] = metadata["Device"]["DeviceID"]
+                outData.SetStartTime(t_ref)
+                outData.RecordDuration = 10.
 
-                Logger.info("Timepoint: {}".format(t_s.isoformat()))
-                Logger.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
-                l_data = []
+                for ev in events:
+                    if (ev.GetChannelsSize() == 0):
+                        outData.AddEvent(ev.GetName(), ev.GetTime(), ev.GetDuration(), -1, "")
+                    else:
+                        for c in ev.GetChannels():
+                            outData.AddEvent(ev.GetName(), ev.GetTime(), ev.GetDuration(), channels.index(ch_dict[c]), "")
+                outData.WriteEvents()
+                    
                 for ch in channels:
-                    l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=1, raw = True ))
-                outData.WriteDataBlock(l_data, t_s)
-            outData.Close()
+                    outData.Channels.append(EDFChannel(Base = ch, Type = ch.SigMainType, 
+                        Specs = ch.SigMainType+"-"+ch.SigSubType, Filter = ""))
+                outData.WriteHeader()
+                t_e = t_ref
+                t_step = 3600
+                if t_step%outData.RecordDuration != 0:
+                    t_step = outData.RecordDuration*(t_step//outData.RecordDuration+1)
+                while True:
+                    t_s = t_e
+                    t_e = t_e + timedelta(0,t_step,0)
+                    if t_s >= t_end: break
+                    if t_e > t_end: 
+                        t_e = t_end
+                        t_step = (t_e - t_s).total_seconds()
+                        if t_step%outData.RecordDuration != 0:
+                            t_step = outData.RecordDuration*(t_step//outData.RecordDuration+1)
+                            t_e = t_s + timedelta(0,t_step,0)
 
-            
+                    Logger.info("Timepoint: {}".format(t_s.isoformat()))
+                    Logger.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
+                    l_data = []
+                    for ch in channels:
+                        l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=1, raw = True ))
+                    outData.WriteDataBlock(l_data, t_s)
+                outData.Close()
 
-        Logger.info("All done. Took {} secons".format(tm.process_time()))
+                
+
+            Logger.info("All done. Took {} secons".format(tm.process_time()))
 
     except Exception as e:
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
@@ -605,7 +626,6 @@ def main(argv):
         for l in tr:
             Logger.error('File "'+l[0]+'", line '+str(l[1])+" in "+l[2]+":")
         Logger.error(type(e).__name__+": "+str(e))
-        #traceback.print_exc()
 
         ex_code = 1
 
@@ -613,8 +633,10 @@ def main(argv):
         Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
         Logger.info("Took {} seconds".format(tm.process_time()))
         Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
+        recording.SetRun("")
+        recording.ResetPrefix()
         shutil.copy2(tmpDir+"/logfile", eegPath+"/"+recording.Prefix()+".log") 
-        shutil.copy2(tmpDir+"/configuration", eegPath+"/"+recording.Prefix()+".conf") 
+        shutil.copy2(tmpDir+"/configuration", eegPath+"/"+recording.Prefix()+".ini") 
         rmdir(tmpDir)
         shutil.rmtree(tmpDir)
     except:
