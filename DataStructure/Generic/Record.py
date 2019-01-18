@@ -93,8 +93,11 @@ class Record(object):
         self.Events         = []
         self.__Frequency    = 1
 
-    def Prefix(self):
-        return self.__prefix
+    def Prefix(self, run=""):
+        if run == "":
+            return self.__prefix
+        else: 
+            return self.__prefix+"_run-"+run
 
     def ResetPrefix(self):
         prefix = "sub-"+self.SubjectInfo.ID
@@ -103,25 +106,19 @@ class Record(object):
         prefix = prefix + "_task-" + self.__task
         if self.__acquisition != "": 
             prefix = prefix + "_acq-" + self.__acquisition 
-        if self.__run != "": 
-            prefix = prefix + "_run-" + self.__run
         self.__prefix = prefix
         return prefix
 
-    def Path(self):
-        return self.__path
+    def Path(self, app = "eeg"):
+        return self.__path+"/"+app
 
     def ResetPath(self):
         path = "sub-"+self.SubjectInfo.ID
         if self.__session != "": 
             path = path + "/ses-" + self.__session 
-        path += "/eeg"
         self.__path = path
-        return path
+        return self.Path()
 
-    def SetRun(self,run):
-        self.__run = str(run)
-        
     @property
     def Frequency(self): return self.__Frequency
     @Frequency.setter

@@ -269,15 +269,15 @@ def main(argv):
         Logger.info("EEG will be saved in "+eegPath)
 
         if parameters['GENERAL'].getboolean('CopySource'):
-            srcPath = parameters['GENERAL']['OutputFolder']+"/source/"+ recording.Path()
+            srcPath = parameters['GENERAL']['OutputFolder']+"/sourcedata/"+ recording.Path()
             if os.path.exists(srcPath):
                 if os.path.exists(srcPath+"/"+basename):
-                    Logger.warning('"{}" exists in source directory. It will be eraised.'.format(basename))
+                    Logger.warning('"{}" exists in sourcedata directory. It will be eraised.'.format(basename))
                     rmdir(srcPath+"/"+parameters['GENERAL']['Path'])
             else:
                 Logger.info("Creating output directory {}".format(srcPath))
                 os.makedirs(srcPath)
-            Logger.info("Copiyng original data to source folder")
+            Logger.info("Copiyng original data to sourcedata folder")
             if extension == "":
                 shutil.copytree(parameters['GENERAL']['Path'], srcPath+"/"+parameters['GENERAL']['Path'])
             else:
@@ -429,6 +429,28 @@ def main(argv):
         if parameters.getboolean("DATATREATMENT","IgnoreOutOfTimeEvents"):
             events = [ev for ev in events if (ev.GetTime() >= t_ref and ev.GetTime() <= t_end) ]
 
+        Logger.info("Creating eeg.json file")
+        with open(eegPath+"/"+recording.Prefix()+"_eeg.json", "w") as f:
+            recording.UpdateJSON()
+            counter = {"EEGChannelCount":0, "EOGChannelCount":0, "ECGChannelCount":0, "EMGChannelCount":0, "MiscChannelCount":0}
+            for ch in channels:
+               if   "EEG" in ch.SigType: counter["EEGChannelCount"] += 1
+               elif "EOG" in ch.SigType: counter["EOGChannelCount"] += 1
+               elif "ECG" in ch.SigType: counter["ECGChannelCount"] += 1
+               elif "EMG" in ch.SigType: counter["EMGChannelCount"] += 1
+               else: counter["MiscChannelCount"] += 1
+            recording.JSONdata.update(counter)
+            res = recording.CheckJSON()
+            if len(res[0]) > 0:
+                Logger.warning("JSON: Missing next required fields: "+ str(res[0]))
+            if len(res[1]) > 0:
+                Logger.info("JSON: Missing next recomennded fields: "+ str(res[1]))
+            if len(res[2]) > 0:
+                Logger.debug("JSON: Missing next optional fields: "+ str(res[2]))
+            if len(res[3]) > 0:
+                Logger.warning("JSON: Contains next non BIDS fields: "+ str(res[3]))
+            json.dump(recording.JSONdata, f, skipkeys=False, indent="  ", separators=(',',':'))
+
         #Updating channels frequency multiplier and starting time
         time_limits = list()
         for c in channels:
@@ -448,15 +470,16 @@ def main(argv):
                 raise Exception("Unable to find main channel '{}', needed to split into runs".format(parameters["RUNS"]["MainChannel"]))
             time_limits.append([t_ref, t_end])
         
+        #Running over runs
         for count,t in enumerate(time_limits):
             t_ref = t[0]
             t_end = t[1]
+            run = ""
             if parameters.getboolean("GENERAL","SplitRuns"):
-                recording.SetRun(count+1)
-                recording.ResetPrefix()
+                run = str(count+1)
             
             Logger.info("Creating channels.tsv file")
-            with open(eegPath+"/"+recording.Prefix()+"_channels.tsv", "w") as f:
+            with open(eegPath+"/"+recording.Prefix(run)+"_channels.tsv", "w") as f:
                 print("name", "type", "units", "description", "sampling_frequency", "reference", 
                     "low_cutoff", "high_cutoff", "notch", "status", "status_description", 
                     sep='\t', file = f)
@@ -468,7 +491,7 @@ def main(argv):
 
 
             Logger.info("Creating events.tsv file")     
-            with open(eegPath+"/"+recording.Prefix()+"_events.tsv", "w") as f:
+            with open(eegPath+"/"+recording.Prefix(run)+"_events.tsv", "w") as f:
                 print("onset", "duration", "trial_type", "responce_time", "value", "sample", sep='\t', file = f)
                 for ev in events:
                     if ev.GetChannelsSize() == 0:
@@ -481,32 +504,10 @@ def main(argv):
                             #This writes index with common frequency
                             print("\t{}".format(ch_dict[c_id].GetIndexTime(ev.GetTime())), file = f)
                     
-            Logger.info("Creating eeg.json file")
-            with open(eegPath+"/"+recording.Prefix()+"_eeg.json", "w") as f:
-                recording.UpdateJSON()
-                counter = {"EEGChannelCount":0, "EOGChannelCount":0, "ECGChannelCount":0, "EMGChannelCount":0, "MiscChannelCount":0}
-                for ch in channels:
-                   if   "EEG" in ch.SigType: counter["EEGChannelCount"] += 1
-                   elif "EOG" in ch.SigType: counter["EOGChannelCount"] += 1
-                   elif "ECG" in ch.SigType: counter["ECGChannelCount"] += 1
-                   elif "EMG" in ch.SigType: counter["EMGChannelCount"] += 1
-                   else: counter["MiscChannelCount"] += 1
-                recording.JSONdata.update(counter)
-                res = recording.CheckJSON()
-                if len(res[0]) > 0:
-                    Logger.warning("JSON: Missing next required fields: "+ str(res[0]))
-                if len(res[1]) > 0:
-                    Logger.info("JSON: Missing next recomennded fields: "+ str(res[1]))
-                if len(res[2]) > 0:
-                    Logger.debug("JSON: Missing next optional fields: "+ str(res[2]))
-                if len(res[3]) > 0:
-                    Logger.warning("JSON: Contains next non BIDS fields: "+ str(res[3]))
-                json.dump(recording.JSONdata, f, skipkeys=False, indent="  ", separators=(',',':'))
-
             outData = None
             if  parameters['GENERAL']['Conversion'] == "BrainVision":
                 Logger.info("Converting to BrainVision format")
-                outData = BrainVision(eegPath, recording.Prefix())
+                outData = BrainVision(eegPath, recording.Prefix(run))
                 outData.SetEncoding(parameters['BRAINVISION']['Encoding'])
                 outData.SetDataFormat(parameters['BRAINVISION']['DataFormat'])
                 outData.SetEndian(parameters['BRAINVISION']['Endian'] == "Little")
@@ -554,11 +555,14 @@ def main(argv):
                         else:
                             l_data.append(ch.getValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer(), raw = True ))
                     outData.DataFile.WriteBlock(l_data)
+
+                with open(parameters['GENERAL']['OutputFolder']+"/"+recording.Path(app="scans.tsv"), "a") as f:
+                    print("eeg/{}_eeg.vhdr\t{}".format(recording.Prefix(run), t[0].isoformat()), file = f)
             #EDF part
             elif parameters['GENERAL']['Conversion'] == "EDF":
                 Logger.info("Converting to EDF+ format")
                 Logger.info("Creating events.edf file")
-                outData = EDF(eegPath, recording.Prefix())
+                outData = EDF(eegPath, recording.Prefix(run))
                 Logger.info("Creating events.edf file")
                 outData.Patient["Code"] = metadata["PatientInfo"]["ID"]
                 if "Gender" in metadata["PatientInfo"]:
@@ -616,9 +620,9 @@ def main(argv):
                     outData.WriteDataBlock(l_data, t_s)
                 outData.Close()
 
-                
+                with open(parameters['GENERAL']['OutputFolder']+"/"+recording.Path(app="scans.tsv"), "a") as f:
+                    print("eeg/{}_eeg.edf\t{}".format(recording.Prefix(run), t[0].isoformat()), file = f)
 
-            Logger.info("All done. Took {} secons".format(tm.process_time()))
 
     except Exception as e:
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
@@ -633,8 +637,6 @@ def main(argv):
         Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
         Logger.info("Took {} seconds".format(tm.process_time()))
         Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
-        recording.SetRun("")
-        recording.ResetPrefix()
         shutil.copy2(tmpDir+"/logfile", eegPath+"/"+recording.Prefix()+".log") 
         shutil.copy2(tmpDir+"/configuration", eegPath+"/"+recording.Prefix()+".ini") 
         rmdir(tmpDir)
