@@ -24,11 +24,14 @@ import shutil
 
 
 def rmdir(path):
-    for root, dirs, files in os.walk(path):
-        for f in files:
-            os.unlink(os.path.join(root, f))
-        for d in dirs:
-            shutil.rmtree(os.path.join(root, d))
+    if os.path.isfile(path):
+        os.remove(path)
+    else:
+        for root, dirs, files in os.walk(path):
+            for f in files:
+                os.remove(os.path.join(root, f))
+            for d in dirs:
+                shutil.rmtree(os.path.join(root, d))
 
 def main(argv):
     ex_code = 0
@@ -83,7 +86,7 @@ def main(argv):
     parameters.optionxform = lambda option: option
 
     #Setting up default values
-    parameters['GENERAL'] = {"TaskId":"", "AcquisitionId":"", "SessionId":"", "RunId":"",
+    parameters['GENERAL'] = {"TaskId":"", "AcquisitionId":"", "SessionId":"", 
                             "JsonFile":"",
                             "OutputFolder":".", 
                             "LogFile" : "",
@@ -134,7 +137,7 @@ def main(argv):
 
     #logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
     logFormatter = logging.Formatter("[%(levelname)-7.7s]:%(asctime)s:%(name)s %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
-    Logger = logging.getLogger("Main")
+    Logger = logging.getLogger()
     Logger.setLevel(getattr(logging, parameters['GENERAL']['LogLevel'], None))
 
     fileHandler = logging.FileHandler(tmpDir+"/logfile")
@@ -160,11 +163,6 @@ def main(argv):
     Logger.debug("Temporary directory: "+tmpDir)
     with open(tmpDir+"/configuration", 'w') as configfile: parameters.write(configfile)
 
-
-
-    Logger.info("Task: {}".format(parameters['GENERAL']['TaskId']))
-    if parameters['GENERAL']['AcquisitionId'] != '' :
-        Logger.info("Acquisition: {}".format(parameters['GENERAL']['AcquisitionId']))
     Logger.info("File: {}".format(parameters['GENERAL']['Path']))
     basename = os.path.basename(parameters['GENERAL']['Path'])
     extension= os.path.splitext(basename)[1]
@@ -179,37 +177,12 @@ def main(argv):
         else:
             raise Exception("Unable determine eeg format")
         
-        JSONdata = dict()
-        if parameters['GENERAL']['JsonFile'] != "":
-            parameters['GENERAL']['JsonFile'] = os.path.realpath(parameters['GENERAL']['JsonFile'])
-            Logger.info("JSON File: {}".format(parameters['GENERAL']['JsonFile']))
-            if not os.path.isfile(parameters['GENERAL']['JsonFile']):
-                raise FileNotFoundError(parameters['GENERAL']['JsonFile'])
-            with open(parameters['GENERAL']['JsonFile']) as f:
-                 JSONdata = json.load(f)
-            t = JSONdata["TaskName"]
-            if t != parameters['GENERAL']['TaskId']:
-                t = ''.join(filter(str.isalnum, t))
-                if parameters['GENERAL']['TaskId'] == "":
-                    parameters['GENERAL']['TaskId'] = t
-                elif t != parameters['GENERAL']['TaskId']:
-                    raise Exception("Task name in JSON '{}' mismach given Task name '{}'".format(t, parameters['GENERAL']['TaskId']))
 
         Logger.info("Output: {}".format(parameters['GENERAL']['OutputFolder']))
         if not os.path.isdir(parameters['GENERAL']['Path']):
             raise Exception("Path {} is not valid".format(parameters['GENERAL']['Path']))
 
-        recording = GRecord(task = parameters['GENERAL']['TaskId'], 
-                            session = parameters['GENERAL']['SessionId'], 
-                            acquisition = parameters['GENERAL']['AcquisitionId'],
-                            run = "")
-        eegPath = "/"
-        srcPath = "/"
-        if parameters['GENERAL']['JsonFile'] != "":
-            with open(parameters['GENERAL']['JsonFile']) as f:
-                recording.JSONdata = JSONdata
-            if "SamplingFrequency" in recording.JSONdata:
-                recording.Frequency = recording.JSONdata["SamplingFrequency"]
+        recording = GRecord("")
         
         if eegform == "embla":
             Logger.info("Detected {} format".format(eegform))
@@ -221,6 +194,7 @@ def main(argv):
             esrc = olefile.OleFileIO(parameters['GENERAL']['Path']+'/Recording.esrc').openstream('RecordingXML')
             xml  = esrc.read().decode("utf_16_le")[2:-1]
             metadata = ParceRecording(xml)
+
             name = ""
             if metadata["PatientInfo"]["FirstName"] != None:
                 name += metadata["PatientInfo"]["FirstName"]
@@ -229,6 +203,22 @@ def main(argv):
             if metadata["PatientInfo"]["LastName"]  != None:
                 name += " "+metadata["PatientInfo"]["LastName"]
             name = name.strip()
+            if name == metadata["PatientInfo"]["ID"]: name = ""
+
+            if parameters['GENERAL']["TaskId"] == "" \
+                    and parameters['GENERAL']["AcquisitionId"] == "" \
+                    and parameters['GENERAL']["SessionId"] == "":
+                recId = metadata["PatientInfo"]["ID"].split("_")
+                if len(recId) < 4:
+                    raise Exception("Unable to exctract record id fields from '{}'".format(metadata["PatientInfo"]["ID"]))
+                recording.SetId(session=recId[2], task=recId[1], acquisition=recId[3])
+                metadata["PatientInfo"]["ID"] = recId[0]
+            else:
+                recording.SetId(session=parameters['GENERAL']["SessionId"], 
+                        task=parameters['GENERAL']["TaskId"],
+                        acquisition=parameters['GENERAL']["AcquisitionId"])
+
+                        
             birth = datetime.min
             if "DateOfBirth" in metadata["PatientInfo"]:
                 birth = metadata["PatientInfo"]["DateOfBirth"]
@@ -249,10 +239,29 @@ def main(argv):
             recording.StopTime  = metadata["RecordingInfo"]["StopTime"]
             esrc.close()
             Logger.info("Patient Id: {}".format(recording.SubjectInfo.ID))
+            Logger.info("Session Id: " + recording.GetSession())
+            Logger.info("Task    Id: " + recording.GetTask())
+            Logger.info("Acq     Id: " + recording.GetAcquisition())
+            
             
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
         
+        JSONdata = dict()
+        if parameters['GENERAL']['JsonFile'] != "":
+            if parameters['GENERAL']['JsonFile'][-5:] != ".json": 
+                parameters['GENERAL']['JsonFile'] = os.path.realpath(parameters['GENERAL']['JsonFile']) + recording.GetTask() + ".json"
+            Logger.info("JSON File: {}".format(parameters['GENERAL']['JsonFile']))
+#            if not os.path.isfile(parameters['GENERAL']['JsonFile']):
+#                raise FileNotFoundError(parameters['GENERAL']['JsonFile'])
+            with open(parameters['GENERAL']['JsonFile']) as f:
+                 JSONdata = json.load(f)
+            recording.JSONdata = JSONdata
+            if "SamplingFrequency" in recording.JSONdata:
+                recording.Frequency = recording.JSONdata["SamplingFrequency"]
+            if "TaskName" in recording.JSONdata and recording.JSONdata["TaskName"] != recording.GetTask():
+                raise Exception("Task name '{}' in JSON file mismach name in record '{}'".format(recording.JSONdata["TaskName"], recording.GetTask()))
+
         recording.ResetPrefix()
         recording.ResetPath()
         eegPath = parameters['GENERAL']['OutputFolder']+"/"+ recording.Path()
@@ -471,6 +480,7 @@ def main(argv):
             time_limits.append([t_ref, t_end])
         
         #Running over runs
+        file_list = list()
         for count,t in enumerate(time_limits):
             t_ref = t[0]
             t_end = t[1]
@@ -555,15 +565,12 @@ def main(argv):
                         else:
                             l_data.append(ch.getValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer(), raw = True ))
                     outData.DataFile.WriteBlock(l_data)
+                file_list.append("eeg/{}_eeg.vhdr\t{}".format(recording.Prefix(run), t[0].isoformat()))
 
-                with open(parameters['GENERAL']['OutputFolder']+"/"+recording.Path(app="scans.tsv"), "a") as f:
-                    print("eeg/{}_eeg.vhdr\t{}".format(recording.Prefix(run), t[0].isoformat()), file = f)
             #EDF part
             elif parameters['GENERAL']['Conversion'] == "EDF":
                 Logger.info("Converting to EDF+ format")
-                Logger.info("Creating events.edf file")
                 outData = EDF(eegPath, recording.Prefix(run))
-                Logger.info("Creating events.edf file")
                 outData.Patient["Code"] = metadata["PatientInfo"]["ID"]
                 if "Gender" in metadata["PatientInfo"]:
                     outData.Patient["Sex"] = "F" if metadata["PatientInfo"]["Gender"] == 1 else "M"
@@ -585,6 +592,7 @@ def main(argv):
                 outData.SetStartTime(t_ref)
                 outData.RecordDuration = 10.
 
+                Logger.info("Creating events.edf file")
                 for ev in events:
                     if (ev.GetChannelsSize() == 0):
                         outData.AddEvent(ev.GetName(), ev.GetTime(), ev.GetDuration(), -1, "")
@@ -593,6 +601,7 @@ def main(argv):
                             outData.AddEvent(ev.GetName(), ev.GetTime(), ev.GetDuration(), channels.index(ch_dict[c]), "")
                 outData.WriteEvents()
                     
+                Logger.info("Creating eeg.edf file")
                 for ch in channels:
                     outData.Channels.append(EDFChannel(Base = ch, Type = ch.SigMainType, 
                         Specs = ch.SigMainType+"-"+ch.SigSubType, Filter = ""))
@@ -620,9 +629,11 @@ def main(argv):
                     outData.WriteDataBlock(l_data, t_s)
                 outData.Close()
 
-                with open(parameters['GENERAL']['OutputFolder']+"/"+recording.Path(app="scans.tsv"), "a") as f:
-                    print("eeg/{}_eeg.edf\t{}".format(recording.Prefix(run), t[0].isoformat()), file = f)
+                file_list.append("eeg/{}_eeg.edf\t{}".format(recording.Prefix(run), t[0].isoformat()))
 
+            with open(parameters['GENERAL']['OutputFolder']+"/"+recording.Path(app="scans.tsv"), "a") as f:
+                for line in file_list:
+                    print(line, file = f)
 
     except Exception as e:
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
@@ -630,6 +641,10 @@ def main(argv):
         for l in tr:
             Logger.error('File "'+l[0]+'", line '+str(l[1])+" in "+l[2]+":")
         Logger.error(type(e).__name__+": "+str(e))
+        flist = glob.glob(eegPath+"/"+recording.Prefix()+"*")
+        if len(flist) != 0:
+            for f in flist:
+                rmdir(f)
 
         ex_code = 1
 

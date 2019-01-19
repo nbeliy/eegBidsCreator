@@ -49,7 +49,7 @@ class Device(object):
 
 class Record(object):
     __slots__ = ["JSONdata", "SubjectInfo", "DeviceInfo", "Type", "__StartTime", "__StopTime", 
-            "__task", "__acquisition", "__session", "__run", 
+            "__task", "__acquisition", "__session",
             "Channels",
             "Events",
             "__Frequency",
@@ -75,23 +75,34 @@ class Record(object):
         "SoftwareVersions":1,
         "SubjectArtefactDescription":2}
 
-    def __init__(self, task, session = "", acquisition = "", run = ""):
+    def __init__(self, task="", session = "", acquisition = "", run = ""):
         self.JSONdata       = dict()
         self.SubjectInfo    = Subject()
         self.DeviceInfo     = Device()
         self.Type           = ""
         self.__StartTime      = datetime.min
         self.__StopTime       = datetime.min
-        self.__task           = task
-        self.__session        = session
-        self.__acquisition    = acquisition
-        self.__run            = run
-        self.ResetPrefix()
+        self.SetId(session, task, acquisition)
         self.ResetPath()
 
         self.Channels       = []
         self.Events         = []
         self.__Frequency    = 1
+
+    def SetId(self, session="", task="", acquisition=""):
+        self.__session      = session
+        self.__acquisition  = acquisition
+        self.__task         = task
+        self.ResetPrefix()
+        self.ResetPath()
+
+    def GetSession(self):
+        return self.__session
+    def GetTask(self):
+        return self.__task
+    def GetAcquisition(self):
+        return self.__acquisition
+
 
     def Prefix(self, run=""):
         if run == "":
@@ -188,6 +199,8 @@ class Record(object):
     def UpdateJSON(self):
         if not ("TaskName" in self.JSONdata):
             self.JSONdata["TaskName"] = self.__task
+        elif self.JSONdata["TaskName"] != self.__task:
+            raise Exception("Task name in JSON file mismach task in Record")
         if not ("DeviceSerialNumber" in self.JSONdata) and self.DeviceInfo.ID != "":
             self.JSONdata["DeviceSerialNumber"] = self.DeviceInfo.ID
         if not ("Manufacturer" in self.JSONdata) and self.DeviceInfo.Manufactor != "":
