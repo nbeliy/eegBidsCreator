@@ -3,13 +3,15 @@ n_parralel=5
 count=0
 
 def_path='/media/beliy/KINGSTON/Memodyn/ForTest/Emb'
-ini_file="Example/COF_BH.ini"
+ini_file="Example/COF_HN.ini"
 out_path="output/ForTest"
+json="Example/COF_"
 
 run(){
   base=`basename $1`
   base=${base:0:8}
-  python3 eegBidsCreator.py -c $ini_file -a $base -o $out_path -q --logfile $out_path/$base.log $file
+  #python3 eegBidsCreator.py -c $ini_file -a $base -o $out_path -q --logfile $out_path/$base.log $file
+  python3 eegBidsCreator.py -t "" -c $ini_file -j $json -o $out_path -q --logfile $out_path/$base.log $file
   retval="$base returned value: $?"
 }
 

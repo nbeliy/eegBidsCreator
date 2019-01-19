@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import logging
 
 from DataStructure.Generic.Channel import GenChannel
-Logger = logging.getLogger(__name__)
+Logger = logging.getLogger("EmblaChannel")
 #Values: ['Field name', 'data size in words, 0 if unknown, not fixed', 'parcing word, c if it is text',  'encoding string']
 
 class Field(object):
@@ -164,7 +164,7 @@ class EbmChannel(GenChannel):
         self._unit         = self.CalUnit
         self._seqStartTime = self.Time
         self._frequency    = int(self.DBLsampling+0.5)
-        if (self.DBLsampling != self._frequency):
+        if abs(self.DBLsampling/self._frequency-1) > 1e-4 :
             Logger.warning("{}: Sample frequency is not integer. Correction factor is 1{:+}".format(self.GetName(),self.DBLsampling/self._frequency-1))
         if (self.RateCorr != None and self.RateCorr != 0):
             Logger.warning("{}: Sample frequency is not integer. Correction factor is 1{:+}".format(self.GetName(),self.RateCorr))
