@@ -7,7 +7,7 @@ It also creates channels.tsv file, containing the list of all channels. Informat
 
 Extracted events are stored in events.tsv file with its onset time, duration, type, and corresponding sample (i.e. the number of data point of corresponding time, onset\*sampling) 
 
-I didn't found the task/acquisition/session/run id in the files, so they must be passed to script via options `-t, -a, -s, -r`. Only task option is mandatory.
+I didn't found the task/acquisition/session id in the files, so they must be passed to script via options `-t, -a, -s`. Only task option is mandatory.
 
 If an additional command `BrainVision` or `EDF` is provided, the source files will be converted into BrainVision/EDF+ format.
 
@@ -34,7 +34,6 @@ optional arguments:
   -a, --acquisition acqId
                         Id of the acquisition
   -s, --session sesId   Id of the session
-  -r, --run, runId      Id of the run
   -j, --json eegJson    A json file with task description
   -o, --output OUTDIR   destination folder
   -c, --config [CONFIG_FILE]
@@ -136,8 +135,6 @@ EDF+ supports also encoding of data using logaritmic scale, which is used if the
 - Some Embla files contains several events files, need to read all and remove duplicates -- **fixed**
 - If 2 Emblas treats same subjects, one overrides other, need to fix it -- **fixed**
 - Interpreting Calibration function produces sometimes a error `eval() arg 1 must be a string, bytes or code object` -- **fixed**
-  - If channel has signed data, it has no CalFunction, producing error above
-  - Need to treat signed data
 - Error `File "DataStructure/Embla/Channel.py", line 209 in _read: b'\xff\xff\xff\xff'` -- **fixed**
   - Happens in corrupted files, file will abort reading 
   - Could be just unfinished session, must be observed
@@ -157,7 +154,7 @@ Other corrections/suggestions/spell corections can be reported as issues on gitl
 
 - Transform the embla format to brainproducts -- **done**
 - Transform the embla format to EDF+ -- **done**
-- Implement segmented data
+- Implement segmented data  -- **done** using splitting into runs
 - Implement version check for ebm
 - Retrieve and control the information from json file -- **done**
 - Understand the filter
@@ -167,3 +164,4 @@ Other corrections/suggestions/spell corections can be reported as issues on gitl
 - A task given in ini or cli can contain non alphanumeric characters, need to check and produce warning/error
 - Difficult distinguish start of next bidsifier form end of old -- **done**
 - Treat Frequency correction (how?)
+- Anonymization -- *partially done*

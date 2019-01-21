@@ -34,7 +34,6 @@ def rmdir(path):
                 shutil.rmtree(os.path.join(root, d))
 
 def main(argv):
-    ANONYM_DATE = datetime(year=1973, month=3, day=1)
     eegPath=None
 
     ex_code = 0
@@ -97,14 +96,17 @@ def main(argv):
                             "Quiet":"no",
                             "Conversion":"",
                             "CopySource":"yes",
-                            "SplitRuns":"no"}
+                            "SplitRuns":"no",
+                            "Anonymize":"yes"}
     parameters['DATATREATMENT'] = {"DropChannels":"", "StartTime":"", "EndTime":"", 
                                     "StartEvent":"","EndEvent":"",
                                     "IgnoreOutOfTimeEvents":"yes",
                                     "MergeCommonEvents":"yes",
                                     "IncludeSegmentStart":"no"}
     parameters['RUNS'] = {"MainChannel":"", "MinSpan":"0"}
+    parameters['ANONYMIZATION'] = {"StartDate":"1973-3-01","SubjName":"John Doe"}
     parameters['BRAINVISION']   = {"Encoding":"UTF-8", "DataFormat":"IEEE_FLOAT_32", "Endian":"Little"}
+    parameters['EDF'] = {"DataRecordDuration":"10"}
 
     #Reading configuration file
     if args.config_file != None:
@@ -157,6 +159,13 @@ def main(argv):
         consoleHandler = logging.StreamHandler()
         consoleHandler.setFormatter(logFormatter)
         Logger.addHandler(consoleHandler)
+
+    if parameters.getboolean("GENERAL","Anonymize"):
+        ANONYM_DATE = datetime.strptime(parameters["ANONYMIZATION"]["StartDate"],"%Y-%m-%d")
+        ANONYM_NAME = parameters["ANONYMIZATION"]["SubjName"]
+    else:
+        ANONYM_DATE = None
+        ANONYM_NAME = None
 
     Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
     Logger.info("Starting new bidsifier")
@@ -271,14 +280,14 @@ def main(argv):
             srcPath = parameters['GENERAL']['OutputFolder']+"/sourcedata/"+ recording.Path()
             if os.path.exists(srcPath):
                 if os.path.exists(srcPath+"/"+basename):
-                    Logger.warning('"{}" exists in sourcedata directory. It will be eraised.'.format(basename))
+                    Logger.warning('"{}" exists in sourcedata directory. It will be erased.'.format(basename))
                     rmdir(srcPath+"/"+parameters['GENERAL']['Path'])
             else:
                 Logger.info("Creating output directory {}".format(srcPath))
                 os.makedirs(srcPath)
             Logger.info("Copiyng original data to sourcedata folder")
             if extension == "":
-                shutil.copytree(parameters['GENERAL']['Path'], srcPath+"/"+parameters['GENERAL']['Path'])
+                shutil.copytree(parameters['GENERAL']['Path'], srcPath+"/"+basename)
             else:
                 shutil.copy2(parameters['GENERAL']['Path'], srcPath+"/"+basename)
 
@@ -573,7 +582,7 @@ def main(argv):
                 outData.Record["Code"]  = metadata["RecordingInfo"]["Type"]
                 outData.Record["Equipment"] = metadata["Device"]["DeviceID"]
                 outData.SetStartTime(t_ref)
-                outData.RecordDuration = 10.
+                outData.RecordDuration = int(parameters["EDF"]["DataRecordDuration"])
 
                 Logger.info("Creating events.edf file")
                 for ev in events:
