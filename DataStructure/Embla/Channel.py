@@ -166,7 +166,7 @@ class EbmChannel(GenChannel):
         self._frequency    = int(self.DBLsampling+0.5)
         if abs(self.DBLsampling/self._frequency-1) > 1e-4 :
             Logger.warning("{}: Sample frequency is not integer. Correction factor is 1{:+}".format(self.GetName(),self.DBLsampling/self._frequency-1))
-        if (self.RateCorr != None and self.RateCorr != 0):
+        if (self.RateCorr != None and self.RateCorr > 1e-4):
             Logger.warning("{}: Sample frequency is not integer. Correction factor is 1{:+}".format(self.GetName(),self.RateCorr))
             
         self._startTime    = self._seqStartTime[0]
