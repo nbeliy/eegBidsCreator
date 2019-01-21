@@ -53,7 +53,8 @@ class Record(object):
             "Channels",
             "Events",
             "__Frequency",
-            "__path", "__prefix"
+            "__path", "__prefix",
+            "_aDate"
             ]
     #__JSONfields contains the full list of fields in JSON with a tags:
     #   0 - required
@@ -75,7 +76,7 @@ class Record(object):
         "SoftwareVersions":1,
         "SubjectArtefactDescription":2}
 
-    def __init__(self, task="", session = "", acquisition = "", run = ""):
+    def __init__(self, task="", session = "", acquisition = "", run = "", AnonymDate=None):
         self.JSONdata       = dict()
         self.SubjectInfo    = Subject()
         self.DeviceInfo     = Device()
@@ -88,6 +89,7 @@ class Record(object):
         self.Channels       = []
         self.Events         = []
         self.__Frequency    = 1
+        self._aDate = AnonymDate
 
     def SetId(self, session="", task="", acquisition=""):
         self.__session      = session

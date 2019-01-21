@@ -36,21 +36,22 @@ class Channel(GenChannel):
         return self._filter
 
 class EDF(object):
-    __slots__ = ["Type", "Patient", "Record", "StartTime", "RecordDuration", "Channels", "Annotations", "Data", "__file", "__path", "__prefix","__records"]
+    __slots__ = ["Type", "Patient", "Record", "StartTime", "RecordDuration", "Channels", "Annotations", "Data", "__file", "__path", "__prefix","__records", "__aDate"]
 
-    def __init__(self, path, prefix):
+    def __init__(self, path, prefix, AnonymDate=None):
         self.__path = path
         self.__prefix = prefix
         self.__file  = None
         self.Type    = "EDF+"
         self.Patient = {"Code":"X", "Sex":"X", "Birthdate": "X", "Name":"X"}
-        self.Record  = {"StartDate":"X", "Code":"X", "Technician":"X", "Equipment":"X"}
+        self.Record  = {"StartDate":datetime.min, "Code":"X", "Technician":"X", "Equipment":"X"}
         self.StartTime = datetime.min
         self.RecordDuration = 1.
         self.Channels    = []
         self.Annotations = []
         self.Data        = []
         self.__records   = 0
+        self.__aDate     = AnonymDate
 
     def __del__(self):
         if self.__file != None:
@@ -69,23 +70,22 @@ class EDF(object):
 
     def PatientId(self):
         d = ""
-        if type(self.Record["StartDate"]) == str:
-            d = self.Record["StartDate"].replace(" ","_")
-        elif type(self.Record["StartDate"]) == date:
-            self.Record["StartDate"].strftime("%d-%b-%Y")
+        if type(self.Patient["Birthdate"]) == str:
+            d = self.Patient["Birthdate"].replace(" ","_")
+        elif type(self.Patient["Birthdate"]) == date:
+            self.Patient["Birthdate"].strftime("%d-%b-%Y")
         else: d = "X"
         name = self.Patient["Name"]
-        if name == self.Patient["Code"]:
+        if name == self.Patient["Code"] or name == "":
             name = "X"
         return (self.Patient["Code"].replace(" ","_")+" "+self.Patient["Sex"]+" "+d+" " + name.replace(" ","_"))[:80]
 
     def RecordId(self):
         d = ""
-        if type(self.Record["StartDate"]) == str:
-            d = self.Record["StartDate"].replace(" ", "_")
-        elif type(self.Record["StartDate"]) == date:
-            self.Record["StartDate"].strftime("%d-%b-%Y")
-        else: d = "X"
+        if self.__aDate != None or self.Record["StartDate"] == datetime.min:
+            d = "X"
+        else :
+            d =  self.Record["StartDate"].strftime("%d-%b-%Y ")
         return " ".join(["Startdate", d, self.Record["Code"].replace(" ","_"), self.Record["Technician"].replace(" ","_"), self.Record["Equipment"].replace(" ",",")])[:80]
 
     
@@ -179,8 +179,12 @@ class EDF(object):
         f.write("{:<80s}".format(self.PatientId()).encode("ascii"))
         #[88-167, 80]   Local recording identification
         f.write("{:<80s}".format(self.RecordId()).encode("ascii"))
-        #[168-175,8]    Start date (as in metadata)
-        d = self.StartTime if self.StartTime.year >= 1985 else self.StartTime.replace(year=(self.StartTime.year+ 100))
+        #[168-175,8]    Start date (reference time)
+        if self.__aDate != None:
+            d = self.__aDate
+        else:
+            d = self.StartTime
+        if d.year < 1985: d = d.replace(year=(d.year+ 100))
         f.write("{:<8s}".format(d.strftime("%d.%m.%y")).encode("ascii"))
         #[176-183,8]    Start time (as in metadata)
         f.write("{:<8s}".format(d.strftime("%H.%M.%S")).encode("ascii"))

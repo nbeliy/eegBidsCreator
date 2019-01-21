@@ -34,6 +34,9 @@ def rmdir(path):
                 shutil.rmtree(os.path.join(root, d))
 
 def main(argv):
+    ANONYM_DATE = datetime(year=1973, month=3, day=1)
+    eegPath=None
+
     ex_code = 0
     parser = argparse.ArgumentParser(description='Converts EEG file formats to BID standard')
 
@@ -195,16 +198,6 @@ def main(argv):
             xml  = esrc.read().decode("utf_16_le")[2:-1]
             metadata = ParceRecording(xml)
 
-            name = ""
-            if metadata["PatientInfo"]["FirstName"] != None:
-                name += metadata["PatientInfo"]["FirstName"]
-            if metadata["PatientInfo"]["MiddleName"]!= None:
-                name += " "+metadata["PatientInfo"]["MiddleName"]
-            if metadata["PatientInfo"]["LastName"]  != None:
-                name += " "+metadata["PatientInfo"]["LastName"]
-            name = name.strip()
-            if name == metadata["PatientInfo"]["ID"]: name = ""
-
             if parameters['GENERAL']["TaskId"] == "" \
                     and parameters['GENERAL']["AcquisitionId"] == "" \
                     and parameters['GENERAL']["SessionId"] == "":
@@ -222,10 +215,9 @@ def main(argv):
             birth = datetime.min
             if "DateOfBirth" in metadata["PatientInfo"]:
                 birth = metadata["PatientInfo"]["DateOfBirth"]
-            recording.StartTime = metadata["RecordingInfo"]["StartTime"]
-            recording.StopTime  = metadata["RecordingInfo"]["StopTime"]
+                
             recording.SetSubject (id = metadata["PatientInfo"]["ID"],
-                                name  = name,
+                                name  = "",
                                 birth  = birth,
                                 gender = metadata["PatientInfo"]["Gender"],
                                 notes  = metadata["PatientInfo"]["Notes"],
@@ -252,8 +244,6 @@ def main(argv):
             if parameters['GENERAL']['JsonFile'][-5:] != ".json": 
                 parameters['GENERAL']['JsonFile'] = os.path.realpath(parameters['GENERAL']['JsonFile']) + recording.GetTask() + ".json"
             Logger.info("JSON File: {}".format(parameters['GENERAL']['JsonFile']))
-#            if not os.path.isfile(parameters['GENERAL']['JsonFile']):
-#                raise FileNotFoundError(parameters['GENERAL']['JsonFile'])
             with open(parameters['GENERAL']['JsonFile']) as f:
                  JSONdata = json.load(f)
             recording.JSONdata = JSONdata
@@ -322,12 +312,12 @@ def main(argv):
                 else:
                     ch_dict[c.GetId()] = c
                 if t_ref != datetime.min:
-                    if t_ref != c.Time[0]:
-                        Logger.warning("Channel '{}': Starts {} sec later than recording {}".format(c.GetName(), (c.Time[0] - t_ref).total_seconds(), t_ref.isoformat()))
+                    if abs((t_ref - c.GetSequenceStart(0)).total_seconds()) > 60:
+                        Logger.warning("Channel '{}': Starts {} sec later than recording".format(c.GetName(), (c.Time[0] - t_ref).total_seconds()))
                 if c.Time[0] < t_min:
-                    t_min = c.Time[0]
+                    t_min = c.GetSequenceStart(0)
                     Logger.debug("New t_min {}".format(t_min.isoformat()))
-                elif c.Time[0] != t_min:
+                elif abs((c.GetSequenceStart(0) - t_min).total_seconds()) > 60:
                     Logger.warning("Channel '{}': Starts {} sec later than other channels".format(c.GetName(), (c.Time[0] - t_min).total_seconds()))
                 if c.Time[-1]+timedelta(0, c._seqSize[-1]/c.GetFrequency(), 0) > t_max:
                     t_max = c.Time[-1]+timedelta(0, c._seqSize[-1]/c.GetFrequency(), 0) 
@@ -346,11 +336,13 @@ def main(argv):
             t_ref = t_min
         if t_end == datetime.min or t_end < t_max:
             t_end = t_max
+            
 
         
        
-        Logger.info("Start time: {}, Stop time: {}".format(t_ref.isoformat(), t_end.isoformat()))
-        Logger.info("Earliest time: {}, Latest time: {}".format(t_min.isoformat(), t_max.isoformat()))
+        Logger.debug("Start time: {}, Stop time: {}".format(t_ref.isoformat(), t_end.isoformat()))
+        Logger.debug("Earliest time: {}, Latest time: {}".format(t_min.isoformat(), t_max.isoformat()))
+        Logger.info("Duration: {}".format(t_end - t_ref))
         if parameters['DATATREATMENT']['StartTime'] != '':
             t = datetime.strptime(parameters['DATATREATMENT']['StartTime'], "%Y-%m-%d %H:%M:%S.%f")
             if t > t_ref : 
@@ -382,13 +374,9 @@ def main(argv):
                     ch_id += "_"+locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("SubType")
                     try :
                         ch  = ch_dict[ch_id]
-                        dt = (time - ch.Time[0]).total_seconds()
                     except:
                         Logger.warning("Channel Id '{}' not in the list of channels".format(ch_id))
                         ch = None
-                        dt = float(ev.LocationIdx) 
-
-                    dt = (time - t_ref).total_seconds()
 
                     try:
                         name = grp_l[ev.GroupTypeIdx]
@@ -460,6 +448,8 @@ def main(argv):
                 Logger.warning("JSON: Contains next non BIDS fields: "+ str(res[3]))
             json.dump(recording.JSONdata, f, skipkeys=False, indent="  ", separators=(',',':'))
 
+        #Rounding t_ref to seconds
+        t_ref = t_ref.replace(microsecond=0)
         #Updating channels frequency multiplier and starting time
         time_limits = list()
         for c in channels:
@@ -470,8 +460,8 @@ def main(argv):
                     for i in range(0, c.GetNsequences()):
                         span = c.GetSequenceSize(i)/c.GetFrequency()
                         if (span/60) > float(parameters["RUNS"]["MinSpan"]):
-                            ts = max(c.GetSequenceStart(i), t_ref)
-                            te = min(c.GetSequenceStart(i) + timedelta(0,span,0), t_end)
+                            ts = max(c.GetSequenceStart(i), t_ref).replace(microsecond=0)
+                            te = min(c.GetSequenceStart(i) + timedelta(seconds=span), t_end)
                             if t_ref < te:
                                 time_limits.append([ts, te])
         if len(time_limits) == 0:
@@ -487,6 +477,7 @@ def main(argv):
             run = ""
             if parameters.getboolean("GENERAL","SplitRuns"):
                 run = str(count+1)
+                Logger.info("Run {}: duration: {}".format(run, t_end - t_ref))
             
             Logger.info("Creating channels.tsv file")
             with open(eegPath+"/"+recording.Prefix(run)+"_channels.tsv", "w") as f:
@@ -517,12 +508,11 @@ def main(argv):
             outData = None
             if  parameters['GENERAL']['Conversion'] == "BrainVision":
                 Logger.info("Converting to BrainVision format")
-                outData = BrainVision(eegPath, recording.Prefix(run))
+                outData = BrainVision(eegPath, recording.Prefix(run), AnonymDate=ANONYM_DATE)
                 outData.SetEncoding(parameters['BRAINVISION']['Encoding'])
                 outData.SetDataFormat(parameters['BRAINVISION']['DataFormat'])
                 outData.SetEndian(parameters['BRAINVISION']['Endian'] == "Little")
                 outData.AddFrequency(recording.Frequency)
-                print(outData.GetFrequency())
 
                 Logger.info("Creating eeg.vhdr header file")
                 for ch in channels:
@@ -570,23 +560,16 @@ def main(argv):
             #EDF part
             elif parameters['GENERAL']['Conversion'] == "EDF":
                 Logger.info("Converting to EDF+ format")
-                outData = EDF(eegPath, recording.Prefix(run))
+                outData = EDF(eegPath, recording.Prefix(run), AnonymDate=ANONYM_DATE)
                 outData.Patient["Code"] = metadata["PatientInfo"]["ID"]
                 if "Gender" in metadata["PatientInfo"]:
                     outData.Patient["Sex"] = "F" if metadata["PatientInfo"]["Gender"] == 1 else "M"
                 if "DateOfBirth" in metadata["PatientInfo"]:
                     outData.Patient["Birthdate"] = metadata["PatientInfo"]["DateOfBirth"].date()
 
-                name = ""
-                if "FirstName" in metadata["PatientInfo"] and metadata["PatientInfo"]["FirstName"] != None:
-                    name += metadata["PatientInfo"]["FirstName"]+" "
-                if "MiddleName" in metadata["PatientInfo"] and metadata["PatientInfo"]["MiddleName"] != None:
-                    name += metadata["PatientInfo"]["MiddleName"]+" "
-                if "LastName" in metadata["PatientInfo"] and metadata["PatientInfo"]["LastName"] != None:
-                    name += metadata["PatientInfo"]["LastName"]+" "
-                outData.Patient["Name"] = name.strip()
+                outData.Patient["Name"] = recording.SubjectInfo.Name
                 
-                outData.Record["StartDate"] = metadata["RecordingInfo"]["StartTime"] 
+                outData.Record["StartDate"] = recording.StartTime
                 outData.Record["Code"]  = metadata["RecordingInfo"]["Type"]
                 outData.Record["Equipment"] = metadata["Device"]["DeviceID"]
                 outData.SetStartTime(t_ref)
@@ -632,8 +615,21 @@ def main(argv):
                 file_list.append("eeg/{}_eeg.edf\t{}".format(recording.Prefix(run), t[0].isoformat()))
 
             with open(parameters['GENERAL']['OutputFolder']+"/"+recording.Path(app="scans.tsv"), "a") as f:
-                for line in file_list:
-                    print(line, file = f)
+                for l in file_list:
+                    print(l, file = f)
+
+        with open(parameters['GENERAL']['OutputFolder']+"/participants.tsv", "a") as f:
+            s_id = recording.SubjectInfo.ID
+            s_gen = "n/a"
+            if recording.SubjectInfo.Gender == 1: 
+                s_gen = "F"
+            elif recording.SubjectInfo.Gender == 2:
+                s_gen = "M"
+            s_age = "n/a"
+            if recording.SubjectInfo.Birth != datetime.min:
+                s_age = str(time_limits[0][0].year - recording.SubjectInfo.Birth.year)
+            print("{}\t{}\t{}".format(s_id, s_gen, s_age), file = f)
+
 
     except Exception as e:
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
@@ -641,10 +637,12 @@ def main(argv):
         for l in tr:
             Logger.error('File "'+l[0]+'", line '+str(l[1])+" in "+l[2]+":")
         Logger.error(type(e).__name__+": "+str(e))
-        flist = glob.glob(eegPath+"/"+recording.Prefix()+"*")
-        if len(flist) != 0:
-            for f in flist:
-                rmdir(f)
+        if eegPath != None:
+            flist = glob.glob(eegPath+"/"+recording.Prefix()+"*")
+            if len(flist) != 0:
+                for f in flist:
+                    rmdir(f)
+        Logger.info("Command: "+" ".join(argv))
 
         ex_code = 1
 
