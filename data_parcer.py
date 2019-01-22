@@ -39,4 +39,4 @@ def GetExtrema(channel, sequence, raw = False):
 
 
 if __name__ == "__main__":
-    exit(main(os.sys.argv))
+    os.sys.exit(main(os.sys.argv))

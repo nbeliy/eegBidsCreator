@@ -165,3 +165,6 @@ Other corrections/suggestions/spell corections can be reported as issues on gitl
 - Difficult distinguish start of next bidsifier form end of old -- **done**
 - Treat Frequency correction (how?)
 - Anonymization -- *partially done*
+- Copy auxiliary files into BIDS folder
+- Pack script into executable
+- Transform into C with cpython
