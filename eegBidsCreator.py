@@ -97,7 +97,8 @@ def main(argv):
                             "Conversion":"",
                             "CopySource":"yes",
                             "SplitRuns":"no",
-                            "Anonymize":"yes"}
+                            "Anonymize":"yes",
+                            "MemoryUsage":"2"}
     parameters['DATATREATMENT'] = {"DropChannels":"", "StartTime":"", "EndTime":"", 
                                     "StartEvent":"","EndEvent":"",
                                     "IgnoreOutOfTimeEvents":"yes",
@@ -138,7 +139,7 @@ def main(argv):
     Setup logging.
     Logfile will be stored into temporary directory first, then moved to output directory.
     '''
-    tmpDir = tempfile.mkdtemp(prefix=argv[0]+"_")
+    tmpDir = tempfile.mkdtemp(prefix=argv[0].replace("/","_")+"_")
 
     #logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
     logFormatter = logging.Formatter("[%(levelname)-7.7s]:%(asctime)s:%(name)s %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
@@ -547,7 +548,9 @@ def main(argv):
                 outData.DataFile.SetEndian(outData.Header.BinaryInfo.UseBigEndianOrder)
                 outData.DataFile.OpenFile()
                 t_e = t_ref
-                t_step = 3600
+                t_step = int(float(parameters["GENERAL"]["MemoryUsage"])*1e+9
+                            /(16*len(channels)*recording.Frequency)+0.5)
+                t_count= 1
                 while True:
                     t_s = t_e
                     t_e = t_e + timedelta(0,t_step,0)
@@ -555,7 +558,7 @@ def main(argv):
                     if t_e > t_end: 
                         t_e = t_end
                         t_step = (t_e - t_s).total_seconds()
-                    Logger.info("Timepoint: {}".format(t_s.isoformat()))
+                    Logger.info("Timepoint {}: Duration {}".format(t_count,t_e -t_s))
                     Logger.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
                     l_data = []
                     for ch in channels:
@@ -564,6 +567,7 @@ def main(argv):
                         else:
                             l_data.append(ch.getValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer(), raw = True ))
                     outData.DataFile.WriteBlock(l_data)
+                    t_count += 1
                 file_list.append("eeg/{}_eeg.vhdr\t{}".format(recording.Prefix(run), t[0].isoformat()))
 
             #EDF part
@@ -599,9 +603,11 @@ def main(argv):
                         Specs = ch.SigMainType+"-"+ch.SigSubType, Filter = ""))
                 outData.WriteHeader()
                 t_e = t_ref
-                t_step = 3600
+                t_step = int(float(parameters["GENERAL"]["MemoryUsage"])*1e+9
+                            /(16*len(channels)*recording.Frequency)+0.5)
                 if t_step%outData.RecordDuration != 0:
                     t_step = outData.RecordDuration*(t_step//outData.RecordDuration+1)
+                t_count= 1
                 while True:
                     t_s = t_e
                     t_e = t_e + timedelta(0,t_step,0)
@@ -613,12 +619,13 @@ def main(argv):
                             t_step = outData.RecordDuration*(t_step//outData.RecordDuration+1)
                             t_e = t_s + timedelta(0,t_step,0)
 
-                    Logger.info("Timepoint: {}".format(t_s.isoformat()))
+                    Logger.info("Timepoint {}: Duration {}".format(t_count,t_e -t_s))
                     Logger.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
                     l_data = []
                     for ch in channels:
                         l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=1, raw = True ))
                     outData.WriteDataBlock(l_data, t_s)
+                    t_count += 1
                 outData.Close()
 
                 file_list.append("eeg/{}_eeg.edf\t{}".format(recording.Prefix(run), t[0].isoformat()))
@@ -670,4 +677,4 @@ def main(argv):
     return(ex_code)
 
 if __name__ == "__main__":
-    exit(main(os.sys.argv))
+    os.sys.exit(main(os.sys.argv))
