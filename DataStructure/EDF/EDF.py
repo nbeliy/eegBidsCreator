@@ -127,7 +127,7 @@ class EDF(object):
         f.close()
 
     def WriteHeader(self):
-        self.__file  = open(self.__path+"/"+self.__prefix+".edf", "wb")
+        self.__file  = open(self.__path+"/"+self.__prefix+"_eeg.edf", "wb")
         self.__writeUpperBlock(self.__file, len(self.Channels)+1)
         #[16] Label in format Type Emplacement
         self.__file.write("{:<16s}".format("EDF Annotations").encode("ascii"))
