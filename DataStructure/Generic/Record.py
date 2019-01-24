@@ -1,4 +1,5 @@
 from datetime import datetime
+import glob, os
 
 class Subject(object):
     __slots__ = ["ID", "Name", "Address", "__gender", "Birth", "Notes", "Height", "Weight", "Head"]
@@ -54,7 +55,8 @@ class Record(object):
             "Events",
             "__Frequency",
             "__path", "__prefix",
-            "_aDate"
+            "_aDate",
+            "_extList"
             ]
     #__JSONfields contains the full list of fields in JSON with a tags:
     #   0 - required
@@ -91,6 +93,18 @@ class Record(object):
         self.__Frequency    = 1
         self._aDate = AnonymDate
 
+        self._extList       = []
+
+    def GetAuxFiles(self, path="."):
+        if not isinstance(path, str):
+            raise TypeError("Path must be a string")
+        return  [
+                    os.path.basename(f) 
+                    for f in glob.glob(path+"/*") 
+                    if not os.path.splitext(f)[1] in self._extList 
+                ]
+
+
     def SetId(self, session="", task="", acquisition=""):
         self.__session      = session
         self.__acquisition  = acquisition
@@ -106,11 +120,11 @@ class Record(object):
         return self.__acquisition
 
 
-    def Prefix(self, run=""):
+    def Prefix(self, run="", app=""):
         if run == "":
-            return self.__prefix
+            return self.__prefix+app
         else: 
-            return self.__prefix+"_run-"+run
+            return self.__prefix+"_run-"+run+app
 
     def ResetPrefix(self):
         prefix = "sub-"+self.SubjectInfo.ID
