@@ -1,4 +1,4 @@
-VERSION = '0.65'
+VERSION = '0.65r1'
 
 import logging, argparse, os, json, glob, olefile, traceback, struct, configparser
 import tempfile, bisect
@@ -154,7 +154,7 @@ def main(argv):
     ANONYM_NAME = None
     ANONYM_BIRTH= None
     if parameters.getboolean("ANONYMIZATION","Anonymize"):
-        if parameters["ANONYMIZATION"]["StartDate"] != "":
+        if parameters["ANONYMIZATION"]["StartDate"] != "None" and parameters["ANONYMIZATION"]["StartDate"] != "":
             ANONYM_DATE = datetime.strptime(parameters["ANONYMIZATION"]["StartDate"],"%Y-%m-%d")
         if parameters["ANONYMIZATION"]["SubjName"] != "None":
             ANONYM_NAME = parameters["ANONYMIZATION"]["SubjName"]
@@ -351,12 +351,12 @@ def main(argv):
         Logger.debug("Earliest time: {}, Latest time: {}".format(t_min.isoformat(), t_max.isoformat()))
         Logger.info("Duration: {}".format(t_end - t_ref))
         if parameters['DATATREATMENT']['StartTime'] != '':
-            t = datetime.strptime(parameters['DATATREATMENT']['StartTime'], "%Y-%m-%d %H:%M:%S.%f")
+            t = datetime.strptime(parameters['DATATREATMENT']['StartTime'], "%Y-%m-%d %H:%M:%S")
             if t > t_ref : 
                 Logger.info("Cropping start time: from {} to {}".format(t_ref.isoformat(), t.isoformat()))
                 t_ref = t
         if parameters['DATATREATMENT']['EndTime'] != '':
-            t = datetime.strptime(parameters['DATATREATMENT']['EndTime'], "%Y-%m-%d %H:%M:%S.%f")
+            t = datetime.strptime(parameters['DATATREATMENT']['EndTime'], "%Y-%m-%d %H:%M:%S")
             if t < t_end : 
                 Logger.info("Cropping end time: from {} to {}".format(t_end.isoformat(), t.isoformat()))
                 t_end = t
@@ -545,7 +545,7 @@ def main(argv):
                 outData.MarkerFile.SetFrequency(outData.GetFrequency())
                 outData.MarkerFile.SetStartTime(t_ref)
                 Logger.info("Writting proper events")
-                outData.MarkerFile.AddMarker("New Segment", t_ref, 0, -1, "")
+                outData.MarkerFile.AddMarker("New Segment", t_ref, 0, 0, "")
                 for ev in events:
                     if (ev.GetChannelsSize() == 0):
                         outData.MarkerFile.AddMarker(ev.GetName(ToReplace = (",","\1")), ev.GetTime(), ev.GetDuration(), -1, "")
@@ -576,7 +576,7 @@ def main(argv):
                         if outData.Header.BinaryInfo.BinaryFormat == "IEEE_FLOAT_32":
                             l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer()))
                         else:
-                            l_data.append(ch.getValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer(), raw = True ))
+                            l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer(), raw = True ))
                     outData.DataFile.WriteBlock(l_data)
                     t_count += 1
                 file_list.append("eeg/{}\t{}".format(
@@ -598,7 +598,8 @@ def main(argv):
 
                 outData.Patient["Name"] = recording.SubjectInfo.Name
                 
-                outData.Record["StartDate"] = recording.StartTime
+                #outData.Record["StartDate"] = recording.StartTime
+                outData.Record["StartDate"] = t_ref.replace(microsecond=0)
                 outData.Record["Code"]      = metadata["RecordingInfo"]["Type"]
                 outData.Record["Equipment"] = metadata["Device"]["DeviceID"]
                 outData.SetStartTime(t_ref)

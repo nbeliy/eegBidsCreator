@@ -44,7 +44,7 @@ class Header(object):
             scale = ch.GetScale()
             if self.BinaryInfo.BinaryFormat == "IEEE_FLOAT_32":
                 scale = 1.
-            f.write("Ch{}={},{},{},{},{}\n".format(i+1, ch.GetName(), ch.GetReference(),ch.GetScale(),ch.GetUnit(),ch.GetComments() ))
+            f.write("Ch{}={},{},{},{},{}\n".format(i+1, ch.GetName(), ch.GetReference(),scale,ch.GetUnit().replace("%","%%"),ch.GetComments() ))
 
         f.close()
 

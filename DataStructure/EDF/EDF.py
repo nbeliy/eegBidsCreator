@@ -85,8 +85,17 @@ class EDF(object):
         if self.__aDate != None or self.Record["StartDate"] == datetime.min:
             d = "X"
         else :
-            d =  self.Record["StartDate"].strftime("%d-%b-%Y ")
-        return " ".join(["Startdate", d, self.Record["Code"].replace(" ","_"), self.Record["Technician"].replace(" ","_"), self.Record["Equipment"].replace(" ",",")])[:80]
+            d =  self.Record["StartDate"].strftime("%d-%b-%Y")
+        res = "Startdate "+ d.upper()+" "
+        lenght = 80 - len(res) - 3
+        strings = [self.Record["Code"].replace(" ","_"), self.Record["Technician"].replace(" ","_"),self.Record["Equipment"].replace(" ","_")]
+        for i in range(0, len(strings)): 
+            if strings[i] == "": strings[i] = "X"
+        while (lenght < len(strings[0]) + len(strings[1]) + len(strings[2])):
+            i = strings.index(max(strings, key=lambda p: len(p)))
+            strings[i] = strings[i][:-1]
+
+        return (res+" ".join(strings))[:80]
 
     
     def WriteEvents(self):
