@@ -1,12 +1,5 @@
 {
-  "TaskName":"HN",
-  "DeviceSerialNumber":"f5e20dd8-7b52-442b-a227-932ef4f66566",
-  "Manufacturer":"RemLogic",
-  "SamplingFrequency":200,
-  "RecordingDuration":90.4,
-  "EEGChannelCount":8,
-  "EOGChannelCount":2,
-  "ECGChannelCount":0,
-  "EMGChannelCount":3,
-  "MiscChannelCount":27
+  "TaskName": "HN",
+  "TaskDescription": "Horror Night",
+  "Instructions": "Play Justin Biber on loop"
 }

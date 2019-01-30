@@ -9,19 +9,18 @@ Extracted events are stored in events.tsv file with its onset time, duration, ty
 
 I didn't found the task/acquisition/session id in the files, so they must be passed to script via options `-t, -a, -s`. Only task option is mandatory.
 
-If an additional command `BrainVision` or `EDF` is provided, the source files will be converted into BrainVision/EDF+ format.
+If an additional option value `--conversion BV` or `EDF` is provided, the source files will be converted into BrainVision/EDF+ format.
 
 ## Usage
 
 ```
-usage: eegBidsCreator.py [-h] [-t, --task taskId] [-a, --acquisition acqId]
-                         [-s, --session sesId] [-r, --run, runId]
-                         [-j, --json eegJson] [-o, --output OUTDIR]
-                         [-c, --config [CONFIG_FILE]] [--logfile [log.out]]
-                         [-q,--quiet]
+usage: eegBidsCreator.py [-h] [-a, --acquisition acqId] [-t, --task taskId]
+                         [-s, --session sesId] [-j, --json eegJson]
+                         [-o, --output OUTDIR] [-c, --config CONFIG_FILE]
+                         [--logfile log.out] [-q,--quiet]
                          [--log {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
-                         [--version]
-                         eegfile {BrainVision,EDF} ...
+                         [--version] [--conversion {EDF,BV}]
+                         eegfile
 
 Converts EEG file formats to BID standard
 
@@ -30,37 +29,21 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
-  -t, --task taskId     Id of the task
   -a, --acquisition acqId
                         Id of the acquisition
+  -t, --task taskId     Id of the task
   -s, --session sesId   Id of the session
   -j, --json eegJson    A json file with task description
   -o, --output OUTDIR   destination folder
-  -c, --config [CONFIG_FILE]
+  -c, --config CONFIG_FILE
                         Path to configuration file
-  --logfile [log.out]   log file destination
+  --logfile log.out     log file destination
   -q,--quiet            Supress standard output
   --log {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         logging level
   --version             show program's version number and exit
-
-conversions:
-  {BrainVision,EDF}     do <command --help> for additional help
-    BrainVision         Conversion to BrainVision format
-    EDF                 Conversion to EDF format
-```
-```
-usage: eegBidsCreator.py eegfile BrainVision [-h] [--encoding {UTF-8,ANSI}]
-                                             [--format {IEEE_FLOAT_32,INT_16,UINT_16}]
-                                             [--big_endian]
-
-optional arguments:
-  -h, --help            show this help message and exit
-  --encoding {UTF-8,ANSI}
-                        Header encoding
-  --format {IEEE_FLOAT_32,INT_16,UINT_16}
-                        Data number format
-  --big_endian          Use big endian
+  --conversion {EDF,BV}
+                        performs conversion to given format
 ```
 
 ### Config File
@@ -165,6 +148,6 @@ Other corrections/suggestions/spell corections can be reported as issues on gitl
 - Difficult distinguish start of next bidsifier form end of old -- **done**
 - Treat Frequency correction (how?)
 - Anonymization -- *partially done*
-- Copy auxiliary files into BIDS folder
+- Copy auxiliary files into BIDS folder -- **done**
 - Pack script into executable
 - Transform into C with cpython
