@@ -3,13 +3,13 @@ from DataStructure.BrainVision.Events import MarkerFile
 from DataStructure.BrainVision.Data import DataFile
 
 class BrainVision(object):
-    __slots__ = ["Header", "MarkerFile", "DataFile", "__aDate"]
+    __slots__ = ["Header", "MarkerFile", "DataFile"]
     
     def __init__(self, path, prefix, AnonymDate=None):
         self.Header     = Header(path, prefix)
         self.MarkerFile = MarkerFile(path, prefix)
+        self.MarkerFile.SetAnonymDate(AnonymDate)
         self.DataFile   = DataFile(path, prefix)
-        self.__aDate    = AnonymDate
 
     def SetEncoding(self, encoding):
         encs = ["UTF-8", "ANSI"]

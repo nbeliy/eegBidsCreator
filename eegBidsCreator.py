@@ -330,6 +330,7 @@ def main(argv):
             channels = [EbmChannel(c) for c in glob.glob(parameters['GENERAL']['Path']+"*.ebm")]
             if parameters["DATATREATMENT"]['DropChannels'] != "":
                 to_drop = [p.strip() for p in parameters['DATATREATMENT']['DropChannels'].split(',')]
+                ch_dropped = [ch.GetId() for ch in channels if ch.GetName() in to_drop]
                 channels = [ch for ch in channels if ch.GetName() not in to_drop]
             channels.sort()
             ch_dict = dict()
@@ -337,7 +338,7 @@ def main(argv):
             for c in channels:
                 Logger.debug("Channel {}, type {}, Sampling {} Hz".format(c.GetName(), c.GetId(), int(c.GetFrequency())))
 
-                if c.SigSubType in ch_dict:
+                if c.GetId() in ch_dict:
                     Logger.warning("Channel {} has same Id {} as channel {}".format(c.GetName(), c.GetId(), ch_dict[c.GetId()].GetName() ))
                 else:
                     ch_dict[c.GetId()] = c
@@ -376,12 +377,12 @@ def main(argv):
         if parameters['DATATREATMENT']['StartTime'] != '':
             t = datetime.strptime(parameters['DATATREATMENT']['StartTime'], "%Y-%m-%d %H:%M:%S")
             if t > t_ref : 
-                Logger.info("Cropping start time: from {} to {}".format(t_ref.isoformat(), t.isoformat()))
+                Logger.info("Cropping start time by {}".format(t - t_ref))
                 t_ref = t
         if parameters['DATATREATMENT']['EndTime'] != '':
             t = datetime.strptime(parameters['DATATREATMENT']['EndTime'], "%Y-%m-%d %H:%M:%S")
             if t < t_end : 
-                Logger.info("Cropping end time: from {} to {}".format(t_end.isoformat(), t.isoformat()))
+                Logger.info("Cropping end time by {}".format(t_end - t))
                 t_end = t
 
 
@@ -401,12 +402,13 @@ def main(argv):
                     ev_id = -1
                     ch_id = locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("MainType")
                     ch_id += "_"+locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("SubType")
-                    try :
+            
+                    ch = None
+                    if ch_id in ch_dict:
                         ch  = ch_dict[ch_id]
-                    except:
+                    elif ch_id not in ch_dropped:
                         Logger.warning("Channel Id '{}' not in the list of channels".format(ch_id))
-                        ch = None
-
+                        
                     try:
                         name = grp_l[ev.GroupTypeIdx]
                     except:
@@ -430,10 +432,10 @@ def main(argv):
 
                     if parameters["DATATREATMENT"]["StartEvent"] == name and time > t_ref and time < t_ev_min:
                         t_ev_min = time
-                        Logger.info("Updated start time {} from event {}".format(time, name))
+                        Logger.info("Cropping start time by {} from event {}".format(time - t_ref, name))
                     if parameters["DATATREATMENT"]["EndEvent"]   == name and time < t_end and time > t_ev_max:
                         t_ev_max = time
-                        Logger.info("Updated end time {} from event {}".format(time, name))
+                        Logger.info("Cropping end time by {} from event {}".format(t_end - time, name))
                 esedb.close()
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
@@ -446,7 +448,7 @@ def main(argv):
             for i, ch in enumerate(channels):
                 for t in ch.Time:
                     ev = GenEvent(Name = "New Segment", Time = t, Duration = 0)
-                    ev.AddChannel(ch.Id())
+                    ev.AddChannel(ch.GetId())
                     if not ev in events:
                         bisect.insort(events,ev)
                     else :
@@ -533,7 +535,7 @@ def main(argv):
                         sep='\t', file = f
                         )
                 for ev in events:
-                    if ev.GetChannelsSize() == 0:
+                    if ev.GetChannelsSize() == 0 or parameters.getboolean("DATATREATMENT","MergeCommonEvents"):
                         print   (  
                                 "%.3f\t%.2f\t%s\tn/a\tn/a\t%d" %(
                                     ev.GetOffset(t_ref), ev.GetDuration(), 
@@ -550,9 +552,9 @@ def main(argv):
                                     file = f, end=""
                                 )
                             #This writes index with channel proper frequency
-                            #print("\t{}".format(channels[ev["Channel"]].GetIndexTime(ev["Time"], freqMultiplier = 1)), file = f)
+                            #print("\t{}".format(channels[ev["Channel"]].GetIndexTime(ev["Time"], freqMultiplier = 1, StartTime=t_ref)), file = f)
                             #This writes index with common frequency
-                            print("\t{}".format(ch_dict[c_id].GetIndexTime(ev.GetTime())), file = f)
+                            print("\t{}".format(ch_dict[c_id].GetIndexTime(ev.GetTime(),StartTime=t_ref)), file = f)
 
                                 
             outData = None
@@ -574,9 +576,9 @@ def main(argv):
                 outData.MarkerFile.SetFrequency(outData.GetFrequency())
                 outData.MarkerFile.SetStartTime(t_ref)
                 Logger.info("Writting proper events")
-                outData.MarkerFile.AddMarker("New Segment", t_ref, 0, 0, "")
+                outData.MarkerFile.AddMarker("New Segment", t_ref, 0, -1, "")
                 for ev in events:
-                    if (ev.GetChannelsSize() == 0):
+                    if (ev.GetChannelsSize() == 0) or parameters.getboolean("DATATREATMENT","MergeCommonEvents"):
                         outData.MarkerFile.AddMarker(ev.GetName(ToReplace = (",","\1")), ev.GetTime(), ev.GetDuration(), -1, "")
                     else:
                         for c in ev.GetChannels():
@@ -645,7 +647,7 @@ def main(argv):
 
                 Logger.info("Creating events.edf file")
                 for ev in events:
-                    if (ev.GetChannelsSize() == 0):
+                    if (ev.GetChannelsSize() == 0) or parameters.getboolean("DATATREATMENT","MergeCommonEvents"):
                         outData.AddEvent(ev.GetName(), ev.GetTime(), ev.GetDuration(), -1, "")
                     else:
                         for c in ev.GetChannels():
@@ -666,7 +668,7 @@ def main(argv):
                         humanbytes(mem_used), 
                         humanbytes(mem_requested),
                         humanbytes(mem_remained)))
-                Logger.debug("1s time worth: {}".format(humanbytes(mem_1s)))
+                Logger.debug("Memory expected for 1s: {}".format(humanbytes(mem_1s)))
                 Logger.debug("Time step:{}".format(timedelta(seconds=t_step)))
                 if t_step%outData.RecordDuration != 0:
                     t_step = outData.RecordDuration*(t_step//outData.RecordDuration+1)
