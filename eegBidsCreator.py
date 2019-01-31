@@ -20,6 +20,7 @@ from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
 
 import shutil
+import psutil
 
 
 
@@ -33,7 +34,28 @@ def rmdir(path):
             for d in dirs:
                 shutil.rmtree(os.path.join(root, d))
 
+def humanbytes(B):
+   'Return the given bytes as a human friendly KB, MB, GB, or TB string'
+   B = float(B)
+   KB = float(1024)
+   MB = float(KB ** 2) # 1,048,576
+   GB = float(KB ** 3) # 1,073,741,824
+   TB = float(KB ** 4) # 1,099,511,627,776
+
+   if B < KB:
+      return '{0} {1}'.format(B,'Bytes' if 0 == B > 1 else 'Byte')
+   elif KB <= B < MB:
+      return '{0:.2f} KB'.format(B/KB)
+   elif MB <= B < GB:
+      return '{0:.2f} MB'.format(B/MB)
+   elif GB <= B < TB:
+      return '{0:.2f} GB'.format(B/GB)
+   elif TB <= B:
+      return '{0:.2f} TB'.format(B/TB)
+
+
 def main(argv):
+    process = psutil.Process(os.getpid())
     eegPath=None
 
     ex_code = 0
@@ -169,6 +191,7 @@ def main(argv):
     Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
 
     Logger.debug(str(os.sys.argv))
+    Logger.debug("Process PID: "+str(os.getpid()))
     Logger.debug("Temporary directory: "+tmpDir)
     with open(tmpDir+"configuration", 'w') as configfile: parameters.write(configfile)
 
@@ -375,7 +398,6 @@ def main(argv):
                 locat   = root.get("Locations", 0)
                     
                 for ev,time in zip(evs, times):
-                    Logger.debug("Event {}, at {}, loc. {}, aux. {} ".format(ev.EventID, time.strftime("%d/%m/%Y %H:%M:%S.%f"), ev.LocationIdx, ev.AuxDataID))
                     ev_id = -1
                     ch_id = locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("MainType")
                     ch_id += "_"+locat.getlist("Location")[ev.LocationIdx].get("Signaltype").get("SubType")
@@ -478,6 +500,12 @@ def main(argv):
         
         #Running over runs
         file_list = list()
+        mem_requested = float(parameters["GENERAL"]["MemoryUsage"])*(1024**3)
+        if parameters['GENERAL']['Conversion'] == "EDF":
+            mem_1s = 32*sum(ch.GetFrequency() for ch in channels)
+        elif parameters['GENERAL']['Conversion'] == "BV": 
+            mem_1s = 32*len(channels)*recording.Frequency
+
         for count,t in enumerate(time_limits):
             t_ref = t[0]
             t_end = t[1]
@@ -525,7 +553,8 @@ def main(argv):
                             #print("\t{}".format(channels[ev["Channel"]].GetIndexTime(ev["Time"], freqMultiplier = 1)), file = f)
                             #This writes index with common frequency
                             print("\t{}".format(ch_dict[c_id].GetIndexTime(ev.GetTime())), file = f)
-                    
+
+                                
             outData = None
             if  parameters['GENERAL']['Conversion'] == "BV":
                 Logger.info("Converting to BrainVision format")
@@ -559,9 +588,17 @@ def main(argv):
                 outData.DataFile.SetEndian(outData.Header.BinaryInfo.UseBigEndianOrder)
                 outData.DataFile.OpenFile()
                 t_e = t_ref
-                t_step = int(float(parameters["GENERAL"]["MemoryUsage"])*1e+9
-                            /(16*len(channels)*recording.Frequency)+0.5)
                 t_count= 1
+
+                mem_used = process.memory_info().rss
+                mem_remained = mem_requested - mem_used
+                t_step = int(mem_remained/mem_1s)
+                Logger.debug("Memory used: {}, Memory requested: {}, Memory remined: {}".format(
+                        humanbytes(mem_used), 
+                        humanbytes(mem_requested),
+                        humanbytes(mem_remained)))
+                Logger.debug("1s time worth: {}".format(humanbytes(mem_1s)))
+                Logger.debug("Time step:{}".format(timedelta(seconds=t_step)))
                 while True:
                     t_s = t_e
                     t_e = t_e + timedelta(0,t_step,0)
@@ -577,6 +614,7 @@ def main(argv):
                             l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer()))
                         else:
                             l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer(), raw = True ))
+                    
                     outData.DataFile.WriteBlock(l_data)
                     t_count += 1
                 file_list.append("eeg/{}\t{}".format(
@@ -620,8 +658,16 @@ def main(argv):
                         Specs = ch.SigMainType+"-"+ch.SigSubType, Filter = ""))
                 outData.WriteHeader()
                 t_e = t_ref
-                t_step = int(float(parameters["GENERAL"]["MemoryUsage"])*1e+9
-                            /(16*len(channels)*recording.Frequency)+0.5)
+
+                mem_used = process.memory_info().rss
+                mem_remained = mem_requested - mem_used
+                t_step = int(mem_remained/mem_1s)
+                Logger.debug("Memory used: {}, Memory requested: {}, Memory remined: {}".format(
+                        humanbytes(mem_used), 
+                        humanbytes(mem_requested),
+                        humanbytes(mem_remained)))
+                Logger.debug("1s time worth: {}".format(humanbytes(mem_1s)))
+                Logger.debug("Time step:{}".format(timedelta(seconds=t_step)))
                 if t_step%outData.RecordDuration != 0:
                     t_step = outData.RecordDuration*(t_step//outData.RecordDuration+1)
                 t_count= 1
