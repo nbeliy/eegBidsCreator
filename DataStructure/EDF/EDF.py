@@ -65,8 +65,7 @@ class EDF(object):
 
     def AddEvent(self, name, date, duration = 0, channel = 0, description = ''):
         ev = {"Name":name, "Date": (date-self.StartTime).total_seconds(), "Duration": duration, "Description":description}
-        if len(self.Annotations) == 0 or self.Annotations[-1] != ev:
-            self.Annotations.append(ev)
+        self.Annotations.append(ev)
 
     def PatientId(self):
         d = ""

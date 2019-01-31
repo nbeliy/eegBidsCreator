@@ -1,7 +1,7 @@
 from datetime import datetime
 
 class MarkerFile(object):
-    __slots__ = ["DataFile", "__file", "__path", "__prefix", "__startTime", "__frequency", "__mkCount" ]
+    __slots__ = ["DataFile", "__file", "__path", "__prefix", "__startTime", "__frequency", "__mkCount", "__aDate" ]
 
     def __init__(self, path, prefix, encoding = "ANSII"):
         self.DataFile   = prefix+"_eeg.eeg"
@@ -11,6 +11,10 @@ class MarkerFile(object):
         self.__frequency= -1
         self.__mkCount  = 0
         self.__file = None
+        self.__aDate = None
+
+    def SetAnonymDate(self, date):
+        self.__aDate = date
 
     def SetFrequency(self, frequency):
         self.__frequency = frequency
@@ -35,23 +39,34 @@ class MarkerFile(object):
     def Write(self):
         self.__file.close()        
        
-    def AddNewSegment(self, date, channel  = 0, description = ''):
+    def AddNewSegment(self, date, channel  = -1, description = ''):
         self.AddMarker("New Segment", date, 0, channel, description)
         
-    def AddMarker(self, name, date, duration = 0, channel = 0, description = '' ) :
+    def AddMarker(self, name, date, duration = 0, channel = -1, description = '' ) :
         if self.__startTime == datetime.min or self.__frequency <= 0:
             raise Exception ("Markers start time or frequency are not initialized")
         self.__mkCount += 1
         #<name>,<description>,<position>,<points>,<channel number>,<date>
-        pos = int((date - self.__startTime).total_seconds()*self.__frequency + 0.5)
+        pos = int((date - self.__startTime).total_seconds()*self.__frequency)
         lenght = int(duration*self.__frequency + 0.5)
+        if self.__aDate != None:
+            date = self.__aDate + (date - self.__startTime)
         if lenght == 0:
             lenght = 1
-        self.__file.write("Mk{0}={1},{2},{3},{4},{5},{6}\n".format(
-                self.__mkCount,
-                name,description,
-                pos,lenght,
-                channel, 
-                date.strftime("%Y%m%d%H%M%S%f") ))
+        if name == "New Segment":
+            self.__file.write("Mk{0}={1},{2},{3},{4},{5},{6}\n".format(
+                    self.__mkCount,
+                    name,description,
+                    pos,lenght,
+                    channel+1, 
+                    date.strftime("%Y%m%d%H%M%S%f") ))
+        else:
+            self.__file.write("Mk{0}={1},{2},{3},{4},{5}\n".format(
+                    self.__mkCount,
+                    name,description,
+                    pos,lenght,
+                    channel+1 
+                    ))
+            
         
         
