@@ -280,12 +280,12 @@ class GenChannel(object):
             raise TypeError(self.__class__+": freqMultiplier must be a positive integer") 
         if not isinstance(sequence, int) or not isinstance(point, int):
             raise TypeError(self.__class__+": sequence and point must be integer")
-        if sequence < 0 or sequence >= len(self.__seqStartTime):
+        if sequence < 0 or sequence >= len(self._seqStartTime):
             raise IndexError(self.__class__+": sequence ("+str(sequence)+")is out of the range")
         if point < 0 or point >= self._seqSize[sequence]:
             raise IndexError(self.__class__+": point ("+str(point)+")is out of the range")
-        time = self._seqStartTime[sequence] - (self._StartTime - StartTime).total_seconds()
-        return int((time*self.__frequency+point)*freqMultiplier)
+        time = self._seqStartTime[sequence] - (self._startTime - StartTime).total_seconds()
+        return int((time*self._frequency+point)*freqMultiplier)
              
     """Returns time of corresponding data point"""
     def GetTimeIndex(self, index, StartTime = None, freqMultiplier = None):
@@ -347,14 +347,14 @@ class GenChannel(object):
 
     """Pure virtual functions for retrieving data"""
     def GetValue(self, point, sequence = None, raw = False):
-        if sequence != None:
-            return self.GetValue(self.GetIndex(point, sequence), raw = raw)
+#        if sequence != None:
+#            return self.GetValue(self.GetIndex(point, sequence), raw = raw)
         if self._baseChannel == self:
             return self.__getValue__(point, sequence, raw)
         else:
             return self._baseChannel.GetValue(point, sequence, raw)
 
-    def __getValue__(point, sequence, raw):
+    def __getValue__(self,point, sequence, raw):
         if raw:
             return 0
         else:

@@ -110,3 +110,12 @@ plt.hist(deviations3, bins=100, log=True)
 plt.title('{}'.format(emb_raw.ch_names[chan_idx]))
 plt.xlabel(r'$(v_{bv}-v_{edf})/v_{bv}$')
 plt.show()
+
+fig, ax = plt.subplots()
+ax.hist2d(deviations1, deviations2, 100)
+ax.text(0.05, 0.95, textstr, fontsize=14, verticalalignment='top', bbox=props, transform=ax.transAxes)
+plt.title('{}'.format(emb_raw.ch_names[chan_idx]))
+plt.xlabel(r'$(v_{emb}-v_{edf})$ [' + unit + ']')
+plt.ylabel(r'$(v_{bv}-v_{edf})/v_{bv}$')
+plt.show()
+
