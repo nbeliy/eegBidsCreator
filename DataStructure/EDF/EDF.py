@@ -125,7 +125,9 @@ class EDF(object):
             if ev["Duration"] > 0:
                 f.write(b'\x15'+"{}".format(ev["Duration"]).encode("utf_8"))
             f.write(b'\x14'+"{}".format(ev["Name"]).encode("utf_8"))
-            f.write(b'\x14'+"{}".format('\x14', ev["Description"]).encode("utf_8")+b'\x00')
+            if (ev["Description"] != ""):
+                f.write(b'\x14'+"{}".format(ev["Description"]).encode("utf_8"))
+            f.write(b'\x14\x00')
         
         if f.tell()%2 != 0:
             f.write(b'\x00')
