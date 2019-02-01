@@ -406,8 +406,10 @@ def main(argv):
                     ch = None
                     if ch_id in ch_dict:
                         ch  = ch_dict[ch_id]
-                    elif ch_id not in ch_dropped:
-                        Logger.warning("Channel Id '{}' not in the list of channels".format(ch_id))
+                    else:
+                        if ch_id not in ch_dropped:
+                            Logger.warning("Channel Id '{}' not in the list of channels".format(ch_id))
+                        continue
                         
                     try:
                         name = grp_l[ev.GroupTypeIdx]
@@ -423,12 +425,12 @@ def main(argv):
                     else:
                         ch_index = 0
                         continue
-                    ev = GenEvent(Name = name, Time = time, Duration = ev.TimeSpan)
-                    ev.AddChannel(ch_id)
-                    if not ev in events:
-                        bisect.insort(events,ev)
+                    evnt = GenEvent(Name = name, Time = time, Duration = ev.TimeSpan)
+                    evnt.AddChannel(ch_id)
+                    if not evnt in events:
+                        bisect.insort(events,evnt)
                     else :
-                        events[events.index(ev)].AddChannel(ch_id)
+                        events[events.index(evnt)].AddChannel(ch_id)
 
                     if parameters["DATATREATMENT"]["StartEvent"] == name and time > t_ref and time < t_ev_min:
                         t_ev_min = time
@@ -452,7 +454,7 @@ def main(argv):
                     if not ev in events:
                         bisect.insort(events,ev)
                     else :
-                        events[events.index(ev)].AddChannel(ch_id)
+                        events[events.index(ev)].AddChannel(ch.GetId())
         
         if parameters.getboolean("DATATREATMENT","IgnoreOutOfTimeEvents"):
             events = [ev for ev in events if (ev.GetTime() >= t_ref and ev.GetTime() <= t_end) ]

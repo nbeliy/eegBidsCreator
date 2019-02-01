@@ -177,7 +177,7 @@ class EbmChannel(GenChannel):
 
         if (self.RawRange[2] == 0.):
             if (abs(self.RawRange[1]) !=  abs(self.RawRange[0])):
-                self.SetScale(max(abs(self.RawRange[1]), abs(self.RawRange[0])/self._digMax))
+                self.SetScale(max(abs(self.RawRange[1]), abs(self.RawRange[0]))/self._digMax)
             else:
                 self.SetPhysicalRange(self.RawRange[0], self.RawRange[1])
         else:
@@ -280,7 +280,7 @@ class EbmChannel(GenChannel):
         return self._stream.tell() - start
     
 
-    def __GetValue__(self, point, sequence, raw):
+    def __getValue__(self, point, sequence, raw):
         """ Returns value of given measure point. If sequance is given, the point should be in correspondent sequance. If no suequance is given, the point is interpreted as global one """
         if sequence == None:
             point, sequence = self.getRelPoint(point)
@@ -315,7 +315,7 @@ class EbmChannel(GenChannel):
             #Sequance starts after end time
             if seq_time >= timeEnd: break
             #offset of sequance start relative to start time
-            offset = int((timeStart - seq_time).total_seconds()*self._frequency)
+            offset = round((timeStart - seq_time).total_seconds()*self._frequency)
             if (offset) >= seq_size: #Sequence ends before time start
                 continue
 
