@@ -703,6 +703,16 @@ def main(argv):
                 for l in file_list:
                     print(l, file = f)
 
+        #Copiyng original files if there no conversion
+        if parameters['GENERAL']["Conversion"] == "":
+            Logger.info("Copying original files")
+            for f in recording.GetMainFiles(path=parameters['GENERAL']['Path']):
+                Logger.debug("file: "+f)
+                shutil.copy2(
+                        parameters['GENERAL']['Path']+f, 
+                        eegPath+recording.Prefix(app="_"+f)
+                        )
+
         #Copiyng auxiliary files
         Logger.info("Copying auxiliary files")
         for f in recording.GetAuxFiles(path=parameters['GENERAL']['Path']):

@@ -104,6 +104,16 @@ class Record(object):
                     if not os.path.splitext(f)[1] in self._extList 
                 ]
 
+    def GetMainFiles(self, path="."):
+        if not isinstance(path, str):
+            raise TypeError("Path must be a string")
+        return  [
+                    os.path.basename(f) 
+                    for f in glob.glob(path+"/*") 
+                    if os.path.splitext(f)[1] in self._extList 
+                ]
+
+
 
     def SetId(self, session="", task="", acquisition=""):
         self.__session      = session
@@ -227,7 +237,7 @@ class Record(object):
             self.JSONdata["HeadCircumference"] = self.SubjectInfo.Head
         self.JSONdata["SamplingFrequency"] = self.__Frequency
         if not ("RecordingDuration" in self.JSONdata):
-            self.JSONdata["RecordingDuration"] = (self.__StopTime - self.__StartTime).total_seconds()
+            self.JSONdata["RecordingDuration"] = round((self.__StopTime - self.__StartTime).total_seconds(),1)
 
     def CheckJSON(self):
         diff = [ k for k in self.__JSONfields if k not in self.JSONdata ]
