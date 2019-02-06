@@ -138,11 +138,14 @@ def main(argv):
     if args.acq      != None: parameters['GENERAL']['AcquisitionId']= args.acq
     if args.eegJson  != None: parameters['GENERAL']['JsonFile']     = args.eegJson
     if args.conv     != None: parameters['GENERAL']['Conversion']   = args.conv
-    if args.infile   != None: parameters['GENERAL']['Path']         = os.path.realpath(args.infile[0])+"/"
-    if args.outdir   != None: parameters['GENERAL']['OutputFolder'] = os.path.realpath(args.outdir[0])+"/"
+    if args.infile   != None: parameters['GENERAL']['Path']         = os.path.realpath(args.infile[0])
+    if args.outdir   != None: parameters['GENERAL']['OutputFolder'] = os.path.realpath(args.outdir[0])
     if args.loglevel != None: parameters['LOGGING']['LogLevel']     = args.loglevel
     if args.logfile  != None: parameters['LOGGING']['LogFile']      = args.logfile[0]
     if args.quiet    == True: parameters['LOGGING']['Quiet']        = 'yes'
+
+    if parameters['GENERAL']['OutputFolder'][-1] != '/': parameters['GENERAL']['OutputFolder'] += '/'
+    if parameters['GENERAL']['Path'][-1] != '/': parameters['GENERAL']['Path'] += '/'
 
     eegform = None
 
