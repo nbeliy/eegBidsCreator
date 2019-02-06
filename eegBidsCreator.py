@@ -760,9 +760,10 @@ def main(argv):
         Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
         shutil.copy2(tmpDir+"/logfile", eegPath+recording.Prefix(app=".log"))
         shutil.copy2(tmpDir+"/configuration", eegPath+recording.Prefix(app=".ini")) 
+        fileHandler.close()
         rmdir(tmpDir)
         shutil.rmtree(tmpDir)
-    except:
+    except e as Exception:
         Logger.error("Unable to copy files to working directory. See in "+tmpDir+"logfile for more details.")
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
         tr = traceback.extract_tb(exc_traceback)
