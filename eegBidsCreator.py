@@ -305,7 +305,8 @@ def main(argv):
             if os.path.exists(srcPath):
                 if os.path.exists(srcPath+basename):
                     Logger.warning('"{}" exists in sourcedata directory. It will be erased.'.format(basename))
-                    rmdir(srcPath+parameters['GENERAL']['Path'])
+                    rmdir(srcPath+basename)
+                    shutil.rmtree(srcPath+basename)
             else:
                 Logger.info("Creating output directory {}".format(srcPath))
                 os.makedirs(srcPath)
