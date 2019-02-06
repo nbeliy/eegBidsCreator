@@ -196,7 +196,7 @@ def main(argv):
     with open(tmpDir+"configuration", 'w') as configfile: parameters.write(configfile)
 
     Logger.info("File: {}".format(parameters['GENERAL']['Path']))
-    basename = os.path.basename(parameters['GENERAL']['Path'])
+    basename = os.path.basename(parameters['GENERAL']['Path'][0:-1])
     extension= os.path.splitext(basename)[1]
     try:
         if not os.path.exists(parameters['GENERAL']['Path']):
