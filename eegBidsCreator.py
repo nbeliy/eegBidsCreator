@@ -764,6 +764,11 @@ def main(argv):
         shutil.rmtree(tmpDir)
     except:
         Logger.error("Unable to copy files to working directory. See in "+tmpDir+"logfile for more details.")
+        exc_type, exc_value, exc_traceback = os.sys.exc_info()
+        tr = traceback.extract_tb(exc_traceback)
+        for l in tr:
+            Logger.error('File "'+l[0]+'", line '+str(l[1])+" in "+l[2]+":")
+        Logger.error(type(e).__name__+": "+str(e))
         ex_code = 1
 
     return(ex_code)
