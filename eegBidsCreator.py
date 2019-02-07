@@ -4,6 +4,8 @@ import logging, argparse, os, json, glob, olefile, traceback, struct, configpars
 import tempfile, bisect
 from datetime import datetime, timedelta
 import time as tm
+import importlib.util
+import inspect
 
 from  Parcel.parcel import Parcel
 from DataStructure.Generic.Record import Record as GRecord
@@ -77,6 +79,10 @@ def main(argv):
     parser.add_argument('--conversion', dest="conv", choices=["EDF","BV"], help="performs conversion to given format")
 
     args = parser.parse_args(argv[1:])
+    args_pl = list()
+    if '--' in args:
+        args_pl = args[args.index('--')+1:]
+        args    = args[:args.index('--')]
 
     parameters = configparser.ConfigParser()
     #Making keys case-sensitive
@@ -116,6 +122,9 @@ def main(argv):
                                     "StartDate" :"1973-3-01",
                                     "SubjName"  :"John Doe",
                                     "BirthDate" :""
+                                    }
+    parameters['PLUGINS']       =   {
+                                    "Plugin" : ""
                                     }
     parameters['BRAINVISION']   =   {
                                     "Encoding"  :"UTF-8", 
@@ -189,6 +198,30 @@ def main(argv):
             else:
                 ANONYM_BIRTH =  datetime.strptime(parameters["ANONYMIZATION"]["BirthDate"],"%Y-%m-%d")
 
+    entry_points = ["RecordingEP", "ChannelsEP", "EventsEP", "RunsEP", "DataEP"]
+    plugins = dict()
+    pl_name = ""
+    if parameters["PLUGINS"]["Plugin"] != "":
+        if not os.path.exists(parameters["PLUGINS"]["Plugin"]):
+            raise FileNotFoundError("Plug-in file {} not found".format(parameters["PLUGINS"]["Plugin"]))
+        pl_name = os.path.splitext(os.path.basename(parameters["PLUGINS"]["Plugin"]))[0]
+        Logger.info("Loading module {} from {}".format(pl_name, parameters["PLUGINS"]["Plugin"]))
+        spec = importlib.util.spec_from_file_location(pl_name, parameters["PLUGINS"]["Plugin"])
+        if spec == None:
+            raise Exception("Unable to load module {} from {}".format(pl_name, parameters["PLUGINS"]["Plugin"]))
+        itertools = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(itertools)
+        f_list = dir(itertools)
+        for ep in entry_points:
+            if ep in f_list and callable(getattr(itertools,ep)):
+                inspect.getargspec(getattr(itertools,ep))[0]#This returns the list of parameters
+                Logger.debug("Entry point {} found".format(ep))
+                plugins[ep] = getattr(itertools,ep)
+        if len(plugins) == 0:
+            Logger.warning("Plugin {} loaded but no compatible functions found".format(pl_name))
+        
+
+
     Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
     Logger.info("Starting new bidsifier")
     Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
@@ -231,19 +264,9 @@ def main(argv):
             xml  = esrc.read().decode("utf_16_le")[2:-1]
             metadata = ParceRecording(xml)
 
-            if parameters['GENERAL']["TaskId"] == "" \
-                    and parameters['GENERAL']["AcquisitionId"] == "" \
-                    and parameters['GENERAL']["SessionId"] == "":
-                recId = metadata["PatientInfo"]["ID"].split("_")
-                if len(recId) < 4:
-                    raise Exception("Unable to exctract record id fields from '{}'".format(metadata["PatientInfo"]["ID"]))
-                recording.SetId(session=recId[2], task=recId[1], acquisition=recId[3])
-                metadata["PatientInfo"]["ID"] = recId[0]
-            else:
-                recording.SetId(session=parameters['GENERAL']["SessionId"], 
-                                task=parameters['GENERAL']["TaskId"],
-                                acquisition=parameters['GENERAL']["AcquisitionId"])
-
+            recording.SetId(session=parameters['GENERAL']["SessionId"], 
+                            task=parameters['GENERAL']["TaskId"],
+                            acquisition=parameters['GENERAL']["AcquisitionId"])
                         
             birth = datetime.min
             if "DateOfBirth" in metadata["PatientInfo"]:
@@ -263,10 +286,6 @@ def main(argv):
             recording.StartTime = metadata["RecordingInfo"]["StartTime"]
             recording.StopTime  = metadata["RecordingInfo"]["StopTime"]
             esrc.close()
-            Logger.info("Patient Id: {}".format(recording.SubjectInfo.ID))
-            Logger.info("Session Id: " + recording.GetSession())
-            Logger.info("Task    Id: " + recording.GetTask())
-            Logger.info("Acq     Id: " + recording.GetAcquisition())
             
             
         else:
@@ -284,21 +303,31 @@ def main(argv):
                 recording.Frequency = recording.JSONdata["SamplingFrequency"]
             if "TaskName" in recording.JSONdata and recording.JSONdata["TaskName"] != recording.GetTask():
                 raise Exception("Task name '{}' in JSON file mismach name in record '{}'".format(recording.JSONdata["TaskName"], recording.GetTask()))
+#Entry point Recording_Init
+            
+        if entry_points[0] in plugins:
+            if plugins[entry_points[0]](recording, args_pl, parameters.items("PLUGINS")) != 0:
+                raise Exception("Plugin {} produced some errors".format(entry_points[0]))
+
+        Logger.info("Patient Id: {}".format(recording.SubjectInfo.ID))
+        Logger.info("Session Id: " + recording.GetSession())
+        Logger.info("Task    Id: " + recording.GetTask())
+        Logger.info("Acq     Id: " + recording.GetAcquisition())
 
         recording.ResetPrefix()
         recording.ResetPath()
-        eegPath = parameters['GENERAL']['OutputFolder']+recording.Path()+"/"
-        if os.path.exists(eegPath):
+        recording.SetEEGPath(prepath=parameters['GENERAL']['OutputFolder'])
+        if os.path.exists(recording.eegPath):
             Logger.debug("Output directory already exists")
-            flist = glob.glob(eegPath+recording.Prefix(app="*"))
+            flist = glob.glob(recording.eegPath+recording.Prefix(app="*"))
             if len(flist) != 0:
                 Logger.warning("Found {} files with same identification. They will be removed.".format(len(flist)))
                 for f in flist:
                     rmdir(f)
         else: 
-            Logger.info("Creating output directory {}".format(eegPath))
-            os.makedirs(eegPath)
-        Logger.info("EEG will be saved in "+eegPath)
+            Logger.info("Creating output directory {}".format(recording.eegPath))
+            os.makedirs(recording.eegPath)
+        Logger.info("EEG will be saved in "+recording.eegPath)
 
         if parameters['GENERAL'].getboolean('CopySource'):
             srcPath = parameters['GENERAL']['OutputFolder']+"sourcedata/"+ recording.Path()+"/"
@@ -372,8 +401,10 @@ def main(argv):
         if t_end == datetime.min or t_end < t_max:
             t_end = t_max
             
-
-        
+#Channels_Init entry point
+        if entry_points[1] in plugins:
+            if plugins[entry_points[1]](channels, args_pl, parameters.items("PLUGINS")) != 0:
+                raise Exception("Plugin {} produced some errors".format(entry_points[1]))
        
         Logger.debug("Start time: {}, Stop time: {}".format(t_ref.isoformat(), t_end.isoformat()))
         Logger.debug("Earliest time: {}, Latest time: {}".format(t_min.isoformat(), t_max.isoformat()))
@@ -463,8 +494,12 @@ def main(argv):
         if parameters.getboolean("DATATREATMENT","IgnoreOutOfTimeEvents"):
             events = [ev for ev in events if (ev.GetTime() >= t_ref and ev.GetTime() <= t_end) ]
 
+        if entry_points[2] in plugins:
+            if plugins[entry_points[2]](events, args_pl, parameters.items("PLUGINS")) != 0:
+                raise Exception("Plugin {} produced some errors".format(entry_points[2]))
+
         Logger.info("Creating eeg.json file")
-        with open(eegPath+"/"+recording.Prefix(app="_eeg.json"), "w") as f:
+        with open(recording.eegPath+"/"+recording.Prefix(app="_eeg.json"), "w") as f:
             recording.UpdateJSON()
             counter = {"EEGChannelCount":0, "EOGChannelCount":0, "ECGChannelCount":0, "EMGChannelCount":0, "MiscChannelCount":0}
             for ch in channels:
@@ -506,6 +541,11 @@ def main(argv):
                 raise Exception("Unable to find main channel '{}', needed to split into runs".format(parameters["RUNS"]["MainChannel"]))
             time_limits.append([t_ref, t_end])
         
+        if entry_points[3] in plugins:
+            if plugins[entry_points[3]](time_limits, args_pl, parameters.items("PLUGINS")) != 0:
+                raise Exception("Plugin {} produced some errors".format(entry_points[3]))
+    
+
         #Running over runs
         file_list = list()
         mem_requested = float(parameters["GENERAL"]["MemoryUsage"])*(1024**3)
@@ -523,7 +563,7 @@ def main(argv):
                 Logger.info("Run {}: duration: {}".format(run, t_end - t_ref))
             
             Logger.info("Creating channels.tsv file")
-            with open(eegPath+recording.Prefix(run=run,app="_channels.tsv"), "w") as f:
+            with open(recording.eegPath+recording.Prefix(run=run,app="_channels.tsv"), "w") as f:
                 print("name", "type", "units", "description", "sampling_frequency", "reference", 
                     sep='\t', file = f)
                 for c in channels:
@@ -534,7 +574,7 @@ def main(argv):
                             )
 
             Logger.info("Creating events.tsv file")     
-            with open(eegPath+recording.Prefix(run=run,app="_events.tsv"), "w") as f:
+            with open(recording.eegPath+recording.Prefix(run=run,app="_events.tsv"), "w") as f:
                 print   (
                         "onset", "duration", "trial_type", 
                         "responce_time", "value", "sample", 
@@ -566,7 +606,7 @@ def main(argv):
             outData = None
             if  parameters['GENERAL']['Conversion'] == "BV":
                 Logger.info("Converting to BrainVision format")
-                outData = BrainVision(eegPath, recording.Prefix(run=run), AnonymDate=ANONYM_DATE)
+                outData = BrainVision(recording.eegPath, recording.Prefix(run=run), AnonymDate=ANONYM_DATE)
                 outData.SetEncoding(parameters['BRAINVISION']['Encoding'])
                 outData.SetDataFormat(parameters['BRAINVISION']['DataFormat'])
                 outData.SetEndian(parameters['BRAINVISION']['Endian'] == "Little")
@@ -623,6 +663,9 @@ def main(argv):
                         else:
                             l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer(), raw = True ))
                     
+                    if entry_points[4] in plugins:
+                        if plugins[entry_points[4]](channels,l_data, args_pl, parameters.items("PLUGINS")) != 0:
+                            raise Exception("Plugin {} produced some errors".format(entry_points[4]))
                     outData.DataFile.WriteBlock(l_data)
                     t_count += 1
                 file_list.append("eeg/{}\t{}".format(
@@ -632,7 +675,7 @@ def main(argv):
             #EDF part
             elif parameters['GENERAL']['Conversion'] == "EDF":
                 Logger.info("Converting to EDF+ format")
-                outData = EDF(eegPath, recording.Prefix(run=run), AnonymDate=ANONYM_DATE)
+                outData = EDF(recording.eegPath, recording.Prefix(run=run), AnonymDate=ANONYM_DATE)
                 outData.Patient["Code"] = metadata["PatientInfo"]["ID"]
                 if "Gender" in metadata["PatientInfo"]:
                     outData.Patient["Sex"] = "F" if metadata["PatientInfo"]["Gender"] == 1 else "M"
@@ -695,6 +738,10 @@ def main(argv):
                     l_data = []
                     for ch in channels:
                         l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=1, raw = True ))
+                    
+                    if entry_points[4] in plugins:
+                        if plugins[entry_points[4]](channels,l_data, args_pl, parameters.items("PLUGINS")) != 0:
+                            raise Exception("Plugin {} produced some errors".format(entry_points[4]))
                     outData.WriteDataBlock(l_data, t_s)
                     t_count += 1
                 outData.Close()
@@ -714,7 +761,7 @@ def main(argv):
                 Logger.debug("file: "+f)
                 shutil.copy2(
                         parameters['GENERAL']['Path']+f, 
-                        eegPath+recording.Prefix(app="_"+f)
+                        recording.eegPath+recording.Prefix(app="_"+f)
                         )
 
         #Copiyng auxiliary files
@@ -723,7 +770,7 @@ def main(argv):
             Logger.debug("file: "+f)
             shutil.copy2(
                         parameters['GENERAL']['Path']+f, 
-                        eegPath+recording.Prefix(app="_"+f)
+                        recording.eegPath+recording.Prefix(app="_"+f)
                         )
 
         with open(parameters['GENERAL']['OutputFolder']+"participants.tsv", "a") as f:
@@ -745,8 +792,8 @@ def main(argv):
         for l in tr:
             Logger.error('File "'+l[0]+'", line '+str(l[1])+" in "+l[2]+":")
         Logger.error(type(e).__name__+": "+str(e))
-        if eegPath != None:
-            flist = glob.glob(eegPath+recording.Prefix(app="*"))
+        if recording.eegPath != None:
+            flist = glob.glob(recording.eegPath+recording.Prefix(app="*"))
             if len(flist) != 0:
                 for f in flist:
                     rmdir(f)
@@ -758,12 +805,12 @@ def main(argv):
         Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
         Logger.info("Took {} seconds".format(tm.process_time()))
         Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
-        shutil.copy2(tmpDir+"/logfile", eegPath+recording.Prefix(app=".log"))
-        shutil.copy2(tmpDir+"/configuration", eegPath+recording.Prefix(app=".ini")) 
+        shutil.copy2(tmpDir+"/logfile", recording.eegPath+recording.Prefix(app=".log"))
+        shutil.copy2(tmpDir+"/configuration", recording.eegPath+recording.Prefix(app=".ini")) 
         fileHandler.close()
         rmdir(tmpDir)
         shutil.rmtree(tmpDir)
-    except e as Exception:
+    except Exception as e:
         Logger.error("Unable to copy files to working directory. See in "+tmpDir+"logfile for more details.")
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
         tr = traceback.extract_tb(exc_traceback)

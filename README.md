@@ -110,6 +110,29 @@ Unlike the BrainVision format, the conversion from short to measured value is no
 
 EDF+ supports also encoding of data using logaritmic scale, which is used if the constant relative precision is nessesary. As original Embla format works with ranges, this feature wasn't implemented.
 
+## Plugins
+
+Script supported a basic plug-ins. They are activated by giving a path to a py script containing user functions to `[PLUGINS] Plugin` function. Script will load corresponding file and look for following functions:
+
+- `RecordingEP(DataStructure.Generic.Record)`. This one is called just after loading meta-data and before creation of output folders. Allows to modify the metadata, for ex. Acquisition ID, fill JSON information, manipulate subject ID etc.
+- `ChannelsEP(list(DataStructure.Generic.Channel))`. This one is called after loading list of channels, and allows to manipulate them. List must be manipulated in-place inorder to be changed in the main script.
+- `EventsEP(list(DataStructure.Generic.Event))`. Called after loading the list of events.
+- `RunsEP(list(tuple(datetime,datetime)))`. Called before processing data, and allows the manipulation of runs separation.
+- `DataEP(list(DataStructure.Generic.Channel), list(list(int/float)))`. Called after loading the data in memory. Allows the manipulation/analisys of given data.
+
+Each of these functions must also accept parameters `cli_args = list(str)` and `cfg_args = list(tuple(str,str))`. The first one is a list of command line options passed after `--`, second is the list of tuples (key, value) representing all parameters in `PLUGINS` section of configuration file.
+
+Each function should return an integer 0, indicating that it was run succesfully. Any other returned value will indicate error and will stop execution.
+
+In oreder to incorporate printouts of plugin in the logging system, one should include 
+```
+import logging
+Logger = logging.getLogger(__name__)
+```
+in the beginning of the file. Then use standard `Logging.info/warning/error/debug`.
+
+The Subject, Session, Task, and Acquisition can be changed only at `RecordingEP`, and will be locked afterwards. This is done to fix the output paths.
+
 ## Known issues
 
 - Some events don't have an associated type, they will appear as "n/a" in events.tsv file -- **fixed**
@@ -147,7 +170,7 @@ Other corrections/suggestions/spell corections can be reported as issues on gitl
 - A task given in ini or cli can contain non alphanumeric characters, need to check and produce warning/error
 - Difficult distinguish start of next bidsifier form end of old -- **done**
 - Treat Frequency correction (how?)
-- Anonymization -- *partially done*
+- Anonymization -- **done**
 - Copy auxiliary files into BIDS folder -- **done**
-- Pack script into executable
+- Pack script into executable -- **done**
 - Transform into C with cpython

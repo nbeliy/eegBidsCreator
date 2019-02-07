@@ -1,5 +1,8 @@
 from datetime import datetime
 import glob, os
+import logging
+
+Logger = logging.getLogger(__name__)
 
 class Subject(object):
     __slots__ = ["ID", "Name", "Address", "__gender", "Birth", "Notes", "Height", "Weight", "Head"]
@@ -56,7 +59,8 @@ class Record(object):
             "__Frequency",
             "__path", "__prefix",
             "_aDate",
-            "_extList"
+            "_extList",
+            "_eegPath"
             ]
     #__JSONfields contains the full list of fields in JSON with a tags:
     #   0 - required
@@ -79,6 +83,7 @@ class Record(object):
         "SubjectArtefactDescription":2}
 
     def __init__(self, task="", session = "", acquisition = "", run = "", AnonymDate=None):
+        self._eegPath = None
         self.JSONdata       = dict()
         self.SubjectInfo    = Subject()
         self.DeviceInfo     = Device()
@@ -94,6 +99,22 @@ class Record(object):
         self._aDate = AnonymDate
 
         self._extList       = []
+        
+
+    @property
+    def eegPath(self):
+        return self._eegPath
+
+
+    def SetEEGPath(self, prepath='.'):
+        if not isinstance(prepath, str): raise TypeError("prepath must be a string")
+        if self._eegPath != None:
+            Logger.warning("EEG path is locked")
+            return self._eegPath
+        if not os.path.exists(prepath): 
+            raise FileNotFoundError("Pre-path {} don't exists.".format(prepath))
+        self._eegPath = os.path.realpath(prepath+'/'+self.Path())+'/'
+        return self._eegPath
 
     def GetAuxFiles(self, path="."):
         if not isinstance(path, str):
@@ -116,6 +137,9 @@ class Record(object):
 
 
     def SetId(self, session="", task="", acquisition=""):
+        if self._eegPath != None:
+            Logger.warning("Recording IDs are locked")
+            return
         self.__session      = session
         self.__acquisition  = acquisition
         self.__task         = task
@@ -137,6 +161,9 @@ class Record(object):
             return self.__prefix+"_run-"+run+app
 
     def ResetPrefix(self):
+        if not self._eegPath == None:
+            Logger.warning("EEG path is locked")
+            return
         prefix = "sub-"+self.SubjectInfo.ID
         if self.__session != "":
             prefix += "_ses-" + self.__session
@@ -150,6 +177,9 @@ class Record(object):
         return self.__path+"/"+app
 
     def ResetPath(self):
+        if not self._eegPath == None:
+            Logger.warning("EEG path is locked")
+            return
         path = "sub-"+self.SubjectInfo.ID
         if self.__session != "": 
             path = path + "/ses-" + self.__session 
