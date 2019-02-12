@@ -58,7 +58,12 @@ def humanbytes(B):
 
 def main(argv):
     process = psutil.Process(os.getpid())
-    eegPath=None
+    recording=None
+
+    argv_plugin = None
+    if '--' in argv:
+        argv_plugin = argv[argv.index('--')+1:]
+        argv = argv[:argv.index('--')]
 
     ex_code = 0
     parser = argparse.ArgumentParser(description='Converts EEG file formats to BID standard')
@@ -79,10 +84,6 @@ def main(argv):
     parser.add_argument('--conversion', dest="conv", choices=["EDF","BV"], help="performs conversion to given format")
 
     args = parser.parse_args(argv[1:])
-    args_pl = list()
-    if '--' in args:
-        args_pl = args[args.index('--')+1:]
-        args    = args[:args.index('--')]
 
     parameters = configparser.ConfigParser()
     #Making keys case-sensitive
@@ -306,8 +307,9 @@ def main(argv):
 #Entry point Recording_Init
             
         if entry_points[0] in plugins:
-            if plugins[entry_points[0]](recording, args_pl, parameters.items("PLUGINS")) != 0:
-                raise Exception("Plugin {} produced some errors".format(entry_points[0]))
+            result = plugins[entry_points[0]](recording, argv_plugin, parameters.items("PLUGINS"))
+            if result != 0:
+                raise Exception("Plugin {} returned code {}".format(entry_points[0], result))
 
         Logger.info("Patient Id: {}".format(recording.SubjectInfo.ID))
         Logger.info("Session Id: " + recording.GetSession())
@@ -401,10 +403,10 @@ def main(argv):
         if t_end == datetime.min or t_end < t_max:
             t_end = t_max
             
-#Channels_Init entry point
         if entry_points[1] in plugins:
-            if plugins[entry_points[1]](channels, args_pl, parameters.items("PLUGINS")) != 0:
-                raise Exception("Plugin {} produced some errors".format(entry_points[1]))
+            result = plugins[entry_points[1]](channels, argv_plugin, parameters.items("PLUGINS"))
+            if result != 0:
+                raise Exception("Plugin {} returned code {}".format(entry_points[1], result))
        
         Logger.debug("Start time: {}, Stop time: {}".format(t_ref.isoformat(), t_end.isoformat()))
         Logger.debug("Earliest time: {}, Latest time: {}".format(t_min.isoformat(), t_max.isoformat()))
@@ -495,8 +497,9 @@ def main(argv):
             events = [ev for ev in events if (ev.GetTime() >= t_ref and ev.GetTime() <= t_end) ]
 
         if entry_points[2] in plugins:
-            if plugins[entry_points[2]](events, args_pl, parameters.items("PLUGINS")) != 0:
-                raise Exception("Plugin {} produced some errors".format(entry_points[2]))
+            result = plugins[entry_points[2]](events, argv_plugin, parameters.items("PLUGINS"))
+            if result != 0:
+                raise Exception("Plugin {} returned code {}".format(entry_points[2], result))
 
         Logger.info("Creating eeg.json file")
         with open(recording.eegPath+"/"+recording.Prefix(app="_eeg.json"), "w") as f:
@@ -542,8 +545,9 @@ def main(argv):
             time_limits.append([t_ref, t_end])
         
         if entry_points[3] in plugins:
-            if plugins[entry_points[3]](time_limits, args_pl, parameters.items("PLUGINS")) != 0:
-                raise Exception("Plugin {} produced some errors".format(entry_points[3]))
+            result = plugins[entry_points[3]](time_limits, argv_plugin, parameters.items("PLUGINS"))
+            if result != 0:
+                raise Exception("Plugin {} returned code {}".format(entry_points[3], result))
     
 
         #Running over runs
@@ -664,8 +668,9 @@ def main(argv):
                             l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer(), raw = True ))
                     
                     if entry_points[4] in plugins:
-                        if plugins[entry_points[4]](channels,l_data, args_pl, parameters.items("PLUGINS")) != 0:
-                            raise Exception("Plugin {} produced some errors".format(entry_points[4]))
+                        result = plugins[entry_points[4]](channels,l_data,argv_plugin, parameters.items("PLUGINS"))
+                        if result != 0:
+                            raise Exception("Plugin {} returned code {}".format(entry_points[4], result))
                     outData.DataFile.WriteBlock(l_data)
                     t_count += 1
                 file_list.append("eeg/{}\t{}".format(
@@ -740,8 +745,9 @@ def main(argv):
                         l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=1, raw = True ))
                     
                     if entry_points[4] in plugins:
-                        if plugins[entry_points[4]](channels,l_data, args_pl, parameters.items("PLUGINS")) != 0:
-                            raise Exception("Plugin {} produced some errors".format(entry_points[4]))
+                        result = plugins[entry_points[4]](channels,l_data,argv_plugin, parameters.items("PLUGINS"))
+                        if result != 0:
+                            raise Exception("Plugin {} returned code {}".format(entry_points[4], result))
                     outData.WriteDataBlock(l_data, t_s)
                     t_count += 1
                 outData.Close()
@@ -792,7 +798,7 @@ def main(argv):
         for l in tr:
             Logger.error('File "'+l[0]+'", line '+str(l[1])+" in "+l[2]+":")
         Logger.error(type(e).__name__+": "+str(e))
-        if recording.eegPath != None:
+        if recording != None and recording.eegPath != None:
             flist = glob.glob(recording.eegPath+recording.Prefix(app="*"))
             if len(flist) != 0:
                 for f in flist:
