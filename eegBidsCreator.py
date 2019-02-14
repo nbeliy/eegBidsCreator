@@ -307,9 +307,14 @@ def main(argv):
 #Entry point Recording_Init
             
         if entry_points[0] in plugins:
-            result = plugins[entry_points[0]](recording, argv_plugin, parameters.items("PLUGINS"))
-            if result != 0:
-                raise Exception("Plugin {} returned code {}".format(entry_points[0], result))
+            try:
+                result = 0
+                result = plugins[entry_points[0]](recording, argv_plugin, parameters.items("PLUGINS"))
+                if result != 0:
+                    raise Exception("Plugin {} returned code {}".format(entry_points[0], result))
+            except:
+                ex_code = 100+0+result
+                raise
 
         Logger.info("Patient Id: {}".format(recording.SubjectInfo.ID))
         Logger.info("Session Id: " + recording.GetSession())
@@ -404,9 +409,14 @@ def main(argv):
             t_end = t_max
             
         if entry_points[1] in plugins:
-            result = plugins[entry_points[1]](channels, argv_plugin, parameters.items("PLUGINS"))
-            if result != 0:
-                raise Exception("Plugin {} returned code {}".format(entry_points[1], result))
+            try:
+                result = 0
+                result = plugins[entry_points[1]](channels, argv_plugin, parameters.items("PLUGINS"))
+                if result != 0:
+                    raise Exception("Plugin {} returned code {}".format(entry_points[1], result))
+            except:
+                ex_code = 100+10+result
+                raise
        
         Logger.debug("Start time: {}, Stop time: {}".format(t_ref.isoformat(), t_end.isoformat()))
         Logger.debug("Earliest time: {}, Latest time: {}".format(t_min.isoformat(), t_max.isoformat()))
@@ -497,9 +507,14 @@ def main(argv):
             events = [ev for ev in events if (ev.GetTime() >= t_ref and ev.GetTime() <= t_end) ]
 
         if entry_points[2] in plugins:
-            result = plugins[entry_points[2]](events, argv_plugin, parameters.items("PLUGINS"))
-            if result != 0:
-                raise Exception("Plugin {} returned code {}".format(entry_points[2], result))
+            try:
+                result = 0
+                result = plugins[entry_points[2]](events, argv_plugin, parameters.items("PLUGINS"))
+                if result != 0:
+                    raise Exception("Plugin {} returned code {}".format(entry_points[2], result))
+            except:
+                ex_code = 100+20+result
+                raise
 
         Logger.info("Creating eeg.json file")
         with open(recording.eegPath+"/"+recording.Prefix(app="_eeg.json"), "w") as f:
@@ -545,10 +560,14 @@ def main(argv):
             time_limits.append([t_ref, t_end])
         
         if entry_points[3] in plugins:
-            result = plugins[entry_points[3]](time_limits, argv_plugin, parameters.items("PLUGINS"))
-            if result != 0:
-                raise Exception("Plugin {} returned code {}".format(entry_points[3], result))
-    
+            try:
+                result = 0
+                result = plugins[entry_points[3]](time_limits, argv_plugin, parameters.items("PLUGINS"))
+                if result != 0:
+                    raise Exception("Plugin {} returned code {}".format(entry_points[3], result))
+            except:
+                ex_code = 100+30+result
+                raise
 
         #Running over runs
         file_list = list()
@@ -668,9 +687,15 @@ def main(argv):
                             l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer(), raw = True ))
                     
                     if entry_points[4] in plugins:
-                        result = plugins[entry_points[4]](channels,l_data,argv_plugin, parameters.items("PLUGINS"))
-                        if result != 0:
-                            raise Exception("Plugin {} returned code {}".format(entry_points[4], result))
+                        try:
+                            result = 0
+                            result = plugins[entry_points[4]](channels,l_data,argv_plugin, parameters.items("PLUGINS"))
+                            if result != 0:
+                                raise Exception("Plugin {} returned code {}".format(entry_points[4], result))
+                        except:
+                            ex_code = 100+40+result
+                            raise
+
                     outData.DataFile.WriteBlock(l_data)
                     t_count += 1
                 file_list.append("eeg/{}\t{}".format(
@@ -743,11 +768,17 @@ def main(argv):
                     l_data = []
                     for ch in channels:
                         l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=1, raw = True ))
-                    
+
                     if entry_points[4] in plugins:
-                        result = plugins[entry_points[4]](channels,l_data,argv_plugin, parameters.items("PLUGINS"))
-                        if result != 0:
-                            raise Exception("Plugin {} returned code {}".format(entry_points[4], result))
+                        try:
+                            result = 0
+                            result = plugins[entry_points[4]](channels,l_data,argv_plugin, parameters.items("PLUGINS"))
+                            if result != 0:
+                                raise Exception("Plugin {} returned code {}".format(entry_points[4], result))
+                        except:
+                            ex_code = 100+40+result
+                            raise
+
                     outData.WriteDataBlock(l_data, t_s)
                     t_count += 1
                 outData.Close()
@@ -793,6 +824,9 @@ def main(argv):
 
 
     except Exception as e:
+        if ex_code == 0:
+            ex_code = 1
+
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
         tr = traceback.extract_tb(exc_traceback)
         for l in tr:
@@ -805,7 +839,6 @@ def main(argv):
                     rmdir(f)
         Logger.info("Command: "+" ".join(argv))
 
-        ex_code = 1
 
     try:
         Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
@@ -817,6 +850,7 @@ def main(argv):
         rmdir(tmpDir)
         shutil.rmtree(tmpDir)
     except Exception as e:
+        ex_code = 10
         Logger.error("Unable to copy files to working directory. See in "+tmpDir+"logfile for more details.")
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
         tr = traceback.extract_tb(exc_traceback)
