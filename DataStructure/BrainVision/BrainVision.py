@@ -31,7 +31,7 @@ class BrainVision(object):
 
     def AddFrequency(self, freq):
         if type(freq) != int:
-            raise Exception("BrainVision: Only integer frequency is supported")
+            raise Exception(__name__+": Only integer frequency is supported")
         self.Header.CommonInfo.AddFrequency(freq)
     def GetFrequency(self):
         return self.Header.CommonInfo.GetFrequency()
