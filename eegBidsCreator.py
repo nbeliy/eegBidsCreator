@@ -761,12 +761,14 @@ def main(argv):
                 outData.SetDuration((t_end - t_ref).total_seconds())
                 outData.AddFrequency(recording.Frequency)
                 Logger.info("Creating eeg.mat header file")
+                outData.InitHeader()
                 for ch in channels:
                     outData.AppendChannel(ch)
-                outData.WriteHeader()
+                outData.WriteChannels()
                 for ev in events:
                     outData.AppendEvent(ev)
                 outData.WriteEvents()
+                outData.WriteHeader()
 
                 Logger.info("Creating eeg.dat file")
                 t_e = t_ref
