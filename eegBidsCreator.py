@@ -468,7 +468,7 @@ def main(argv):
                             Logger.warning("Can't get event name for index {}".format(ev.AuxDataID))
                             name = ""
 
-                    if ch != None:
+                    if ch != None and ch in channels:
                         ch_index = channels.index(ch)
                     else:
                         ch_index = 0
@@ -541,6 +541,7 @@ def main(argv):
 
         #Rounding t_ref to seconds
         t_ref = t_ref.replace(microsecond=0)
+        t_end = t_end.replace(microsecond=0, second=t_end.second+1)
         #Updating channels frequency multiplier and starting time
         time_limits = list()
         for c in channels:

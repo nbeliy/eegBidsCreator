@@ -12,8 +12,18 @@ Logger = logging.getLogger(__name__)
 
 class MEEG(object):
     __slots__ = ["__headerFile", "__dataFile", "__frequency", "__aDate", "__D", "__channels", "__events", "__startTime", "__duration", "__path", "__file"] 
-
-
+    #SPM12 accepts following types:
+    # EOG: EOG, VEOG, HEOG
+    # ECG: ECG,EKG
+    # REF: REF, REFMAG, REFGRAD, REFPLANAR
+    # MEG: MEG, MEGMAG, MEGGRAD
+    # MEGANY: MEGANY, MEGPLANAR
+    # MEGCOMB
+    # FILTERED: MEEG, REF, EOG, ECG, EMG, LFP, PHYS, ILAM, SRC
+    # 
+    __chanTypes = ['MEGPLANAR', 'MEGMAG', 'MEGGRAD', 'MEGCOMB', 'MEG',
+                'EEG','EOG', 'ECG', 'EMG', 'LFP', 'SRC', 
+                'PHYS', 'ILAM', 'OTHER', 'REF', 'REFMAG', 'REFGRAD']
     def __init__(self, path, prefix, AnonymDate=None):
         self.__headerFile   = prefix+"_eeg.mat"
         self.__dataFile     = prefix+"_eeg.dat"
@@ -61,7 +71,7 @@ class MEEG(object):
             "history": {},
             "other":    {
                 'info': {
-                    'date':[self.__startTime.year, self.__startTime.month, self.__startTime.day],
+                    'date':[float(self.__startTime.year), float(self.__startTime.month), float(self.__startTime.day)],
                     'hour':[float(self.__startTime.hour), float(self.__startTime.minute), float(self.__startTime.second)]
                         }
                         },
@@ -72,7 +82,17 @@ class MEEG(object):
 
     def AppendChannel(self, channel):
         #fields: 'label'        'bad'    'type'        'X'  'y'      'label'    
-        ch = ( channel.GetName(), 0, channel.GetType(), 0, 0, channel.GetUnit())   
+        spm_type = ''
+        or_type = channel.GetType()
+        if 'EKG' in or_type:
+            or_type = 'ECG'
+        for t in self.__chanTypes:
+            if t in or_type:
+                spm_type = t
+                break
+        if spm_type == '':
+            spm_type = 'OTHER'
+        ch = ( channel.GetName(), 0, spm_type, (), (), channel.GetUnit())   
         self.__channels.append(ch)
 
     def WriteChannels(self):
