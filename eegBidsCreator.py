@@ -11,6 +11,7 @@ from  Parcel.parcel import Parcel
 from DataStructure.Generic.Record import Record as GRecord
 from DataStructure.Generic.Event  import GenEvent
 
+from DataStructure.SPM12.MEEG import MEEG
 
 from DataStructure.Embla.Record  import ParceRecording
 from DataStructure.Embla.Channel import EbmChannel
@@ -81,7 +82,7 @@ def main(argv):
     parser.add_argument('-q,--quiet', dest='quiet', action="store_true", help="Supress standard output")
     parser.add_argument('--log', dest='loglevel', choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help='logging level')
     parser.add_argument('--version', action='version', version='%(prog)s '+VERSION)
-    parser.add_argument('--conversion', dest="conv", choices=["EDF","BV"], help="performs conversion to given format")
+    parser.add_argument('--conversion', dest="conv", choices=["EDF","BV","MEEG"], help="performs conversion to given format")
 
     args = parser.parse_args(argv[1:])
 
@@ -576,6 +577,8 @@ def main(argv):
             mem_1s = 32*sum(ch.GetFrequency() for ch in channels)
         elif parameters['GENERAL']['Conversion'] == "BV": 
             mem_1s = 32*len(channels)*recording.Frequency
+        elif parameters['GENERAL']['Conversion'] == "MEEG": 
+            mem_1s = 32*len(channels)*recording.Frequency
 
         for count,t in enumerate(time_limits):
             t_ref = t[0]
@@ -785,22 +788,81 @@ def main(argv):
 
                 file_list.append("eeg/{}\t{}".format(
                         recording.Prefix(run=run,app="_eeg.edf"), 
+                        t_ref.isoformat()))
+
+            #Matlab SPM12 eeg format
+            elif parameters['GENERAL']["Conversion"] == "MEEG":
+                Logger.info("Converting to Matlab SPM format")
+                outData = MEEG(recording.eegPath, recording.Prefix(run=run), AnonymDate=ANONYM_DATE)
+                outData.SetStartTime(t_ref)
+                outData.SetDuration((t_end - t_ref).total_seconds())
+                outData.AddFrequency(recording.Frequency)
+                Logger.info("Creating eeg.mat header file")
+                outData.InitHeader()
+                for ch in channels:
+                    outData.AppendChannel(ch)
+                outData.WriteChannels()
+                for ev in events:
+                    outData.AppendEvent(ev)
+                outData.WriteEvents()
+                outData.WriteHeader()
+
+                Logger.info("Creating eeg.dat file")
+                t_e = t_ref
+                t_count= 1
+
+                mem_used = process.memory_info().rss
+                mem_remained = mem_requested - mem_used
+                t_step = int(mem_remained/mem_1s)
+                Logger.debug("Memory used: {}, Memory requested: {}, Memory remined: {}".format(
+                        humanbytes(mem_used), 
+                        humanbytes(mem_requested),
+                        humanbytes(mem_remained)))
+                Logger.debug("1s time worth: {}".format(humanbytes(mem_1s)))
+                Logger.debug("Time step:{}".format(timedelta(seconds=t_step)))
+                while True:
+                    t_s = t_e
+                    t_e = t_e + timedelta(0,t_step,0)
+                    if t_s >= t_end: break
+                    if t_e > t_end: 
+                        t_e = t_end
+                        t_step = (t_e - t_s).total_seconds()
+                    Logger.info("Timepoint {}: Duration {}".format(t_count,t_e -t_s))
+                    Logger.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
+                    l_data = []
+                    for ch in channels:
+                        l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer()))
+                    if entry_points[4] in plugins:
+                        if plugins[entry_points[4]](channels,l_data, args_pl, parameters.items("PLUGINS")) != 0:
+                            raise Exception("Plugin {} produced some errors".format(entry_points[4]))
+                    outData.WriteBlock(l_data)
+                    t_count += 1
+                file_list.append("eeg/{}\t{}".format(
+                        recording.Prefix(run=run,app="_eeg.mat"), 
                         t[0].isoformat()))
+
+
+            #Copiyng original files if there no conversion
+            elif parameters['GENERAL']["Conversion"] == "":
+                Logger.info("Copying original files")
+                for f in recording.GetMainFiles(path=parameters['GENERAL']['Path']):
+                    Logger.debug("file: "+f)
+                    shutil.copy2(
+                            parameters['GENERAL']['Path']+f, 
+                            recording.eegPath+recording.Prefix(app="_"+f)
+                            )
+                file_list.append("eeg/{}\t{}".format(
+                            recording.Prefix(run=run,app="_Recording.esrc"),
+                            t_ref.isoformat() ))
+
+            else:
+                raise Exception("Conversion to {} format not implemented".format(parameters['GENERAL']["Conversion"]))
 
             with open(parameters['GENERAL']['OutputFolder']+recording.Path(app="scans.tsv"), "a") as f:
                 for l in file_list:
                     print(l, file = f)
 
-        #Copiyng original files if there no conversion
-        if parameters['GENERAL']["Conversion"] == "":
-            Logger.info("Copying original files")
-            for f in recording.GetMainFiles(path=parameters['GENERAL']['Path']):
-                Logger.debug("file: "+f)
-                shutil.copy2(
-                        parameters['GENERAL']['Path']+f, 
-                        recording.eegPath+recording.Prefix(app="_"+f)
-                        )
-
+        
         #Copiyng auxiliary files
         Logger.info("Copying auxiliary files")
         for f in recording.GetAuxFiles(path=parameters['GENERAL']['Path']):
