@@ -1,13 +1,17 @@
 from  scipy.io import savemat
 from scipy.io.matlab.mio5_params import MatlabObject
 from datetime import datetime
+import sys
 import numpy
 import struct
+import logging
 
 from numpy.core.records import fromarrays
 
+Logger = logging.getLogger(__name__)
+
 class MEEG(object):
-    __slots__ = ["__headerFile", "__dataFile", "__frequency", "__aDate", "__D", "__events", "__startTime", "__duration", "__path", "__file"] 
+    __slots__ = ["__headerFile", "__dataFile", "__frequency", "__aDate", "__D", "__channels", "__events", "__startTime", "__duration", "__path", "__file"] 
 
 
     def __init__(self, path, prefix, AnonymDate=None):
@@ -17,33 +21,15 @@ class MEEG(object):
         self.__aDate        = AnonymDate
         self.__frequency    = 1
         self.__events       = list()
-        self.__D            = {
-            "type":"continuous",
-            "data":[],
-            "Nsamples":0,
-            "Fsample":0,
-            "timeOnset": 0.0,
-            "fname":prefix+"_eeg.mat",
-            "path": path,
-            "trials": [],
-            "channels": [],
-            "sensors": {},
-            "fiducials":{},
-            "transform": {"ID":"time"},
-            "history": {},
-            "other": [],
-            "condlist": [],
-            "montage":  {}    
-        }
-        self.__startTime = datetime.min
-        self.__file = open (self.__path+"/"+self.__dataFile, "bw")
+        self.__channels     = list()
+        self.__D            = dict()
+        self.__startTime    = datetime.min
+        self.__file = None
         
     def SetStartTime(self, time):
         self.__startTime = time
         if self.__aDate != None:
             time = self.__aDate
-        self.__D['other'] = {'info':{'date':[time.year, time.month, time.day],
-                 'hour':[time.hour, time.minute, time.second]}}
 
     def SetDuration(self, duration):
         self.__duration = duration
@@ -56,34 +42,47 @@ class MEEG(object):
     def GetFrequency(self):
         return self.Header.CommonInfo.GetFrequency()
 
+    def InitHeader(self, Parameters = None):
+        Logger.info("Creating eeg.mat header file")
+        self.__file = open (self.__path+"/"+self.__dataFile, "bw")
+        self.__D = {
+            "type":"continuous",
+            "data":{},
+            "Nsamples" : float(round(self.__duration*self.__frequency)),
+            "Fsample":  float(self.__frequency),
+            "timeOnset": float(self.__startTime.microsecond*1e-6),
+            "fname":self.__headerFile,
+            "path": self.__path,
+            "trials": [],
+            "channels": {},
+            "sensors": {},
+            "fiducials":{},
+            "transform": {"ID":"time"},
+            "history": {},
+            "other":    {
+                'info': {
+                    'date':[self.__startTime.year, self.__startTime.month, self.__startTime.day],
+                    'hour':[float(self.__startTime.hour), float(self.__startTime.minute), float(self.__startTime.second)]
+                        }
+                        },
+            "condlist": [],
+            "montage":  {}    
+            }
+
+
     def AppendChannel(self, channel):
         #fields: 'label'        'bad'    'type'        'X'  'y'      'label'    
         ch = ( channel.GetName(), 0, channel.GetType(), 0, 0, channel.GetUnit())   
-        self.__D["channels"].append(ch)
+        self.__channels.append(ch)
+
+    def WriteChannels(self):
+        self.__D['channels'] = numpy.array(self.__channels, 
+                    dtype=[('label',object),('bad',object),('type',object),
+                            ('X_plot2D',object),('Y_plot2D',object),('units',object)])
 
     def AppendEvent(self, event):
         ev = (event.GetName(), 0, event.GetOffset(self.__startTime), event.GetDuration())
         self.__events.append(ev)
-
-    def WriteHeader(self):
-        f_data = numpy.array(
-                [(self.__path+self.__dataFile, 
-                [len(self.__D['channels']),int(self.__duration*self.__frequency)],
-                16, 0, 0, [1.,1.], 1, 0, 'rw')],
-            dtype=[('fname', object),('dim', object),('dtype',float),
-                ('be',float), ('offset',float), ('pos', object),
-                ('scl_slope', float), ('scl_inter', float),('permission',object)]
-            )
-        #self.__D['data'] = f_data
-        self.__D['data'] = MatlabObject(f_data, 'file_array')
-        self.__D['channels'] = numpy.array(self.__D['channels'], 
-                    dtype=[('label',object),('bad',object),('type',object),
-                            ('X_plot2D',object),('Y_plot2D',object),('units',object)])
-        self.__D['Nsamples'] = int(self.__duration*self.__frequency)
-        self.__D['Fsample']  = self.__frequency
-        self.__D['timeOnset']= self.__startTime.microsecond*1e-6
-        
-        
 
     def WriteEvents(self):
         self.__events = numpy.array(self.__events,
@@ -92,7 +91,21 @@ class MEEG(object):
             dtype=[('label',object),('onset',object),
                     ('repl',object),('bad',object),
                     ('events',object),('tag',object)])
+
+    def WriteHeader(self):
+        f_data = numpy.array(
+                [(self.__path+self.__dataFile, 
+                [len(self.__channels),int(self.__duration*self.__frequency)],
+                16, 0 if sys.byteorder=='little' else 1, 0, [1.,1.], 1, 0, 'rw')],
+            dtype=[('fname', object),('dim', object),('dtype',float),
+                ('be',float), ('offset',float), ('pos', object),
+                ('scl_slope', float), ('scl_inter', float),('permission',object)]
+            )
+        self.__D['data'] = MatlabObject(f_data, 'file_array')
         savemat(self.__path+self.__headerFile, {'D':self.__D})
+        
+       
+        
 
     def WriteBlock(self, data):
         if type(data) != list or type(data[0]) != list:
