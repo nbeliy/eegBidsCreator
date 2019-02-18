@@ -292,7 +292,17 @@ def main(argv):
             
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
-        
+
+        if entry_points[0] in plugins:
+            try:
+                result = 0
+                result = plugins[entry_points[0]](recording, argv_plugin, parameters.items("PLUGINS"))
+                if result != 0:
+                    raise Exception("Plugin {} returned code {}".format(entry_points[0], result))
+            except:
+                ex_code = 100+0+result
+                raise
+       
         JSONdata = dict()
         if parameters['GENERAL']['JsonFile'] != "":
             if parameters['GENERAL']['JsonFile'][-5:] != ".json": 
@@ -307,16 +317,6 @@ def main(argv):
                 raise Exception("Task name '{}' in JSON file mismach name in record '{}'".format(recording.JSONdata["TaskName"], recording.GetTask()))
 #Entry point Recording_Init
             
-        if entry_points[0] in plugins:
-            try:
-                result = 0
-                result = plugins[entry_points[0]](recording, argv_plugin, parameters.items("PLUGINS"))
-                if result != 0:
-                    raise Exception("Plugin {} returned code {}".format(entry_points[0], result))
-            except:
-                ex_code = 100+0+result
-                raise
-
         Logger.info("Patient Id: {}".format(recording.SubjectInfo.ID))
         Logger.info("Session Id: " + recording.GetSession())
         Logger.info("Task    Id: " + recording.GetTask())
@@ -907,20 +907,24 @@ def main(argv):
         Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
         Logger.info("Took {} seconds".format(tm.process_time()))
         Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
-        shutil.copy2(tmpDir+"/logfile", recording.eegPath+recording.Prefix(app=".log"))
-        shutil.copy2(tmpDir+"/configuration", recording.eegPath+recording.Prefix(app=".ini")) 
-        fileHandler.close()
-        rmdir(tmpDir)
-        shutil.rmtree(tmpDir)
+        if recording and recording.eegPath:
+            shutil.copy2(tmpDir+"/logfile", recording.eegPath+recording.Prefix(app=".log"))
+            shutil.copy2(tmpDir+"/configuration", recording.eegPath+recording.Prefix(app=".ini")) 
+            fileHandler.close()
+            rmdir(tmpDir)
+            shutil.rmtree(tmpDir)
+        else:
+            Logger.warning("Output path is not defined. See in "+tmpDir+"logfile for more details.")
+            fileHandler.close()
     except Exception as e:
-        ex_code = 10
+        if ex_code == 0:
+            ex_code = 10
         Logger.error("Unable to copy files to working directory. See in "+tmpDir+"logfile for more details.")
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
         tr = traceback.extract_tb(exc_traceback)
         for l in tr:
             Logger.error('File "'+l[0]+'", line '+str(l[1])+" in "+l[2]+":")
         Logger.error(type(e).__name__+": "+str(e))
-        ex_code = 1
 
     return(ex_code)
 
