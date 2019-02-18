@@ -243,6 +243,10 @@ class GenChannel(object):
     def GetSequenceSize(self, seq = 0):
         return self._seqSize[seq]
 
+    def GetSequenceDuration(self, seq = 0):
+        """Returns the time span (in seconds) of given sequence"""
+        return self._seqSize[seq]/self._frequency
+
     def SetStartTime(self, start):
         if not isinstance(start, datetime):
             raise TypeError(self.__class__+": StartTime must be a datetime object")

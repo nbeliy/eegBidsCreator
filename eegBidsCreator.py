@@ -1,11 +1,17 @@
 VERSION = '0.65r1'
 
-import logging, argparse, os, json, glob, olefile, traceback, struct, configparser
+import logging, argparse, os, json, glob, olefile, traceback
 import tempfile, bisect
 from datetime import datetime, timedelta
 import time as tm
 import importlib.util
 import inspect
+import shutil
+import psutil
+
+import tools.cfi as cfi
+import tools.cli as cli
+import tools.tools as tools
 
 from  Parcel.parcel import Parcel
 from DataStructure.Generic.Record import Record as GRecord
@@ -22,42 +28,12 @@ from DataStructure.BrainVision.Channel  import BvChannel
 from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
 
-import shutil
-import psutil
 
 
-
-def rmdir(path):
-    if os.path.isfile(path):
-        os.remove(path)
-    else:
-        for root, dirs, files in os.walk(path):
-            for f in files:
-                os.remove(os.path.join(root, f))
-            for d in dirs:
-                shutil.rmtree(os.path.join(root, d))
-
-def humanbytes(B):
-   'Return the given bytes as a human friendly KB, MB, GB, or TB string'
-   B = float(B)
-   KB = float(1024)
-   MB = float(KB ** 2) # 1,048,576
-   GB = float(KB ** 3) # 1,073,741,824
-   TB = float(KB ** 4) # 1,099,511,627,776
-
-   if B < KB:
-      return '{0} {1}'.format(B,'Bytes' if 0 == B > 1 else 'Byte')
-   elif KB <= B < MB:
-      return '{0:.2f} KB'.format(B/KB)
-   elif MB <= B < GB:
-      return '{0:.2f} MB'.format(B/MB)
-   elif GB <= B < TB:
-      return '{0:.2f} GB'.format(B/GB)
-   elif TB <= B:
-      return '{0:.2f} TB'.format(B/TB)
 
 
 def main(argv):
+
     process = psutil.Process(os.getpid())
     recording=None
 
@@ -67,81 +43,11 @@ def main(argv):
         argv = argv[:argv.index('--')]
 
     ex_code = 0
-    parser = argparse.ArgumentParser(description='Converts EEG file formats to BID standard')
+    args = cli.parce_CLI(argv[1:], VERSION)
 
-    parser.add_argument('infile', 
-        metavar='eegfile', nargs = 1,
-        help='input eeg file')
-    parser.add_argument('-a, --acquisition', metavar='acqId', dest='acq', help='Id of the acquisition')
-    parser.add_argument('-t, --task', metavar='taskId', dest='task', help='Id of the task')
-    parser.add_argument('-s, --session', metavar='sesId', dest='ses', help='Id of the session')
-    parser.add_argument('-j, --json', metavar='eegJson', dest='eegJson', help="A json file with task description")
-    parser.add_argument('-o, --output', nargs=1, dest='outdir', help='destination folder')
-    parser.add_argument('-c, --config', nargs=1, dest='config_file', help="Path to configuration file")
-    parser.add_argument('--logfile', nargs=1, metavar='log.out', dest='logfile', help='log file destination')
-    parser.add_argument('-q,--quiet', dest='quiet', action="store_true", help="Supress standard output")
-    parser.add_argument('--log', dest='loglevel', choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], help='logging level')
-    parser.add_argument('--version', action='version', version='%(prog)s '+VERSION)
-    parser.add_argument('--conversion', dest="conv", choices=["EDF","BV","MEEG"], help="performs conversion to given format")
-
-    args = parser.parse_args(argv[1:])
-
-    parameters = configparser.ConfigParser()
-    #Making keys case-sensitive
-    parameters.optionxform = lambda option: option
-    #Setting up default values
-    parameters['GENERAL'] = {
-                            "SessionId"     :"", 
-                            "TaskId"        :"", 
-                            "AcquisitionId" :"",
-                            "JsonFile"      :"", 
-                            "OutputFolder"  :".", 
-                            "Conversion"    :"",
-                            "CopySource"    :"yes",
-                            "MemoryUsage"   :"2"
-                            }
-    parameters['LOGGING'] = {
-                            "LogLevel"  :"INFO", 
-                            "LogFile"   :"",
-                            "Quiet"     :"no",
-                            "SplitRuns" :"no"
-                            }
-    parameters['DATATREATMENT'] =   {
-                                    "DropChannels"  :"", 
-                                    "StartTime"     :"", "EndTime"  :"", 
-                                    "StartEvent"    :"", "EndEvent" :"",
-                                    "IgnoreOutOfTimeEvents" :"yes",
-                                    "IncludeSegmentStart"   :"no",
-                                    "MergeCommonEvents"     :"yes",
-                                    }
-    parameters['RUNS'] =    {
-                            "SplitRuns"     :"no",
-                            "MainChannel"   :"", 
-                            "MinSpan"       :"0"
-                            }
-    parameters['ANONYMIZATION'] =   {
-                                    "Anonymize" :"yes",
-                                    "StartDate" :"1973-3-01",
-                                    "SubjName"  :"John Doe",
-                                    "BirthDate" :""
-                                    }
-    parameters['PLUGINS']       =   {
-                                    "Plugin" : ""
-                                    }
-    parameters['BRAINVISION']   =   {
-                                    "Encoding"  :"UTF-8", 
-                                    "DataFormat":"IEEE_FLOAT_32", 
-                                    "Endian"    :"Little"
-                                    }
-    parameters['EDF'] = {
-                        "DataRecordDuration"    :"10"
-                        }
-
-    #Reading configuration file
-    if args.config_file != None:
-        readed = parameters.read(args.config_file[0])
-        if len(readed) == 0:
-            raise FileNotFoundError("Unable to open file "+args.config_file)
+    parameters = cfi.default_parameters()
+    if args.config_file:
+        cfi.read_parameters(parameters, args.config_file[0])
 
     #Overloading values by command-line arguments
     if args.ses      != None: parameters['GENERAL']['SessionId']    = args.ses
@@ -151,6 +57,7 @@ def main(argv):
     if args.conv     != None: parameters['GENERAL']['Conversion']   = args.conv
     if args.infile   != None: parameters['GENERAL']['Path']         = os.path.realpath(args.infile[0])
     if args.outdir   != None: parameters['GENERAL']['OutputFolder'] = os.path.realpath(args.outdir[0])
+    if args.mem      != None: parameters['GENERAL']['MemoryUsage']  = args.mem[0]
     if args.loglevel != None: parameters['LOGGING']['LogLevel']     = args.loglevel
     if args.logfile  != None: parameters['LOGGING']['LogFile']      = args.logfile[0]
     if args.quiet    == True: parameters['LOGGING']['Quiet']        = 'yes'
@@ -158,7 +65,9 @@ def main(argv):
     if parameters['GENERAL']['OutputFolder'][-1] != '/': parameters['GENERAL']['OutputFolder'] += '/'
     if parameters['GENERAL']['Path'][-1] != '/': parameters['GENERAL']['Path'] += '/'
 
-    eegform = None
+    if not cfi.check_configuration(parameters):
+        raise Exception("Errors in configuration file")
+
 
     '''
     Setup logging.
@@ -169,14 +78,15 @@ def main(argv):
     #logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
     logFormatter = logging.Formatter("[%(levelname)-7.7s]:%(asctime)s:%(name)s %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
     Logger = logging.getLogger()
-    Logger.setLevel(getattr(logging, parameters['LOGGING']['LogLevel'], None))
 
-    fileHandler = logging.FileHandler(tmpDir+"logfile")
+    fileHandler = logging.FileHandler(tmpDir+"logfile", mode='w')
     fileHandler.setFormatter(logFormatter)
     Logger.addHandler(fileHandler)
 
+
+    Logger.setLevel(getattr(logging, parameters['LOGGING']['LogLevel'], None))
     if parameters['LOGGING']['LogFile'] != "":
-        fileHandler2 = logging.FileHandler(parameters['LOGGING']['LogFile'])
+        fileHandler2 = logging.FileHandler(parameters['LOGGING']['LogFile'], mode='w')
         fileHandler2.setFormatter(logFormatter)
         Logger.addHandler(fileHandler2)
         
@@ -186,6 +96,7 @@ def main(argv):
         consoleHandler.setFormatter(logFormatter)
         Logger.addHandler(consoleHandler)
 
+    eegform = None
     ANONYM_DATE = None
     ANONYM_NAME = None
     ANONYM_BIRTH= None
@@ -331,7 +242,7 @@ def main(argv):
             if len(flist) != 0:
                 Logger.warning("Found {} files with same identification. They will be removed.".format(len(flist)))
                 for f in flist:
-                    rmdir(f)
+                    tools.rmdir(f)
         else: 
             Logger.info("Creating output directory {}".format(recording.eegPath))
             os.makedirs(recording.eegPath)
@@ -342,7 +253,7 @@ def main(argv):
             if os.path.exists(srcPath):
                 if os.path.exists(srcPath+basename):
                     Logger.warning('"{}" exists in sourcedata directory. It will be erased.'.format(basename))
-                    rmdir(srcPath+basename)
+                    tools.rmdir(srcPath+basename)
                     shutil.rmtree(srcPath+basename)
             else:
                 Logger.info("Creating output directory {}".format(srcPath))
@@ -367,18 +278,32 @@ def main(argv):
 
 
         Logger.info("Reading channels")
+        main_channel = None
+        to_keep = None
+        if parameters["CHANNELS"]["WhiteList"] != "":
+            to_keep = [p.strip() for p in parameters['CHANNELS']['WhiteList'].split(',')]
+        to_drop = None
+        if parameters["CHANNELS"]["BlackList"] != "":
+            to_drop = [p.strip() for p in parameters['CHANNELS']['BlackList'].split(',')]
         if eegform == "embla":
             channels = [EbmChannel(c) for c in glob.glob(parameters['GENERAL']['Path']+"*.ebm")]
-            if parameters["DATATREATMENT"]['DropChannels'] != "":
-                to_drop = [p.strip() for p in parameters['DATATREATMENT']['DropChannels'].split(',')]
-                ch_dropped = [ch.GetId() for ch in channels if ch.GetName() in to_drop]
+            if to_keep:
+                ch_dropped = [ch.GetId() for ch in channels if ch.GetName() not in to_keep]
+                channels = [ch for ch in channels if ch.GetName() in to_keep]
+            if to_drop:
+                ch_dropped += [ch.GetId() for ch in channels if ch.GetName() in to_drop]
                 channels = [ch for ch in channels if ch.GetName() not in to_drop]
             channels.sort()
             ch_dict = dict()
             
             for c in channels:
                 Logger.debug("Channel {}, type {}, Sampling {} Hz".format(c.GetName(), c.GetId(), int(c.GetFrequency())))
-
+                if c.GetName() == parameters['CHANNELS']['MainChannel']:
+                    if main_channel:
+                        Logger.warning('Main channel {} already defined'.format(main_channel.GetName()))
+                    else:
+                        main_channel = c
+                        Logger.debug('Found main channel {}, type {}'.format(main_channel.GetName(), c.GetId()))
                 if c.GetId() in ch_dict:
                     Logger.warning("Channel {} has same Id {} as channel {}".format(c.GetName(), c.GetId(), ch_dict[c.GetId()].GetName() ))
                 else:
@@ -403,6 +328,9 @@ def main(argv):
                     
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
+
+        del to_keep
+        del to_drop
 
         if t_ref == datetime.min:
             t_ref = t_min
@@ -436,6 +364,13 @@ def main(argv):
 
         events = []
         Logger.info("Reading events info")
+        to_keep = None
+        if parameters['EVENTS']['WhiteList'] != '':
+            to_keep = [p.strip() for p in parameters['EVENTS']['WhiteList'].split(',')]
+        to_drop = None
+        if parameters['EVENTS']['BlackList'] != '':
+            to_drop = [p.strip() for p in parameters['EVENTS']['BlackList'].split(',')]
+
         if eegform == "embla":
             for evfile in glob.glob(parameters['GENERAL']['Path']+"*.esedb"):
                 esedb = olefile.OleFileIO(evfile).openstream('Event Store/Events')
@@ -468,6 +403,11 @@ def main(argv):
                             Logger.warning("Can't get event name for index {}".format(ev.AuxDataID))
                             name = ""
 
+                    if to_keep:
+                        if name not in to_keep: continue
+                    if to_drop:
+                        if name in to_drop: continue
+
                     if ch != None and ch in channels:
                         ch_index = channels.index(ch)
                     else:
@@ -489,22 +429,29 @@ def main(argv):
                 esedb.close()
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
+        del to_keep
+        del to_drop
 
         ##Treating events
         if t_ev_min != datetime.max: t_ref = t_ev_min
         if t_ev_max != datetime.min: t_end = t_ev_max
 
-        if parameters.getboolean("DATATREATMENT","IncludeSegmentStart"):
-            for i, ch in enumerate(channels):
-                for t in ch.Time:
-                    ev = GenEvent(Name = "New Segment", Time = t, Duration = 0)
-                    ev.AddChannel(ch.GetId())
+        if parameters.getboolean("EVENTS","IncludeSegmentStart"):
+            if main_channel:
+                for t in range(0, main_channel.GetNsequences()):
+                    ev = GenEvent(Name = "New Segment", 
+                        Time = main_channel.GetSequenceStart(t), 
+                        Duration = main_channel.GetSequenceDuration(t))
+                    ev.AddChannel(main_channel.GetId())
                     if not ev in events:
                         bisect.insort(events,ev)
                     else :
-                        events[events.index(ev)].AddChannel(ch.GetId())
+                        events[events.index(ev)].AddChannel(main_channel.GetId())
+            else:
+                Logger.warning("Main Channel is not defined. Switching off IncludeSegmentStart")
+                parameters["EVENTS"]["IncludeSegmentStart"] = "no"
         
-        if parameters.getboolean("DATATREATMENT","IgnoreOutOfTimeEvents"):
+        if parameters.getboolean("EVENTS","IgnoreOutOfTimeEvents"):
             events = [ev for ev in events if (ev.GetTime() >= t_ref and ev.GetTime() <= t_end) ]
 
         if entry_points[2] in plugins:
@@ -547,18 +494,60 @@ def main(argv):
         for c in channels:
             c.SetFrequencyMultiplyer(int(recording.Frequency/c.GetFrequency()))
             c.SetStartTime(t_ref)
-            if parameters.getboolean("RUNS","SplitRuns"):
-                if c.GetName() == parameters["RUNS"]["MainChannel"]:
-                    for i in range(0, c.GetNsequences()):
-                        span = c.GetSequenceSize(i)/c.GetFrequency()
+        if parameters["RUNS"]["SplitRuns"] == "Channel":
+            if main_channel:
+                for i in range(0, main_channel.GetNsequences()):
+                    span = main_channel.GetSequenceDuration(i)+1
+                    if (span/60) > float(parameters["RUNS"]["MinSpan"]):
+                        ts = max(main_channel.GetSequenceStart(i), t_ref).replace(microsecond=0)
+                        te = min(main_channel.GetSequenceStart(i) + timedelta(seconds=span), t_end).replace(microsecond=0)
+                        if t_ref < te:
+                            time_limits.append([ts, te])
+        elif parameters["RUNS"]["SplitRuns"] == "EventSpan":
+            for opEv in parameters["RUNS"]["OpeningEvents"].split():
+                opEv = opEvstrip()
+                for ev in events:
+                    if ev.GetName() == opEv:
+                        span = ev.GetDuration()+1
                         if (span/60) > float(parameters["RUNS"]["MinSpan"]):
-                            ts = max(c.GetSequenceStart(i), t_ref).replace(microsecond=0)
-                            te = min(c.GetSequenceStart(i) + timedelta(seconds=span), t_end)
+                            ts = max(ev.GetTime(), t_ref).replace(microsecond=0)
+                            te = min(ev.GetTime() + timedelta(seconds=span), t_end).replace(microsecond=0)
                             if t_ref < te:
                                 time_limits.append([ts, te])
+        elif parameters["RUNS"]["SplitRuns"] == "EventLimit":
+            opEvl = parameters["RUNS"]["OpeningEvents"].split(',')
+            clEvl = parameters["RUNS"]["ClosingEvents"].split(',')
+            for opEv,clEv in zip(opEvl, clEvl):
+                opEv = opEv.strip()
+                clEv = clEv.strip()
+                l_t  = None
+                r_t  = None
+                l_c  = 0
+                for ev in events:
+                    if ev.GetName() == opEv and l_c == 0:
+                        l_t = ev.GetTime().replace(microsecond=0)
+                        l_c = 1
+                    elif ev.GetName() == clEv:
+                        if l_c == 0:
+                            Logger.warning("Extra closing event {} at {}".format(clEv, ev.GetTime()))
+                            break
+                        l_c -= 1
+                        if l_c == 0:
+                            r_t = ev.GetTime().replace(microsecond=0,second = ev.GetTime().second+1)
+                            if (r_t - l_t).total_seconds()/60 < float(parameters["RUNS"]["MinSpan"]):
+                                continue
+                            if l_t < t_end and r_t > t_ref:
+                                if l_t < t_ref: l_t = t_ref
+                                if r_t > t_end: r_t = t_end
+                                time_limits.append([l_t, r_t]) 
+                    elif ev.GetName() == opEv:
+                        l_c += 1
+                if l_c != 0:
+                    Logger.warning("Unclosed event {} at {}".format(opEv, l_t))
+
         if len(time_limits) == 0:
-            if parameters.getboolean("RUNS","SplitRuns"):
-                raise Exception("Unable to find main channel '{}', needed to split into runs".format(parameters["RUNS"]["MainChannel"]))
+            if parameters["RUNS"]["SplitRuns"] != "":
+                raise Exception("No valid runs found")
             time_limits.append([t_ref, t_end])
         
         if entry_points[3] in plugins:
@@ -585,7 +574,7 @@ def main(argv):
             t_ref = t[0]
             t_end = t[1]
             run = ""
-            if parameters.getboolean("RUNS","SplitRuns"):
+            if parameters["RUNS"]["SplitRuns"] != "":
                 run = str(count+1)
                 Logger.info("Run {}: duration: {}".format(run, t_end - t_ref))
             
@@ -608,7 +597,7 @@ def main(argv):
                         sep='\t', file = f
                         )
                 for ev in events:
-                    if ev.GetChannelsSize() == 0 or parameters.getboolean("DATATREATMENT","MergeCommonEvents"):
+                    if ev.GetChannelsSize() == 0 or parameters.getboolean("EVENTS","MergeCommonEvents"):
                         print   (  
                                 "%.3f\t%.2f\t%s\tn/a\tn/a\t%d" %(
                                     ev.GetOffset(t_ref), ev.GetDuration(), 
@@ -651,7 +640,7 @@ def main(argv):
                 Logger.info("Writting proper events")
                 outData.MarkerFile.AddMarker("New Segment", t_ref, 0, -1, "")
                 for ev in events:
-                    if (ev.GetChannelsSize() == 0) or parameters.getboolean("DATATREATMENT","MergeCommonEvents"):
+                    if (ev.GetChannelsSize() == 0) or parameters.getboolean("EVENTS","MergeCommonEvents"):
                         outData.MarkerFile.AddMarker(ev.GetName(ToReplace = (",","\1")), ev.GetTime(), ev.GetDuration(), -1, "")
                     else:
                         for c in ev.GetChannels():
@@ -669,10 +658,10 @@ def main(argv):
                 mem_remained = mem_requested - mem_used
                 t_step = int(mem_remained/mem_1s)
                 Logger.debug("Memory used: {}, Memory requested: {}, Memory remined: {}".format(
-                        humanbytes(mem_used), 
-                        humanbytes(mem_requested),
-                        humanbytes(mem_remained)))
-                Logger.debug("1s time worth: {}".format(humanbytes(mem_1s)))
+                        tools.humanbytes(mem_used), 
+                        tools.humanbytes(mem_requested),
+                        tools.humanbytes(mem_remained)))
+                Logger.debug("1s time worth: {}".format(tools.humanbytes(mem_1s)))
                 Logger.debug("Time step:{}".format(timedelta(seconds=t_step)))
                 while True:
                     t_s = t_e
@@ -730,7 +719,7 @@ def main(argv):
 
                 Logger.info("Creating events.edf file")
                 for ev in events:
-                    if (ev.GetChannelsSize() == 0) or parameters.getboolean("DATATREATMENT","MergeCommonEvents"):
+                    if (ev.GetChannelsSize() == 0) or parameters.getboolean("EVENTS","MergeCommonEvents"):
                         outData.AddEvent(ev.GetName(), ev.GetTime(), ev.GetDuration(), -1, "")
                     else:
                         for c in ev.GetChannels():
@@ -748,10 +737,10 @@ def main(argv):
                 mem_remained = mem_requested - mem_used
                 t_step = int(mem_remained/mem_1s)
                 Logger.debug("Memory used: {}, Memory requested: {}, Memory remined: {}".format(
-                        humanbytes(mem_used), 
-                        humanbytes(mem_requested),
-                        humanbytes(mem_remained)))
-                Logger.debug("Memory expected for 1s: {}".format(humanbytes(mem_1s)))
+                        tools.humanbytes(mem_used), 
+                        tools.humanbytes(mem_requested),
+                        tools.humanbytes(mem_remained)))
+                Logger.debug("Memory expected for 1s: {}".format(tools.humanbytes(mem_1s)))
                 Logger.debug("Time step:{}".format(timedelta(seconds=t_step)))
                 if t_step%outData.RecordDuration != 0:
                     t_step = outData.RecordDuration*(t_step//outData.RecordDuration+1)
@@ -816,10 +805,10 @@ def main(argv):
                 mem_remained = mem_requested - mem_used
                 t_step = int(mem_remained/mem_1s)
                 Logger.debug("Memory used: {}, Memory requested: {}, Memory remined: {}".format(
-                        humanbytes(mem_used), 
-                        humanbytes(mem_requested),
-                        humanbytes(mem_remained)))
-                Logger.debug("1s time worth: {}".format(humanbytes(mem_1s)))
+                        tools.humanbytes(mem_used), 
+                        tools.humanbytes(mem_requested),
+                        tools.humanbytes(mem_remained)))
+                Logger.debug("1s time worth: {}".format(tools.humanbytes(mem_1s)))
                 Logger.debug("Time step:{}".format(timedelta(seconds=t_step)))
                 while True:
                     t_s = t_e
@@ -899,7 +888,7 @@ def main(argv):
             flist = glob.glob(recording.eegPath+recording.Prefix(app="*"))
             if len(flist) != 0:
                 for f in flist:
-                    rmdir(f)
+                    tools.rmdir(f)
         Logger.info("Command: "+" ".join(argv))
 
 
@@ -911,7 +900,7 @@ def main(argv):
             shutil.copy2(tmpDir+"/logfile", recording.eegPath+recording.Prefix(app=".log"))
             shutil.copy2(tmpDir+"/configuration", recording.eegPath+recording.Prefix(app=".ini")) 
             fileHandler.close()
-            rmdir(tmpDir)
+            tools.rmdir(tmpDir)
             shutil.rmtree(tmpDir)
         else:
             Logger.warning("Output path is not defined. See in "+tmpDir+"logfile for more details.")
