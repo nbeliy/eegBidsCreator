@@ -6,7 +6,7 @@ in_path='/Storage/beliy/COGNAP/Incoming'
 out_path='/Storage/beliy/COGNAP/Outcoming/'
 q_path='/Storage/beliy/COGNAP/Quarantine/'
 bk_path='/Storage/beliy/COGNAP/Backup/'
-ini_file='/Storage/beliy/COGNAP/Configuration/TestCOG.ini'
+ini_file='/Storage/beliy/COGNAP/Configuration/Configurationfile_EEGBIDS_COGNAP.ini'
 json_file='/Storage/beliy/COGNAP/Configuration/COG_'
 log_path='/Storage/beliy/COGNAP/Log/'
 

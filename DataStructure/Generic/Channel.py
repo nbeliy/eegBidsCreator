@@ -1,5 +1,6 @@
 import math
 from datetime import datetime
+from datetime import timedelta
 
 class GenChannel(object):
     """An intendent virtual class serving as parent to other, format specific channel classes"""
@@ -239,7 +240,7 @@ class GenChannel(object):
     def GetSequenceStart(self, seq = 0):
         return self._seqStartTime[seq]
     def GetSequenceEnd(self, seq = 0):
-        return self._seqStartTime[seq]+timedelta(seconds=self._seqSize[seq]*self._frequency)
+        return self._seqStartTime[seq]+timedelta(seconds=self.GetSequenceDuration(seq))
     
 
     """Returns the size (number of measurements) in given sequence"""
