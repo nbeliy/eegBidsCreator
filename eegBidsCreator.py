@@ -339,7 +339,7 @@ def main(argv):
                 t_ref = t_min
         if t_end == datetime.min or t_end < t_max:
             if main_channel:
-                t_ref = main_channel.GetSequenceEnd(-1)
+                t_end = main_channel.GetSequenceEnd(-1)
             else:
                 t_end = t_max
             
