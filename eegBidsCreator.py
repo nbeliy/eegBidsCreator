@@ -333,9 +333,15 @@ def main(argv):
         del to_drop
 
         if t_ref == datetime.min:
-            t_ref = t_min
+            if main_channel:
+                t_ref = main_channel.GetSequenceStart(0)
+            else:
+                t_ref = t_min
         if t_end == datetime.min or t_end < t_max:
-            t_end = t_max
+            if main_channel:
+                t_ref = main_channel.GetSequenceEnd(-1)
+            else:
+                t_end = t_max
             
         if entry_points[1] in plugins:
             try:
