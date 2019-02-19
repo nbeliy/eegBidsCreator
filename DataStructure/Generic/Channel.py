@@ -238,6 +238,9 @@ class GenChannel(object):
     """Returns the start time of the ith sequence"""
     def GetSequenceStart(self, seq = 0):
         return self._seqStartTime[seq]
+    def GetSequenceEnd(self, seq = 0):
+        return self._seqStartTime[seq]+timedelta(seconds=self._seqSize[seq]*self._frequency)
+    
 
     """Returns the size (number of measurements) in given sequence"""
     def GetSequenceSize(self, seq = 0):
