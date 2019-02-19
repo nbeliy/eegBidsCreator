@@ -1,5 +1,6 @@
 import math
 from datetime import datetime
+from datetime import timedelta
 
 class GenChannel(object):
     """An intendent virtual class serving as parent to other, format specific channel classes"""
