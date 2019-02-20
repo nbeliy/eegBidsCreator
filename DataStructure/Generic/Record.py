@@ -1,9 +1,10 @@
 from datetime import datetime
 import glob, os
 import logging
+import bisect
 
-import DataStructure.Generic.Channel import GenChannel as Channel
-import DataStructure.Generic.Event import GenEvent as Event
+from DataStructure.Generic.Channel import GenChannel as Channel
+from DataStructure.Generic.Event   import GenEvent   as Event
 
 Logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ class Record(object):
             "__MinTime", "__MaxTime", #Time where the first and last data point are taken
             "__RefTime", "__EndTime", #Time limits concidered for confertion
             "__task", "__acquisition", "__session",
-            "Channels", "_chDict", "_dropped","_mainChanneal",
+            "Channels", "_chDict", "_dropped","_mainChannel",
             "Events",
             "__Frequency",
             "__path", "__prefix",
@@ -104,6 +105,7 @@ class Record(object):
         self.ResetPath()
 
         self.Channels       = list()
+        self._mainChannel   = None
         self.Events         = list()
         self._chDict        = dict()
         self._dropped       = list()
@@ -238,7 +240,7 @@ class Record(object):
         self.__StopTime   = t_end
         return (self.__StartTime, self.__StopTime)
 
-    def SetReferenceTime(iself, t_ref = None, t_end = None):
+    def SetReferenceTime(self, t_ref = None, t_end = None):
         """Setes the reference times to given values.
         If no values given, set to (in oreder):
         recording time, or main channel times, or min/max times
@@ -250,16 +252,16 @@ class Record(object):
             self.__RefTime = t_ref
         elif self.__StartTime:
             self.__RefTime = self.__StartTime
-        elif self._mainChanneal:
-            self.__RefTime = self._mainChanneal.GetSequenceStart(0)
+        elif self._mainChannel:
+            self.__RefTime = self._mainChannel.GetSequenceStart(0)
         else:
             self.__RefTime = self.__MinTime
         if t_end:
             self.__EndTime = t_end
         elif self.__StopTime:
             self.__EndTime = self.__StopTime
-        elif self._mainChanneal:
-            self.__EndTime = self._mainChanneal.GetSequenceEnd(-1)
+        elif self._mainChannel:
+            self.__EndTime = self._mainChannel.GetSequenceEnd(-1)
         else:
             self.__EndTime = self.__MinTime
         return (self.__RefTime, self.__EndTime)
@@ -286,7 +288,7 @@ class Record(object):
     def GetStopTime(self, striso=False):
         """Return the stop time of recording as it written in metadata.
         if striso set to True, returns an iso formated string"""
-        return self._returnTime(self.__StopTime. striso)
+        return self._returnTime(self.__StopTime, striso)
     def GetMaxTime(self, striso=False):
         """Return the time of first data point.
         if striso set to True, returns an iso formated string"""
@@ -296,7 +298,7 @@ class Record(object):
         if striso set to True, returns an iso formated string"""
         return self._returnTime(self.__MinTime, striso)
 
-    def GetReftime(self, striso=False):
+    def GetRefTime(self, striso=False):
         """Return reference start time.
         if striso set to True, returns an iso formated string"""
         return self._returnTime(self.__RefTime, striso)
@@ -305,8 +307,8 @@ class Record(object):
         if striso set to True, returns an iso formated string"""
         return self._returnTime(self.__EndTime, striso)
 
-    def _returnTime(time, striso):
-        if if striso:
+    def _returnTime(self, time, striso):
+        if striso:
             if time:  
                 return time.isoformat()
             else:
@@ -348,7 +350,7 @@ class Record(object):
             self.JSONdata["HeadCircumference"] = self.SubjectInfo.Head
         self.JSONdata["SamplingFrequency"] = self.__Frequency
         if not ("RecordingDuration" in self.JSONdata):
-            self.JSONdata["RecordingDuration"] = round((self.__StopTime - self.__StartTime).total_seconds(),1)
+            self.JSONdata["RecordingDuration"] = round((self.__EndTime - self.__RefTime).total_seconds(),1)
         counter = {"EEGChannelCount":0, "EOGChannelCount":0, 
                     "ECGChannelCount":0, "EMGChannelCount":0, 
                     "MiscChannelCount":0}
@@ -381,10 +383,10 @@ class Record(object):
     def __addChannel(self, c, white_list=[], black_list=[]):
         if not isinstance(c, Channel):
             raise TypeError("Variable {} is not of a channel type".format(c))
-        if black_list != [] and c.GetName() in black_list: 
+        if black_list != [] and (c.GetName() in black_list): 
             self._dropped.append(c.GetName())
             return
-        if white_list == [] or ( c.GetName in  white_list ):
+        if white_list == [] or ( c.GetName() in  white_list ):
             self.Channels.append(c)
             Logger.debug("Channel {}, type {}, Sampling {} Hz".format(
                 c.GetName(), c.GetId(), int(c.GetFrequency())))
@@ -394,24 +396,24 @@ class Record(object):
     def SetMainChannel(self, chan_name = ""):
         if not isinstance(chan_name, str):
             raise TypeError("Chan_name must be a string")
-        self._mainChanneal = None
+        self._mainChannel = None
         if chan_name != "":
             for c in self.Channels:
                 if c.GetName() == chan_name:
-                    self._mainChanneal = c
+                    self._mainChannel = c
                     Logger.debug('Found main channel {}, type {}'.format(
-                        main_channel.GetName(), c.GetId()))
+                        c.GetName(), c.GetId()))
                     break
-            if not self._mainChanneal:
+            if not self._mainChannel:
                 Logger.warning("Unable find main channel "+chan_name)
-        return self._mainChanneal
+        return self._mainChannel
     def GetMainChannel(self):
         return self._mainChannel
 
 
     def InitChannels(self, resetFrequency=False):
         """Sort, rebuild and updates dictionary, frequency and min/max times"""
-        #Sorting by ID
+        #Sorting by Id
         self.Channels.sort()
         #Rebuilding dictionary and min/max time
         self._chDict =  dict()
@@ -424,13 +426,13 @@ class Record(object):
                 Logger.warning("Channel {} has same Id {} as channel {}".format(
                         c.GetName(), c.GetId(), self._chDict[c.GetId()].GetName() ))
             else:
-                self._chDict[c.GetID()] = c
+                self._chDict[c.GetId()] = c
             if c.GetSequenceStart(0) < self.__MinTime:
                 self.__MinTime = c.GetSequenceStart(0)
                 Logger.debug('Updated min time to {} from {}'.format(
                     self.__MinTime.isoformat(), c.GetName()))
             if c.GetSequenceEnd(-1) > self.__MaxTime:
-                self.__MaxTime: = c.GetSequenceEnd(-1)
+                self.__MaxTime = c.GetSequenceEnd(-1)
                 Logger.debug('Updated max time to {} from {}'.format(
                     self.__MaxTime.isoformat(), c.GetName()))
             if c.GetFrequency() != self.__Frequency:
@@ -477,23 +479,23 @@ class Record(object):
         if t_high == datetime.min or t_high == datetime.max: t_high = None
 
         if not t_low : t_low = self.__RefTime
-        if not t_high: t_high = self.__Endtime
+        if not t_high: t_high = self.__EndTime
 
         return [ev for ev in self.Events if (ev.GetTime() >= t_low and ev.GetTime() <= t_high )]
 
-    def GetRunsByEvents(self, openingEvents=[], closingEvents=[], min_span = 0):
+    def GetRuns(self, openingEvents=[], closingEvents=[], min_span = 0):
         res = []
         #Getting runs by main channel
         if openingEvents==[] and closingEvents==[]:
             if self._mainChannel == None:
                 raise Exception("Main channel not defined")
-            for i in range(0, self._mainChannelGetNsequences())
-                span = self._mainChannel.GetSequenceDuration(i)+1
+            for i in range(0, self._mainChannelGetNsequences()):
+                span = self._mainChannel.GetSequenceDuration(i)
                 if span > min_span:
                     ts, te = self.TimeIntersect(self._mainChannel.GetSequenceStart(i), 
                                 self._mainChannel.GetSequenceStart(i) + timedelta(seconds=span))
                     if te > ts:
-                        res.append([ts.replace(microsecond=0),te.replace(microsecond=0)])
+                        res.append([ts,te])
         #Getting runs by event and span
         if openingEvents!=[] and closingEvents==[]:
             for opEv in openingEvents:
@@ -503,7 +505,7 @@ class Record(object):
                         if span > min_span:
                             ts, te = self.TimeIntersect(ev.GetTime(), ev.GetTime() + timedelta(seconds=span))
                             if te > ts:
-                                res.append([ts.replace(microsecond=0),te.replace(microsecond=0)])
+                                res.append([ts,te])
         #Getting by opening and closing events
         if openingEvents!=[] and closingEvents!=[]:
             for opEv,clEv in zip(openingEvents, closingEvents):
@@ -512,7 +514,7 @@ class Record(object):
                 l_c = 0
                 for ev in self.Events:
                     if ev.GetName() == opEv and l_c == 0:
-                        l_t = ev.GetTime().replace(microsecond=0)
+                        l_t = ev.GetTime()
                         l_c = 1
                     elif ev.GetName() == clEv:
                         if l_c == 0:
@@ -520,12 +522,12 @@ class Record(object):
                             break
                         l_c -= 1
                         if l_c == 0:
-                            r_t = ev.GetTime().replace(microsecond=0,second = ev.GetTime().second+1)
-                            if (r_t - l_t).total_seconds() < min_span
+                            r_t = ev.GetTime()
+                            if (r_t - l_t).total_seconds() < min_span:
                                 continue
-                                l_t, r_t = self.TimeIntersect(l_t, r_t)
-                                if l_t > r_t:
-                                    res.append([l_t.replace(microsecond=0),r_t.replace(microsecond=0)])
+                            l_t, r_t = self.TimeIntersect(l_t, r_t)
+                            if l_t < r_t:
+                                res.append([l_t,r_t])
                     elif ev.GetName() == opEv:
                         l_c += 1
                 if l_c != 0:
