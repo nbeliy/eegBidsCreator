@@ -266,18 +266,18 @@ def main(argv):
         t_ev_min= datetime.max
         t_ev_max= datetime.min
 
-        if t_ref == datetime.min:
+        if not recording.GetStartTime():
             Logger.warning("Unable to get StartTime of record. Will be set to first data point.")
-        if t_end == datetime.min:
+        if not recording.GetStopTime():
             Logger.warning("Unable to get EndTime of record. Will be set to last data point.")
 
 
         Logger.info("Reading channels")
         main_channel = None
-        to_keep = None
+        to_keep = []
         if parameters["CHANNELS"]["WhiteList"] != "":
             to_keep = [p.strip() for p in parameters['CHANNELS']['WhiteList'].split(',')]
-        to_drop = None
+        to_drop = []
         if parameters["CHANNELS"]["BlackList"] != "":
             to_drop = [p.strip() for p in parameters['CHANNELS']['BlackList'].split(',')]
 
@@ -286,8 +286,14 @@ def main(argv):
         else:
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
 
-        recording.AddChannels(channels, whitelist=to_keep, black_list=to_drop)           
-        recording.SetMainChannel(parameters["Channels"]["MainChannel"])
+        recording.AddChannels(channels, white_list=to_keep, black_list=to_drop)           
+        recording.SetMainChannel(parameters["CHANNELS"]["MainChannel"])
+        if recording.GetStartTime() and recording.GetStopTime():
+            ddt = recording.GetMaxTime() - recording.GetMinTime()
+            ddt -= recording.GetStopTime() - recording.GetStartTime()
+            if abs(ddt.total_seconds()) > 3600:
+                Logger.warning("Record duration is shorter by {} than data taking. Updating Start and Stop times".format(ddt))
+                recording.SetStartTime(recording.GetMinTime(), recording.GetMaxTime())
         t_ref, t_end = recording.SetReferenceTime()
             
         if entry_points[1] in plugins:
@@ -304,11 +310,11 @@ def main(argv):
             raise ValueError("Unable to determine reference times")
 
         Logger.debug("Start time: {}, Stop time: {}".format(
-                recording.GetStartTime(True), recording.GetStopTime(True))
+            recording.GetStartTime(True), recording.GetStopTime(True)))
         Logger.debug("Earliest time: {}, Latest time: {}".format(
-                recording.GetMinTime(True), recording.GetMaxTime(True))
+            recording.GetMinTime(True), recording.GetMaxTime(True)))
         Logger.debug("Ref start time: {}, ref end time: {}".format(
-                recording.GetRefTime(True), recording.GetEndTime(True))
+            recording.GetRefTime(True), recording.GetEndTime(True)))
         Logger.info("Duration: {}".format(t_end - t_ref))
 
         t_l = None
@@ -329,10 +335,10 @@ def main(argv):
 
         events = []
         Logger.info("Reading events info")
-        to_keep = None
+        to_keep =  []
         if parameters['EVENTS']['WhiteList'] != '':
             to_keep = [p.strip() for p in parameters['EVENTS']['WhiteList'].split(',')]
-        to_drop = None
+        to_drop = []
         if parameters['EVENTS']['BlackList'] != '':
             to_drop = [p.strip() for p in parameters['EVENTS']['BlackList'].split(',')]
 
@@ -379,14 +385,14 @@ def main(argv):
             raise Exception("EEG format {} not implemented (yet)".format(eegform))
 
         ##Treating events
-        if t_ev_min or t_ev_mac:
-            t_ev_min, t_ev_mac = recording.CropTime(t_ev_min, t_ev_mac)
+        if t_ev_min or t_ev_max:
+            t_ev_min, t_ev_max = recording.CropTime(t_ev_min, t_ev_max)
             if t_ev_min != t_ref:
                 Logger.info("Cropping start time by {}".format(t_ev_min - t_ref))
                 t_ref = t_ev_min
-            if t_ev_mac != t_end:
-                Logger.info("Cropping end time by {}".format(t_end - t_ev_mac))
-                t_end = t_ev_mac
+            if t_ev_max != t_end:
+                Logger.info("Cropping end time by {}".format(t_end - t_ev_max))
+                t_end = t_ev_max
             Logger.info("New duration: {}".format(t_end - t_ref))
 
         if parameters.getboolean("EVENTS","IncludeSegmentStart"):
@@ -429,25 +435,22 @@ def main(argv):
                 Logger.warning("JSON: Contains next non BIDS fields: "+ str(res[3]))
             json.dump(recording.JSONdata, f, skipkeys=False, indent="  ", separators=(',',':'))
 
-        #Rounding t_ref to seconds
-        t_ref = t_ref.replace(microsecond=0)
-        t_end = t_end.replace(microsecond=0, second=t_end.second+1)
         #Updating channels frequency multiplier and starting time
         for c in recording.Channels:
             c.SetFrequencyMultiplyer(int(recording.Frequency/c.GetFrequency()))
-            c.SetStartTime(t_ref)
+            #c.SetStartTime(t_ref)
 
         time_limits = None
         if parameters["RUNS"]["SplitRuns"] == "Channel":
-            time_limits = recording.GetRunsByEvents(min_span=60*float(parameters["RUNS"]["MinSpan"]))
+            time_limits = recording.GetRuns(min_span=60*float(parameters["RUNS"]["MinSpan"]))
         elif parameters["RUNS"]["SplitRuns"] == "EventSpan":
-            opEvl = [opEv.strip() for opEv in parameters["RUNS"]["OpeningEvents"].split()]
-            time_limits = recording.GetRunsByEvents(openingEvents=opEvl, 
+            opEvl = [opEv.strip() for opEv in parameters["RUNS"]["OpeningEvents"].split(',')]
+            time_limits = recording.GetRuns(openingEvents=opEvl, 
                     min_span=60*float(parameters["RUNS"]["MinSpan"]))
         elif parameters["RUNS"]["SplitRuns"] == "EventLimit":
-            opEvl = [opEv.strip() for opEv in parameters["RUNS"]["OpeningEvents"].split()]
-            clEvl = [clEv.strip() for clEv in parameters["RUNS"]["ClosingEvents"].split()]
-            time_limits = recording.GetRunsByEvents(
+            opEvl = [opEv.strip() for opEv in parameters["RUNS"]["OpeningEvents"].split(',')]
+            clEvl = [clEv.strip() for clEv in parameters["RUNS"]["ClosingEvents"].split(',')]
+            time_limits = recording.GetRuns(
                     openingEvents=opEvl, closingEvents=clEvl,
                     min_span=60*float(parameters["RUNS"]["MinSpan"]))
         else: time_limits = [[t_ref, t_end]]
@@ -476,8 +479,22 @@ def main(argv):
             mem_1s = 32*len(channels)*recording.Frequency
 
         for count,t in enumerate(time_limits):
-            t_ref = t[0]
-            t_end = t[1]
+            t_ref = t[0].replace(microsecond=0)
+            t_end = t[1].replace(microsecond=0, second=t[1].second+1)
+
+            #Getting list of channels and events
+            channels = recording.Channels
+
+            if parameters["EVENTS"].getboolean("IgnoreOutOfTimeEvents"):
+                events = recording.EventsInTime(t_ref, t_end)
+            else:
+                events = recording.EventsInTime()
+
+            # Updating channels reference time
+            for c in recording.Channels:
+                c.SetStartTime(t_ref)
+
+            #Run definition
             run = ""
             if parameters["RUNS"]["SplitRuns"] != "":
                 run = str(count+1)
@@ -794,7 +811,7 @@ def main(argv):
             if len(flist) != 0:
                 for f in flist:
                     tools.rmdir(f)
-        Logger.info("Command: "+" ".join(argv))
+        Logger.info("Command: '" + "' '".join(argv)+"'")
 
 
     try:
