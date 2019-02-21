@@ -2,6 +2,7 @@ VERSION = '0.65r1'
 
 import logging, argparse, os, json, glob, olefile, traceback
 import tempfile, bisect
+import warnings
 from datetime import datetime, timedelta
 import time as tm
 import importlib.util
@@ -57,7 +58,7 @@ def main(argv):
     if args.conv     != None: parameters['GENERAL']['Conversion']   = args.conv
     if args.infile   != None: parameters['GENERAL']['Path']         = os.path.realpath(args.infile[0])
     if args.outdir   != None: parameters['GENERAL']['OutputFolder'] = os.path.realpath(args.outdir[0])
-    if args.mem      != None: parameters['GENERAL']['MemoryUsage']  = args.mem[0]
+    if args.mem      != None: parameters['GENERAL']['MemoryUsage']  = str(args.mem[0])
     if args.loglevel != None: parameters['LOGGING']['LogLevel']     = args.loglevel
     if args.logfile  != None: parameters['LOGGING']['LogFile']      = args.logfile[0]
     if args.quiet    == True: parameters['LOGGING']['Quiet']        = 'yes'
@@ -73,7 +74,11 @@ def main(argv):
     Setup logging.
     Logfile will be stored into temporary directory first, then moved to output directory.
     '''
-    tmpDir = tempfile.mkdtemp(prefix=argv[0].replace("/","_")+"_")+"/"
+    try:
+        tmpDir = tempfile.mkdtemp(prefix=argv[0].replace("/","_")+"_")+"/"
+    except:
+        warnings.warn("TMPDIR: Failed to create temporary directory. Will try current directory")
+        tmpDir = tempfile.mkdtemp(prefix=argv[0].replace("/","_")+"_",dir=".")+"/"
 
     #logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
     logFormatter = logging.Formatter("[%(levelname)-7.7s]:%(asctime)s:%(name)s %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
@@ -127,7 +132,6 @@ def main(argv):
         f_list = dir(itertools)
         for ep in entry_points:
             if ep in f_list and callable(getattr(itertools,ep)):
-                inspect.getargspec(getattr(itertools,ep))[0]#This returns the list of parameters
                 Logger.debug("Entry point {} found".format(ep))
                 plugins[ep] = getattr(itertools,ep)
         if len(plugins) == 0:

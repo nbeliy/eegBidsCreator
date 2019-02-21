@@ -263,7 +263,7 @@ class Record(object):
         elif self._mainChannel:
             self.__EndTime = self._mainChannel.GetSequenceEnd(-1)
         else:
-            self.__EndTime = self.__MinTime
+            self.__EndTime = self.__MaxTime
         return (self.__RefTime, self.__EndTime)
 
     def CropTime(self, t_low = None, t_high = None):
