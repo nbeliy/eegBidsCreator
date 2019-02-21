@@ -104,9 +104,6 @@ def check_configuration(parameters):
         passed = False
 
     if parameters["RUNS"]["SplitRuns"] != "":
-        if parameters["EVENTS"].getboolean("IgnoreOutOfTimeEvents"):
-            print("EVENTS: IgnoreOutOfTimeEvents is incompatible with SplitRuns")
-            passed = False
         if parameters["RUNS"]["SplitRuns"] == "Channel":
             if parameters["CHANNELS"]["MainChannel"] == "":
                 print("RUNS: Splitting by channel, but MainChannel is not defined")
@@ -119,7 +116,7 @@ def check_configuration(parameters):
             opEvl = parameters["RUNS"]["OpeningEvents"].split(',')
             clEvl = parameters["RUNS"]["ClosingEvents"].split(',')
             if len(opEvl) == 0 or len(opEvl) != len(clEvl):
-                print("RUNS: Splitting by event start and end but Event and/or EndEvent mismuch dimensions") 
+                print("RUNS: Splitting by event start and end but Event and/or EndEvent mismatch dimensions") 
                 passed = False
         else :
             print("RUNS: Invalid run splitting mode: "+parameters["RUNS"]["SplitRuns"])
