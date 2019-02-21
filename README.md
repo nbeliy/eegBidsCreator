@@ -51,6 +51,14 @@ optional arguments:
 Several options are accessible by the configuration file, which is loaded by `-c <configuration file>`.
 The file follows a standard `ini` structture, with parameters and possible values are explained in the example file `eegBidsCreator.ini`. The parameters specification priority are as follows: `default < conf < cmd line`
 
+**Windows**
+Windows in all its glory uses `\n\r` as EOL character. The text files written under the Windows are compatible with Nix platforms, but Nix text files are not.
+
+In order to convert one Linux EOL to Windows, one can do in DOS prompt:
+```
+TYPE input_filename | MORE /P > output_filename
+``` 
+
 ### Example
 
 `python3 eegBidsCreator.py -t my_task "data_example/embla_data/" --log DEBUG BrainVision --format INT_16`

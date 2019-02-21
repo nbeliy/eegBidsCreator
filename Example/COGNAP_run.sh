@@ -13,7 +13,7 @@ log_path='/Storage/beliy/COGNAP/Log/'
 run(){
   base=`basename "$1"`
   python3 eegBidsCreator.py -c $ini_file -j $json_file -o $out_path \
-      -q --logfile $log_path/$base.log $1
+      -q --logfile $log_path/$base.log --log DEBUG $1
   retval=$?
 }
 
