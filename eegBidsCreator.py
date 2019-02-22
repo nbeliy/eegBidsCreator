@@ -744,41 +744,49 @@ def main(argv):
 
                 mem_used = process.memory_info().rss
                 mem_remained = mem_requested - mem_used
-                t_step = int(mem_remained/mem_1s)
+                t_step = int(mem_remained / mem_1s)
                 Logger.debug("Memory used: {}, Memory requested: {}, Memory remined: {}".format(
                         tools.humanbytes(mem_used), 
                         tools.humanbytes(mem_requested),
                         tools.humanbytes(mem_remained)))
                 Logger.debug("Memory expected for 1s: {}".format(tools.humanbytes(mem_1s)))
                 Logger.debug("Time step:{}".format(timedelta(seconds=t_step)))
-                if t_step%outData.RecordDuration != 0:
-                    t_step = outData.RecordDuration*(t_step//outData.RecordDuration+1)
-                t_count= 1
+                if t_step % outData.RecordDuration != 0:
+                    t_step = outData.RecordDuration \
+                             * (t_step // outData.RecordDuration + 1)
+                t_count = 1
                 while True:
                     t_s = t_e
-                    t_e = t_e + timedelta(0,t_step,0)
+                    t_e = t_e + timedelta(0, t_step, 0)
                     if t_s >= t_end: break
                     if t_e > t_end: 
                         t_e = t_end
                         t_step = (t_e - t_s).total_seconds()
-                        if t_step%outData.RecordDuration != 0:
-                            t_step = outData.RecordDuration*(t_step//outData.RecordDuration+1)
+                        if t_step % outData.RecordDuration != 0:
+                            t_step = outData.RecordDuration \
+                                * (t_step // outData.RecordDuration + 1)
                             t_e = t_s + timedelta(0,t_step,0)
 
-                    Logger.info("Timepoint {}: Duration {}".format(t_count,t_e -t_s))
-                    Logger.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
+                    Logger.info("Timepoint {}: Duration {}".format(t_count,t_e - t_s))
+                    Logger.debug("From {} to {} ({})sec.".format(
+                            t_s.isoformat(), t_e.isoformat(), 
+                            (t_e - t_s).total_seconds()))
                     l_data = []
                     for ch in channels:
-                        l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=1, raw = True ))
+                        l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=1, raw=True))
 
                     if entry_points[4] in plugins:
                         try:
                             result = 0
-                            result = plugins[entry_points[4]](channels,l_data,argv_plugin, parameters.items("PLUGINS"))
+                            result = plugins[entry_points[4]](
+                                        channels, l_data, argv_plugin, 
+                                        parameters.items("PLUGINS"))
                             if result != 0:
-                                raise Exception("Plugin {} returned code {}".format(entry_points[4], result))
+                                raise Exception(
+                                        "Plugin {} returned code {}"
+                                        .format(entry_points[4], result))
                         except:
-                            ex_code = 100+40+result
+                            ex_code = 100 + 40 + result
                             raise
 
                     outData.WriteDataBlock(l_data, t_s)
@@ -789,10 +797,12 @@ def main(argv):
                         recording.Prefix(run=run,app="_eeg.edf"), 
                         t_ref.isoformat()))
 
-            #Matlab SPM12 eeg format
+            # Matlab SPM12 eeg format
             elif parameters['GENERAL']["Conversion"] == "MEEG":
                 Logger.info("Converting to Matlab SPM format")
-                outData = MEEG(recording.eegPath, recording.Prefix(run=run), AnonymDate=ANONYM_DATE)
+                outData = MEEG(recording.eegPath,
+                               recording.Prefix(run=run),
+                               AnonymDate=ANONYM_DATE)
                 outData.SetStartTime(t_ref)
                 outData.SetDuration((t_end - t_ref).total_seconds())
                 outData.AddFrequency(recording.Frequency)
@@ -808,16 +818,18 @@ def main(argv):
 
                 Logger.info("Creating eeg.dat file")
                 t_e = t_ref
-                t_count= 1
+                t_count = 1
 
                 mem_used = process.memory_info().rss
                 mem_remained = mem_requested - mem_used
-                t_step = int(mem_remained/mem_1s)
-                Logger.debug("Memory used: {}, Memory requested: {}, Memory remined: {}".format(
-                        tools.humanbytes(mem_used), 
-                        tools.humanbytes(mem_requested),
-                        tools.humanbytes(mem_remained)))
-                Logger.debug("1s time worth: {}".format(tools.humanbytes(mem_1s)))
+                t_step = int(mem_remained / mem_1s)
+                Logger.debug(
+                    "Memory used: {}, Memory requested: {}, Memory remined: {}"
+                    .format(tools.humanbytes(mem_used), 
+                            tools.humanbytes(mem_requested),
+                            tools.humanbytes(mem_remained)))
+                Logger.debug("1s time worth: {}"
+                             .format(tools.humanbytes(mem_1s)))
                 Logger.debug("Time step:{}".format(timedelta(seconds=t_step)))
                 while True:
                     t_s = t_e
@@ -826,52 +838,56 @@ def main(argv):
                     if t_e > t_end: 
                         t_e = t_end
                         t_step = (t_e - t_s).total_seconds()
-                    Logger.info("Timepoint {}: Duration {}".format(t_count,t_e -t_s))
-                    Logger.debug("From {} to {} ({})sec.".format(t_s.isoformat(), t_e.isoformat(), (t_e - t_s).total_seconds()))
+                    Logger.info("Timepoint {}: Duration {}"
+                                .format(t_count,t_e - t_s))
+                    Logger.debug("From {} to {} ({})sec."
+                                 .format(t_s.isoformat(), 
+                                         t_e.isoformat(), 
+                                         (t_e - t_s).total_seconds()))
                     l_data = []
                     for ch in channels:
-                        l_data.append(ch.GetValueVector(t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer()))
-                    if entry_points[4] in plugins:
-                        if plugins[entry_points[4]](channels,l_data, args_pl, parameters.items("PLUGINS")) != 0:
-                            raise Exception("Plugin {} produced some errors".format(entry_points[4]))
+                        l_data.append(ch.GetValueVector(
+                            t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer()))
                     outData.WriteBlock(l_data)
                     t_count += 1
                 file_list.append("eeg/{}\t{}".format(
                         recording.Prefix(run=run,app="_eeg.mat"), 
                         t[0].isoformat()))
 
-
-            #Copiyng original files if there no conversion
+            # Copiyng original files if there no conversion
             elif parameters['GENERAL']["Conversion"] == "":
                 Logger.info("Copying original files")
-                for f in recording.GetMainFiles(path=parameters['GENERAL']['Path']):
-                    Logger.debug("file: "+f)
+                for f in recording.GetMainFiles(
+                            path=parameters['GENERAL']['Path']):
+                    Logger.debug("file: " + f)
                     shutil.copy2(
-                            parameters['GENERAL']['Path']+f, 
-                            recording.eegPath+recording.Prefix(app="_"+f)
+                            parameters['GENERAL']['Path'] + f, 
+                            recording.eegPath + recording.Prefix(app="_" + f)
                             )
                 file_list.append("eeg/{}\t{}".format(
                             recording.Prefix(run=run,app="_Recording.esrc"),
-                            t_ref.isoformat() ))
+                            t_ref.isoformat()))
 
             else:
-                raise Exception("Conversion to {} format not implemented".format(parameters['GENERAL']["Conversion"]))
+                raise Exception("Conversion to {} format not implemented"
+                                .format(parameters['GENERAL']["Conversion"]))
 
-            with open(parameters['GENERAL']['OutputFolder']+recording.Path(app="scans.tsv"), "a") as f:
+            with open(parameters['GENERAL']['OutputFolder'] 
+                      + recording.Path(app="scans.tsv"), "a") as f:
                 for l in file_list:
-                    print(l, file = f)
+                    print(l, file=f)
 
-        
-        #Copiyng auxiliary files
+        # Copiyng auxiliary files
         Logger.info("Copying auxiliary files")
         for f in recording.GetAuxFiles(path=parameters['GENERAL']['Path']):
-            Logger.debug("file: "+f)
+            Logger.debug("file: " + f)
             shutil.copy2(
-                        parameters['GENERAL']['Path']+f, 
-                        recording.eegPath+recording.Prefix(app="_"+f)
+                        parameters['GENERAL']['Path'] + f, 
+                        recording.eegPath + recording.Prefix(app="_" + f)
                         )
 
-        with open(parameters['GENERAL']['OutputFolder']+"participants.tsv", "a") as f:
+        with open(parameters['GENERAL']['OutputFolder'] 
+                  + "participants.tsv", "a") as f:
             s_id = recording.SubjectInfo.ID
             s_gen = "n/a"
             if recording.SubjectInfo.Gender == 1: 
@@ -880,9 +896,9 @@ def main(argv):
                 s_gen = "M"
             s_age = "n/a"
             if recording.SubjectInfo.Birth != datetime.min:
-                s_age = str(time_limits[0][0].year - recording.SubjectInfo.Birth.year)
+                s_age = str(time_limits[0][0].year 
+                            - recording.SubjectInfo.Birth.year)
             print("{}\t{}\t{}".format(s_id, s_gen, s_age), file=f)
-
 
     except Exception as e:
         if ex_code == 0:
