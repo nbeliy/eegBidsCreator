@@ -1,6 +1,5 @@
 import configparser
 import logging
-import warnings
 from datetime import datetime
 
 Logger = logging.getLogger(__name__)
@@ -95,7 +94,7 @@ def check_configuration(parameters):
     if not isinstance(parameters, configparser.ConfigParser):
         raise TypeError("Parameters must be a ConfigParcer instance")
     passed = True
-    
+
     # GENERAL
     sec = "GENERAL"
     passed = passed and check_string(parameters, sec, "SessionId")
@@ -161,15 +160,20 @@ def check_configuration(parameters):
 
     # BRAINVISION
     sec = "BRAINVISION"
-    passed = passed and check_string(parameters, sec, "Encoding", empty=False)
-    passed = passed and check_string(parameters, sec, "DataFormat", empty=False)
-    passed = passed and check_string(parameters, sec, "Endian", empty=False)
+    passed = passed and check_string(parameters, sec, 
+                                     "Encoding", empty=False)
+    passed = passed and check_string(parameters, sec, 
+                                     "DataFormat", empty=False)
+    passed = passed and check_string(parameters, sec, 
+                                     "Endian", empty=False)
 
     # EDF
     sec = "EDF"
-    passed = passed and check_int(parameters, sec, "DataRecordDuration", empty=False)
+    passed = passed and check_int(parameters, sec, 
+                                  "DataRecordDuration", empty=False)
 
-    if not passed: return False
+    if not passed: 
+        return False
 
     # The format and values of all parameters are correct.
     # Checking compatibility of them
@@ -177,10 +181,12 @@ def check_configuration(parameters):
     # MainChannel
     if parameters["CHANNELS"]["MainChannel"] == "":
         if parameters["EVENTS"].getboolean("IncludeSegmentStart"):
-            print("EVENTS: IncludeSegmentStart is defined but MainChannel is not")
+            print("EVENTS: IncludeSegmentStart is defined" 
+                  + "but MainChannel is not")
             passed = False
         if parameters["RUNS"]["SplitRuns"] == "Channel":
-            print("RUNS: Splitting by channel, but MainChannel is not defined")
+            print("RUNS: Splitting by channel, "
+                  + "but MainChannel is not defined")
             passed = False
 
     # Checking lists
@@ -209,11 +215,10 @@ def check_configuration(parameters):
             print("RUNS: Splitting by event but Event is not defined")
             passed = False
     if parameters["RUNS"]["SplitRuns"] == "EventLimit":
-        if len(run_CE) == 0 or len (run_OE) == 0:
+        if len(run_CE) == 0 or len(run_OE) == 0:
             print("RUNS: Splitting by Opening and Closing events," 
                   + "but one of them is not defined") 
             passed = False
-
 
     return passed
 
@@ -221,15 +226,15 @@ def check_configuration(parameters):
 def check_bool(parameters, section, name, empty=True):
     val = parameters.get(section, name, fallback=None)
     if val is None:
-        print(section + ": " + name+ " not found")
+        print(section + ": " + name + " not found")
         return False
     if not empty and val == "":
-        print(section + ": Invalid " + name+ "value : empty string")
+        print(section + ": Invalid " + name + "value : empty string")
         return False
     try:
         parameters[section].getboolean(name)
     except ValueError:
-        print(section + ": Invalid " + name+ " value " + val)
+        print(section + ": Invalid " + name + " value " + val)
         return False
     return True
 
@@ -237,30 +242,31 @@ def check_bool(parameters, section, name, empty=True):
 def check_int(parameters, section, name, empty=True):
     val = parameters.get(section, name, fallback=None)
     if val is None:
-        print(section + ": " + name+ " not found")
+        print(section + ": " + name + " not found")
         return False
     if not empty and val == "":
-        print(section + ": Invalid " + name+ "value : empty string")
+        print(section + ": Invalid " + name + "value : empty string")
         return False
     try:
         parameters[section].getint(name)
     except ValueError:
-        print(section + ": Invalid " + name+ " value " + val)
+        print(section + ": Invalid " + name + " value " + val)
         return False
     return True
+
 
 def check_float(parameters, section, name, empty=True):
     val = parameters.get(section, name, fallback=None)
     if val is None:
-        print(section + ": " + name+ " not found")
+        print(section + ": " + name + " not found")
         return False
     if not empty and val == "":
-        print(section + ": Invalid " + name+ "value : empty string")
+        print(section + ": Invalid " + name + "value : empty string")
         return False
     try:
         parameters[section].getfloat(name)
     except ValueError:
-        print(section + ": Invalid " + name+ " value " + val)
+        print(section + ": Invalid " + name + " value " + val)
         return False
     return True
 
@@ -268,25 +274,26 @@ def check_float(parameters, section, name, empty=True):
 def check_string(parameters, section, name, values=None, empty=True):
     val = parameters.get(section, name, fallback=None)
     if val is None:
-        print(section + ": " + name+ " not found")
+        print(section + ": " + name + " not found")
         return False
     if not empty and val == "":
-        print(section + ": Invalid " + name+ "value : empty string")
+        print(section + ": Invalid " + name + "value : empty string")
         return False
     if values:
         if val not in values:
-            print(section + ": Invalid " + name+ " value " + val)
+            print(section + ": Invalid " + name + " value " + val)
             return False
     return True
+
 
 def check_time(parameters, section, name, empty=True, chop=6):
     val = parameters.get(section, name, fallback=None)
     if val is None:
-        print(section + ": " + name+ " not found")
+        print(section + ": " + name + " not found")
         return False
     if val == "":
         if not empty: 
-            print(section + ": Invalid " + name+ "value : empty string")
+            print(section + ": Invalid " + name + "value : empty string")
             return False
         else:
             return True
@@ -301,18 +308,19 @@ def check_time(parameters, section, name, empty=True, chop=6):
     try :
         datetime.strptime(val, dt_format)
     except ValueError:
-        print(section + ": Invalid " + name+ "value : " + val)
+        print(section + ": Invalid " + name + "value : " + val)
         return False
     return True
+
 
 def get_list(parameters, section, name, check=None):
     if parameters[section][name] == '':
         return list()
-    ch = [c.strip() for c  in parameters[section][name].split(',')] 
+    ch = [c.strip() for c in parameters[section][name].split(',')] 
 
     if check is not None:
         space_warning = [c for c in ch if check in c]
         if len(space_warning) != 0:
             print(section + ": " + name + " contains elements with space:" 
-                    + ",".join(space_warning))
+                  + ",".join(space_warning))
     return ch
