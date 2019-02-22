@@ -1,12 +1,15 @@
-VERSION = '0.65r1'
-
-import logging, argparse, os, json, glob, olefile, traceback
-import tempfile, bisect
+import logging
+import os
+import json
+import glob
+import olefile
+import traceback
+import tempfile
+import bisect
 import warnings
 from datetime import datetime, timedelta
 import time as tm
 import importlib.util
-import inspect
 import shutil
 import psutil
 
@@ -14,33 +17,33 @@ import tools.cfi as cfi
 import tools.cli as cli
 import tools.tools as tools
 
-from  Parcel.parcel import Parcel
+from Parcel.parcel import Parcel
 from DataStructure.Generic.Record import Record as GRecord
-from DataStructure.Generic.Event  import GenEvent
+from DataStructure.Generic.Event import GenEvent
 
 from DataStructure.SPM12.MEEG import MEEG
 
-from DataStructure.Embla.Record  import ParceRecording
+from DataStructure.Embla.Record import ParceRecording
 from DataStructure.Embla.Channel import EbmChannel
 
 from DataStructure.BrainVision.BrainVision import BrainVision
-from DataStructure.BrainVision.Channel  import BvChannel
+from DataStructure.BrainVision.Channel import BvChannel
 
 from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
 
 
-
+VERSION = '0.65r1'
 
 
 def main(argv):
 
     process = psutil.Process(os.getpid())
-    recording=None
+    recording = None
 
     argv_plugin = None
     if '--' in argv:
-        argv_plugin = argv[argv.index('--')+1:]
+        argv_plugin = argv[argv.index('--') + 1:]
         argv = argv[:argv.index('--')]
 
     ex_code = 0
@@ -50,51 +53,70 @@ def main(argv):
     if args.config_file:
         cfi.read_parameters(parameters, args.config_file[0])
 
-    #Overloading values by command-line arguments
-    if args.ses      != None: parameters['GENERAL']['SessionId']    = args.ses
-    if args.task     != None: parameters['GENERAL']['TaskId']       = args.task
-    if args.acq      != None: parameters['GENERAL']['AcquisitionId']= args.acq
-    if args.eegJson  != None: parameters['GENERAL']['JsonFile']     = args.eegJson
-    if args.conv     != None: parameters['GENERAL']['Conversion']   = args.conv
-    if args.infile   != None: parameters['GENERAL']['Path']         = os.path.realpath(args.infile[0])
-    if args.outdir   != None: parameters['GENERAL']['OutputFolder'] = os.path.realpath(args.outdir[0])
-    if args.mem      != None: parameters['GENERAL']['MemoryUsage']  = str(args.mem[0])
-    if args.loglevel != None: parameters['LOGGING']['LogLevel']     = args.loglevel
-    if args.logfile  != None: parameters['LOGGING']['LogFile']      = args.logfile[0]
-    if args.quiet    == True: parameters['LOGGING']['Quiet']        = 'yes'
+    # Overloading values by command-line arguments
+    if args.ses is not None: 
+        parameters['GENERAL']['SessionId'] = args.ses
+    if args.task is not None:
+        parameters['GENERAL']['TaskId'] = args.task
+    if args.acq is not None:
+        parameters['GENERAL']['AcquisitionId'] = args.acq
+    if args.eegJson is not None:
+        parameters['GENERAL']['JsonFile'] = args.eegJson
+    if args.conv is not None:
+        parameters['GENERAL']['Conversion'] = args.conv
+    if args.infile is not None:
+        parameters['GENERAL']['Path'] = os.path.realpath(args.infile[0])
+    if args.outdir is not None:
+        parameters['GENERAL']['OutputFolder'] = \
+                os.path.realpath(args.outdir[0])
+    if args.mem is not None:
+        parameters['GENERAL']['MemoryUsage'] = str(args.mem[0])
+    if args.loglevel is not None:
+        parameters['LOGGING']['LogLevel'] = args.loglevel
+    if args.logfile is not None:
+        parameters['LOGGING']['LogFile'] = args.logfile[0]
+    if args.quiet is True:
+        parameters['LOGGING']['Quiet'] = 'yes'
 
-    if parameters['GENERAL']['OutputFolder'][-1] != '/': parameters['GENERAL']['OutputFolder'] += '/'
-    if parameters['GENERAL']['Path'][-1] != '/': parameters['GENERAL']['Path'] += '/'
+    if parameters['GENERAL']['OutputFolder'][-1] != '/':
+        parameters['GENERAL']['OutputFolder'] += '/'
+    if parameters['GENERAL']['Path'][-1] != '/':
+        parameters['GENERAL']['Path'] += '/'
 
     if not cfi.check_configuration(parameters):
         raise Exception("Errors in configuration file")
 
-
-    '''
-    Setup logging.
-    Logfile will be stored into temporary directory first, then moved to output directory.
-    '''
+    # Setup logging.
+    # Logfile will be stored into temporary directory first,
+    # then moved to output directory.
     try:
-        tmpDir = tempfile.mkdtemp(prefix=argv[0].replace("/","_")+"_")+"/"
-    except:
-        warnings.warn("TMPDIR: Failed to create temporary directory. Will try current directory")
-        tmpDir = tempfile.mkdtemp(prefix=argv[0].replace("/","_")+"_",dir=".")+"/"
+        tmpDir = tempfile.mkdtemp(
+                prefix=argv[0].replace("/","_") + "_") + "/"
+    except FileNotFoundError:
+        warnings.warn("TMPDIR: Failed to create temporary directory."
+                      "Will try current directory")
+        tmpDir = tempfile.mkdtemp(
+                prefix=argv[0].replace("/","_") + "_",dir=".") + "/"
 
-    #logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
-    logFormatter = logging.Formatter("[%(levelname)-7.7s]:%(asctime)s:%(name)s %(message)s", datefmt='%m/%d/%Y %H:%M:%S')
+    # Alternate formatter:
+    # logFormatter = logging.Formatter(
+    #    "%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s",
+    #    datefmt='%m/%d/%Y %H:%M:%S')
+    logFormatter = logging.Formatter(
+            "[%(levelname)-7.7s]:%(asctime)s:%(name)s %(message)s",
+            datefmt='%m/%d/%Y %H:%M:%S')
     Logger = logging.getLogger()
 
-    fileHandler = logging.FileHandler(tmpDir+"logfile", mode='w')
+    fileHandler = logging.FileHandler(tmpDir + "logfile", mode='w')
     fileHandler.setFormatter(logFormatter)
     Logger.addHandler(fileHandler)
 
-
     Logger.setLevel(getattr(logging, parameters['LOGGING']['LogLevel'], None))
     if parameters['LOGGING']['LogFile'] != "":
-        fileHandler2 = logging.FileHandler(parameters['LOGGING']['LogFile'], mode='w')
+        fileHandler2 = logging.FileHandler(
+                parameters['LOGGING']['LogFile'], mode='w')
         fileHandler2.setFormatter(logFormatter)
         Logger.addHandler(fileHandler2)
-        
 
     if not parameters['LOGGING'].getboolean('Quiet'):
         consoleHandler = logging.StreamHandler()
@@ -104,29 +126,41 @@ def main(argv):
     eegform = None
     ANONYM_DATE = None
     ANONYM_NAME = None
-    ANONYM_BIRTH= None
+    ANONYM_BIRTH = None
     if parameters.getboolean("ANONYMIZATION","Anonymize"):
-        if parameters["ANONYMIZATION"]["StartDate"] != "None" and parameters["ANONYMIZATION"]["StartDate"] != "":
-            ANONYM_DATE = datetime.strptime(parameters["ANONYMIZATION"]["StartDate"],"%Y-%m-%d")
+        if parameters["ANONYMIZATION"]["StartDate"] != "None" and \
+                parameters["ANONYMIZATION"]["StartDate"] != "":
+            ANONYM_DATE = datetime.strptime(
+                    parameters["ANONYMIZATION"]["StartDate"],"%Y-%m-%d")
         if parameters["ANONYMIZATION"]["SubjName"] != "None":
             ANONYM_NAME = parameters["ANONYMIZATION"]["SubjName"]
         if parameters["ANONYMIZATION"]["BirthDate"] != "None":
             if parameters["ANONYMIZATION"]["BirthDate"] == "" :
                 ANONYM_BIRTH = ""
             else:
-                ANONYM_BIRTH =  datetime.strptime(parameters["ANONYMIZATION"]["BirthDate"],"%Y-%m-%d")
+                ANONYM_BIRTH = datetime.strptime(
+                        parameters["ANONYMIZATION"]["BirthDate"],"%Y-%m-%d")
 
-    entry_points = ["RecordingEP", "ChannelsEP", "EventsEP", "RunsEP", "DataEP"]
+    entry_points = \
+        ["RecordingEP", "ChannelsEP", "EventsEP", "RunsEP", "DataEP"]
     plugins = dict()
     pl_name = ""
     if parameters["PLUGINS"]["Plugin"] != "":
         if not os.path.exists(parameters["PLUGINS"]["Plugin"]):
-            raise FileNotFoundError("Plug-in file {} not found".format(parameters["PLUGINS"]["Plugin"]))
-        pl_name = os.path.splitext(os.path.basename(parameters["PLUGINS"]["Plugin"]))[0]
-        Logger.info("Loading module {} from {}".format(pl_name, parameters["PLUGINS"]["Plugin"]))
-        spec = importlib.util.spec_from_file_location(pl_name, parameters["PLUGINS"]["Plugin"])
-        if spec == None:
-            raise Exception("Unable to load module {} from {}".format(pl_name, parameters["PLUGINS"]["Plugin"]))
+            raise FileNotFoundError(
+                    "Plug-in file {} not found".format(
+                        parameters["PLUGINS"]["Plugin"]))
+        pl_name = os.path.splitext(
+                os.path.basename(parameters["PLUGINS"]["Plugin"]))[0]
+        Logger.info(
+                "Loading module {} from {}".format(
+                    pl_name, parameters["PLUGINS"]["Plugin"]))
+        spec = importlib.util.spec_from_file_location(
+                pl_name, parameters["PLUGINS"]["Plugin"])
+        if spec is None:
+            raise Exception(
+                    "Unable to load module {} from {}".format(
+                        pl_name, parameters["PLUGINS"]["Plugin"]))
         itertools = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(itertools)
         f_list = dir(itertools)
@@ -135,102 +169,123 @@ def main(argv):
                 Logger.debug("Entry point {} found".format(ep))
                 plugins[ep] = getattr(itertools,ep)
         if len(plugins) == 0:
-            Logger.warning("Plugin {} loaded but no compatible functions found".format(pl_name))
-        
-
+            Logger.warning(
+                    "Plugin {} loaded but "
+                    "no compatible functions found".format(pl_name))
 
     Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
     Logger.info("Starting new bidsifier")
     Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
 
     Logger.debug(str(os.sys.argv))
-    Logger.debug("Process PID: "+str(os.getpid()))
-    Logger.debug("Temporary directory: "+tmpDir)
-    with open(tmpDir+"configuration", 'w') as configfile: parameters.write(configfile)
+    Logger.debug("Process PID: " + str(os.getpid()))
+    Logger.debug("Temporary directory: " + tmpDir)
+    with open(tmpDir + "configuration", 'w') as configfile: 
+        parameters.write(configfile)
 
     Logger.info("File: {}".format(parameters['GENERAL']['Path']))
     basename = os.path.basename(parameters['GENERAL']['Path'][0:-1])
-    extension= os.path.splitext(basename)[1]
+    extension = os.path.splitext(basename)[1]
     try:
         if not os.path.exists(parameters['GENERAL']['Path']):
-            raise Exception("Path {} is not valid".format(parameters['GENERAL']['Path']))       
+            raise Exception(
+                "Path {} is not valid".format(parameters['GENERAL']['Path']))
         if os.path.isdir(parameters['GENERAL']['Path']):
-            if len(glob.glob(parameters['GENERAL']['Path']+'*.ebm')) > 0:
+            if len(glob.glob(parameters['GENERAL']['Path'] + '*.ebm')) > 0:
                 eegform = "embla"
         elif extension == '.edf':
             eegform = "edf"
         else:
             raise Exception("Unable determine eeg format")
-        
 
         Logger.info("Output: {}".format(parameters['GENERAL']['OutputFolder']))
         if not os.path.isdir(parameters['GENERAL']['Path']):
-            raise Exception("Path {} is not valid".format(parameters['GENERAL']['Path']))
+            raise Exception(
+                "Path {} is not valid".format(parameters['GENERAL']['Path']))
 
         recording = GRecord("")
-        
+
         if eegform == "embla":
             Logger.info("Detected {} format".format(eegform))
-            recording._extList = [".ebm",".ead",".esedb",".ewp",".esrc",".esev"]
-            if len(glob.glob(parameters['GENERAL']['Path']+'Recording.esrc')) != 1: 
-                raise FileNotFoundError("Couldn't find Recording.escr file, needed for recording proprieties")
-            if len (glob.glob(parameters['GENERAL']['Path']+'*.esedb')) == 0:
-                Logger.warning("No .esedb files containing events found. Event list will be empty.")
-            #Reading metadata
-            esrc = olefile.OleFileIO(parameters['GENERAL']['Path']+'Recording.esrc').openstream('RecordingXML')
-            xml  = esrc.read().decode("utf_16_le")[2:-1]
+            recording._extList = \
+                [".ebm",".ead",".esedb",".ewp",".esrc",".esev"]
+            if len(glob.glob(parameters['GENERAL']['Path']
+                   + 'Recording.esrc')) != 1:
+                raise FileNotFoundError(
+                    "Couldn't find Recording.escr file, "
+                    "needed for recording proprieties")
+            if len(glob.glob(parameters['GENERAL']['Path'] + '*.esedb')) == 0:
+                Logger.warning("No .esedb files containing events found. "
+                               "Event list will be empty.")
+            # Reading metadata
+            esrc = olefile.OleFileIO(
+                parameters['GENERAL']['Path'] + 'Recording.esrc').\
+                openstream('RecordingXML')
+            xml = esrc.read().decode("utf_16_le")[2:-1]
             metadata = ParceRecording(xml)
 
             recording.SetId(session=parameters['GENERAL']["SessionId"], 
                             task=parameters['GENERAL']["TaskId"],
                             acquisition=parameters['GENERAL']["AcquisitionId"])
-                        
+
             birth = datetime.min
             if "DateOfBirth" in metadata["PatientInfo"]:
                 birth = metadata["PatientInfo"]["DateOfBirth"]
-                
-            recording.SetSubject (id = metadata["PatientInfo"]["ID"],
-                                name  = "",
-                                birth  = birth,
-                                gender = metadata["PatientInfo"]["Gender"],
-                                notes  = metadata["PatientInfo"]["Notes"],
-                                height = metadata["PatientInfo"]["Height"],
-                                weight = metadata["PatientInfo"]["Weight"])
-            recording.SetDevice(    type=metadata["Device"]["DeviceTypeID"],
-                                    id  = metadata["Device"]["DeviceID"],
-                                    name= metadata["Device"]["DeviceName"],
-                                    manufactor= "RemLogic")
+
+            recording.SetSubject(id=metadata["PatientInfo"]["ID"],
+                                 name="",
+                                 birth=birth,
+                                 gender=metadata["PatientInfo"]["Gender"],
+                                 notes=metadata["PatientInfo"]["Notes"],
+                                 height=metadata["PatientInfo"]["Height"],
+                                 weight=metadata["PatientInfo"]["Weight"])
+            recording.SetDevice(type=metadata["Device"]["DeviceTypeID"],
+                                id=metadata["Device"]["DeviceID"],
+                                name=metadata["Device"]["DeviceName"],
+                                manufactor="RemLogic")
             recording.SetStartTime(metadata["RecordingInfo"]["StartTime"],
-                                    metadata["RecordingInfo"]["StopTime"])
+                                   metadata["RecordingInfo"]["StopTime"])
             esrc.close()
-            
-            
+
         else:
-            raise Exception("EEG format {} not implemented (yet)".format(eegform))
+            raise Exception(
+                    "EEG format {} not implemented (yet)".format(eegform))
 
         if entry_points[0] in plugins:
             try:
                 result = 0
-                result = plugins[entry_points[0]](recording, argv_plugin, parameters.items("PLUGINS"))
+                result = plugins[entry_points[0]](
+                        recording, 
+                        argv_plugin,
+                        parameters.items("PLUGINS"))
                 if result != 0:
-                    raise Exception("Plugin {} returned code {}".format(entry_points[0], result))
-            except:
-                ex_code = 100+0+result
+                    raise Exception("Plugin {} returned code {}"
+                                    .format(entry_points[0], result))
+            except Exception:
+                ex_code = 100 + 0 + result
                 raise
-       
+
         JSONdata = dict()
         if parameters['GENERAL']['JsonFile'] != "":
             if parameters['GENERAL']['JsonFile'][-5:] != ".json": 
-                parameters['GENERAL']['JsonFile'] = os.path.realpath(parameters['GENERAL']['JsonFile']) + recording.GetTask() + ".json"
-            Logger.info("JSON File: {}".format(parameters['GENERAL']['JsonFile']))
+                parameters['GENERAL']['JsonFile'] = \
+                        os.path.realpath(parameters['GENERAL']['JsonFile']) \
+                        + recording.GetTask() + ".json"
+            Logger.info("JSON File: {}"
+                        .format(parameters['GENERAL']['JsonFile']))
             with open(parameters['GENERAL']['JsonFile']) as f:
-                 JSONdata = json.load(f)
+                JSONdata = json.load(f)
             recording.JSONdata = JSONdata
             if "SamplingFrequency" in recording.JSONdata:
                 recording.Frequency = recording.JSONdata["SamplingFrequency"]
-            if "TaskName" in recording.JSONdata and recording.JSONdata["TaskName"] != recording.GetTask():
-                raise Exception("Task name '{}' in JSON file mismach name in record '{}'".format(recording.JSONdata["TaskName"], recording.GetTask()))
-            
+            if "TaskName" in recording.JSONdata and \
+                    recording.JSONdata["TaskName"] != recording.GetTask():
+                raise Exception(
+                        "Task name '{}' in JSON file "
+                        "mismach name in record '{}'"
+                        .format(recording.JSONdata["TaskName"],
+                                recording.GetTask()))
+
         Logger.info("Patient Id: {}".format(recording.SubjectInfo.ID))
         Logger.info("Session Id: " + recording.GetSession())
         Logger.info("Task    Id: " + recording.GetTask())
@@ -241,54 +296,75 @@ def main(argv):
         recording.SetEEGPath(prepath=parameters['GENERAL']['OutputFolder'])
         if os.path.exists(recording.eegPath):
             Logger.debug("Output directory already exists")
-            flist = glob.glob(recording.eegPath+recording.Prefix(app="*"))
+            flist = glob.glob(recording.eegPath + recording.Prefix(app="*"))
             if len(flist) != 0:
-                Logger.warning("Found {} files with same identification. They will be removed.".format(len(flist)))
-                for f in flist:
-                    tools.rmdir(f)
+                Logger.warning('In {}'.format(recording.eegPath))
+                Logger.warning('Duplicated files {}'.format(recording.Prefix(app="*")))
+                msg = "Found {} files with same identification.".format(len(flist))
+                if parameters["GENERAL"].getboolean("OverideDuplicated"):
+                    Logger.warning(msg)
+                    Logger.warning("They will be removed.")
+                    for f in flist:
+                        tools.rmdir(f)
+                else:
+                    raise Exception(msg + "Please remove them.")
         else: 
-            Logger.info("Creating output directory {}".format(recording.eegPath))
+            Logger.info("Creating output directory {}"
+                        .format(recording.eegPath))
             os.makedirs(recording.eegPath)
-        Logger.info("EEG will be saved in "+recording.eegPath)
+        Logger.info("EEG will be saved in " + recording.eegPath)
 
         if parameters['GENERAL'].getboolean('CopySource'):
-            srcPath = parameters['GENERAL']['OutputFolder']+"sourcedata/"+ recording.Path()+"/"
+            srcPath = parameters['GENERAL']['OutputFolder'] \
+                    + "sourcedata/" + recording.Path() + "/"
             if os.path.exists(srcPath):
-                if os.path.exists(srcPath+basename):
-                    Logger.warning('"{}" exists in sourcedata directory. It will be erased.'.format(basename))
-                    tools.rmdir(srcPath+basename)
-                    shutil.rmtree(srcPath+basename)
+                if os.path.exists(srcPath + basename):
+                    msg = '{} exists in sourcedata directory.'.format(basename)
+                    if parameters["GENERAL"].getboolean("OverideDuplicated"):
+                        Logger.warning(msg)
+                        Logger.warning('It will be erased.')
+                        tools.rmdir(srcPath + basename)
+                        shutil.rmtree(srcPath + basename)
+                    else:
+                        raise Exception(msg + "Please remove it.")
             else:
                 Logger.info("Creating output directory {}".format(srcPath))
                 os.makedirs(srcPath)
             Logger.info("Copiyng original data to sourcedata folder")
             if extension == "":
-                shutil.copytree(parameters['GENERAL']['Path'], srcPath+basename)
+                shutil.copytree(parameters['GENERAL']['Path'],
+                                srcPath + basename)
             else:
-                shutil.copy2(parameters['GENERAL']['Path'], srcPath+basename)
+                shutil.copy2(parameters['GENERAL']['Path'],
+                             srcPath + basename)
 
-        t_ev_min= datetime.max
-        t_ev_max= datetime.min
+        t_ev_min = datetime.max
+        t_ev_max = datetime.min
 
         if not recording.GetStartTime():
-            Logger.warning("Unable to get StartTime of record. Will be set to first data point.")
+            Logger.warning("Unable to get StartTime of record. "
+                           "Will be set to first data point.")
         if not recording.GetStopTime():
-            Logger.warning("Unable to get EndTime of record. Will be set to last data point.")
-
+            Logger.warning("Unable to get EndTime of record. "
+                           "Will be set to last data point.")
 
         Logger.info("Reading channels")
         main_channel = None
         to_keep = []
         if parameters["CHANNELS"]["WhiteList"] != "":
-            to_keep = [p.strip() for p in parameters['CHANNELS']['WhiteList'].split(',')]
+            to_keep = [p.strip() for p in
+                       parameters['CHANNELS']['WhiteList'].split(',')]
         to_drop = []
         if parameters["CHANNELS"]["BlackList"] != "":
-            to_drop = [p.strip() for p in parameters['CHANNELS']['BlackList'].split(',')]
+            to_drop = [p.strip() for p in
+                       parameters['CHANNELS']['BlackList'].split(',')]
 
         if eegform == "embla":
-            channels = [EbmChannel(c) for c in glob.glob(parameters['GENERAL']['Path']+"*.ebm")]
+            channels = [EbmChannel(c) for c in
+                        glob.glob(parameters['GENERAL']['Path'] + "*.ebm")]
         else:
-            raise Exception("EEG format {} not implemented (yet)".format(eegform))
+            raise Exception(
+                    "EEG format {} not implemented (yet)".format(eegform))
 
         recording.AddChannels(channels, white_list=to_keep, black_list=to_drop)           
         recording.SetMainChannel(parameters["CHANNELS"]["MainChannel"])
@@ -296,20 +372,27 @@ def main(argv):
             ddt = recording.GetMaxTime() - recording.GetMinTime()
             ddt -= recording.GetStopTime() - recording.GetStartTime()
             if abs(ddt.total_seconds()) > 3600:
-                Logger.warning("Record duration is shorter by {} than data taking. Updating Start and Stop times".format(ddt))
-                recording.SetStartTime(recording.GetMinTime(), recording.GetMaxTime())
+                Logger.warning(
+                        "Record duration is shorter by {} than data taking. "
+                        "Updating Start and Stop times".format(ddt))
+                recording.SetStartTime(recording.GetMinTime(),
+                                       recording.GetMaxTime())
         t_ref, t_end = recording.SetReferenceTime()
-            
+
         if entry_points[1] in plugins:
             try:
                 result = 0
-                result = plugins[entry_points[1]](recording, argv_plugin, parameters.items("PLUGINS"))
+                result = plugins[entry_points[1]](
+                        recording, 
+                        argv_plugin, 
+                        parameters.items("PLUGINS"))
                 if result != 0:
-                    raise Exception("Plugin {} returned code {}".format(entry_points[1], result))
-            except:
-                ex_code = 100+10+result
+                    raise Exception("Plugin {} returned code {}"
+                                    .format(entry_points[1], result))
+            except Exception:
+                ex_code = 100 + 10 + result
                 raise
-       
+
         if not t_ref or not t_end:
             raise ValueError("Unable to determine reference times")
 
@@ -798,7 +881,7 @@ def main(argv):
             s_age = "n/a"
             if recording.SubjectInfo.Birth != datetime.min:
                 s_age = str(time_limits[0][0].year - recording.SubjectInfo.Birth.year)
-            print("{}\t{}\t{}".format(s_id, s_gen, s_age), file = f)
+            print("{}\t{}\t{}".format(s_id, s_gen, s_age), file=f)
 
 
     except Exception as e:
@@ -808,40 +891,46 @@ def main(argv):
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
         tr = traceback.extract_tb(exc_traceback)
         for l in tr:
-            Logger.error('File "'+l[0]+'", line '+str(l[1])+" in "+l[2]+":")
-        Logger.error(type(e).__name__+": "+str(e))
-        if recording != None and recording.eegPath != None:
-            flist = glob.glob(recording.eegPath+recording.Prefix(app="*"))
+            Logger.error('File "' + l[0] + '", line '
+                         + str(l[1]) + " in " + l[2] + ":")
+        Logger.error(type(e).__name__ + ": " + str(e))
+        if recording is not None and recording.eegPath is not None:
+            flist = glob.glob(recording.eegPath + recording.Prefix(app="*"))
             if len(flist) != 0:
                 for f in flist:
                     tools.rmdir(f)
-        Logger.info("Command: '" + "' '".join(argv)+"'")
-
+        Logger.info("Command: '" + "' '".join(argv) + "'")
 
     try:
         Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
         Logger.info("Took {} seconds".format(tm.process_time()))
         Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
         if recording and recording.eegPath:
-            shutil.copy2(tmpDir+"/logfile", recording.eegPath+recording.Prefix(app=".log"))
-            shutil.copy2(tmpDir+"/configuration", recording.eegPath+recording.Prefix(app=".ini")) 
+            shutil.copy2(tmpDir + "/logfile",
+                         recording.eegPath + recording.Prefix(app=".log"))
+            shutil.copy2(tmpDir + "/configuration",
+                         recording.eegPath + recording.Prefix(app=".ini")) 
             fileHandler.close()
             tools.rmdir(tmpDir)
             shutil.rmtree(tmpDir)
         else:
-            Logger.warning("Output path is not defined. See in "+tmpDir+"logfile for more details.")
+            Logger.warning("Output path is not defined. See in "
+                           + tmpDir + "logfile for more details.")
             fileHandler.close()
     except Exception as e:
         if ex_code == 0:
             ex_code = 10
-        Logger.error("Unable to copy files to working directory. See in "+tmpDir+"logfile for more details.")
+        Logger.error("Unable to copy files to working directory. See in " 
+                     + tmpDir + "logfile for more details.")
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
         tr = traceback.extract_tb(exc_traceback)
         for l in tr:
-            Logger.error('File "'+l[0]+'", line '+str(l[1])+" in "+l[2]+":")
-        Logger.error(type(e).__name__+": "+str(e))
+            Logger.error('File "' + l[0] + '", line '
+                         + str(l[1]) + " in " + l[2] + ":")
+        Logger.error(type(e).__name__ + ": " + str(e))
 
     return(ex_code)
+
 
 if __name__ == "__main__":
     os.sys.exit(main(os.sys.argv))
