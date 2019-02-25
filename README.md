@@ -1,25 +1,33 @@
 # eegBidsCreator
 
 A script to convert embla files to the BID standard
-It creates the required folders: `sub-<participant_label>/[ses-<session_label>/]eeg`,  which will contain acquisition information, and `source/sub-<participant_label>/[ses-<session_label>/]eeg`, where the original raw data will be copied. If subfolder eeg already exists, the content will be **erased**
+It creates the required folders: `sub-<participant_label>/[ses-<session_label>/]eeg`,
+which will contain acquisition information, and `source/sub-<participant_label>/[ses-<session_label>/]eeg`,
+where the original raw data will be copied.
 
-It also creates channels.tsv file, containing the list of all channels. Information that I managed to retrieve are the name, units, type, description (if it is provided by embla), and sampling frequency. Remaining fields are filled with "n/a".
+It also creates channels.tsv file, containing the list of all channels.
+Information that I managed to retrieve are the name, units, type, description (if it is provided by embla),
+and sampling frequency. Remaining fields are filled with "n/a".
 
-Extracted events are stored in events.tsv file with its onset time, duration, type, and corresponding sample (i.e. the number of data point of corresponding time, onset\*sampling) 
+Extracted events are stored in events.tsv file with its onset time, duration, type,
+and corresponding sample (i.e. the number of data point of corresponding time, onset\*sampling) 
 
-I didn't found the task/acquisition/session id in the files, so they must be passed to script via options `-t, -a, -s`. Only task option is mandatory.
+I didn't found the task/acquisition/session id in the files, so they must be passed to script via options
+`-t, -a, -s`. Only task option is mandatory.
 
-If an additional option value `--conversion BV` or `EDF` is provided, the source files will be converted into BrainVision/EDF+ format.
+If an additional option value `--conversion BV`,`EDF` or `MEEG` is provided, the source files
+will be converted into BrainVision/EDF+ format.
 
 ## Usage
 
 ```
-usage: eegBidsCreator.py [-h] [-a, --acquisition acqId] [-t, --task taskId]
-                         [-s, --session sesId] [-j, --json eegJson]
-                         [-o, --output OUTDIR] [-c, --config CONFIG_FILE]
-                         [--logfile log.out] [-q,--quiet]
+usage: eegBidsCreator.py [-h] [--version] [-a, --acquisition acqId]
+                         [-t, --task taskId] [-s, --session sesId]
+                         [-j, --json eegJson] [-o, --output OUTDIR]
+                         [-c, --config CONFIG_FILE] [--logfile log.out]
+                         [-q,--quiet]
                          [--log {DEBUG,INFO,WARNING,ERROR,CRITICAL}]
-                         [--version] [--conversion {EDF,BV}]
+                         [--mem MEM] [--conversion {EDF,BV,MEEG}]
                          eegfile
 
 Converts EEG file formats to BID standard
@@ -29,6 +37,7 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
+  --version             show program's version number and exit
   -a, --acquisition acqId
                         Id of the acquisition
   -t, --task taskId     Id of the task
@@ -41,23 +50,30 @@ optional arguments:
   -q,--quiet            Supress standard output
   --log {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         logging level
-  --version             show program's version number and exit
-  --conversion {EDF,BV}
+  --mem MEM             allowed memury usage (in GiB)
+  --conversion {EDF,BV,MEEG}
                         performs conversion to given format
 ```
 
 ### Config File
 
 Several options are accessible by the configuration file, which is loaded by `-c <configuration file>`.
-The file follows a standard `ini` structture, with parameters and possible values are explained in the example file `eegBidsCreator.ini`. The parameters specification priority are as follows: `default < conf < cmd line`
+The file follows a standard `ini` structture, with parameters and possible values are explained 
+in the example file `eegBidsCreator.ini`. 
+
+The parameters specification priority are as follows: `default < conf < cmd line`
 
 **Windows**
-Windows in all its glory uses `\n\r` as EOL character. The text files written under the Windows are compatible with Nix platforms, but Nix text files are not.
+
+Windows in all its glory uses `\n\r` as EOL character. The text files written under the Windows 
+are compatible with Nix platforms, but Nix text files are not.
 
 In order to convert one Linux EOL to Windows, one can do in DOS prompt:
 ```
 TYPE input_filename | MORE /P > output_filename
 ``` 
+
+Another solution is to use a text editor, able to detect the correct EOL characters, like notepad++
 
 ### Example
 
@@ -71,23 +87,43 @@ TYPE input_filename | MORE /P > output_filename
 
 It runs only with python3, and need following standard modules installed:
 
-- olefile
-- json
-- glob
-- traceback
-- struct
-- os
-- sys
-- io
-- math
-- shutil
-- tempfile
-- logging
-- argparse
-- configparser
-- datetime
-- time
+ - numpy
+ - olefile
+ - scipy.io
+ - psutil
 
+The next modules are required but seems to be part of python3 standard package:
+ - logging
+ - os
+ - json
+ - glob
+ - traceback
+ - tempfile
+ - bisect
+ - warnings
+ - datetime
+ - time
+ - importlib.util
+ - shutil
+ - configparcer
+ - argparce
+ - struct
+ - sys
+ - math
+ - xml.etree
+ - io
+
+## Stand-alone executables
+
+The stand-alone executables are packed with help of PyInstaller for linux and Windows10. They can be found in 
+`bin/` directory. Their work was tested on Windows10 and Ubuntu machines, it should be tested on MacOSX and Windows7.
+
+The python packing is not a true compiling, so the launch of executables takes some time (of order of seconds).
+Installing python and using script directly is still preffered way to do.
+
+It is not clear how plugins with extra modules will interact with packed version.
+
+**The executables are garanteed to correspond to a tagged commit, but I will not do this for each commit between tags**
 
 ## Conversion into BrainVision
 
@@ -123,10 +159,10 @@ EDF+ supports also encoding of data using logaritmic scale, which is used if the
 Script supported a basic plug-ins. They are activated by giving a path to a py script containing user functions to `[PLUGINS] Plugin` function. Script will load corresponding file and look for following functions:
 
 - `RecordingEP(DataStructure.Generic.Record)`. This one is called just after loading meta-data and before creation of output folders. Allows to modify the metadata, for ex. Acquisition ID, fill JSON information, manipulate subject ID etc.
-- `ChannelsEP(list(DataStructure.Generic.Channel))`. This one is called after loading list of channels, and allows to manipulate them. List must be manipulated in-place inorder to be changed in the main script.
-- `EventsEP(list(DataStructure.Generic.Event))`. Called after loading the list of events.
+- `ChannelsEP(list(DataStructure.Generic.Record))`. This one is called after loading list of channels, and allows to manipulate them. List must be manipulated in-place inorder to be changed in the main script.
+- `EventsEP(list(DataStructure.Generic.Record))`. Called after loading the list of events.
 - `RunsEP(list(tuple(datetime,datetime)))`. Called before processing data, and allows the manipulation of runs separation.
-- `DataEP(list(DataStructure.Generic.Channel), list(list(int/float)))`. Called after loading the data in memory. Allows the manipulation/analisys of given data.
+- `DataEP(list(DataStructure.Generic.Record), list(list(int/float)))`. Called after loading the data in memory. Allows the manipulation/analisys of given data.
 
 Each of these functions must also accept parameters `cli_args = list(str)` and `cfg_args = list(tuple(str,str))`. The first one is a list of command line options passed after `--`, second is the list of tuples (key, value) representing all parameters in `PLUGINS` section of configuration file.
 
@@ -143,16 +179,6 @@ The Subject, Session, Task, and Acquisition can be changed only at `RecordingEP`
 
 ## Known issues
 
-- Some events don't have an associated type, they will appear as "n/a" in events.tsv file -- **fixed**
-- For some channels, the names in esedb and in emb files mismach, thus can't determine the corect `sample` value -- **fixed**
-- `sample` value can be not an integer, if corresponding event happened between two measures -- **fixed**
-- Some Embla files contains several events files, need to read all and remove duplicates -- **fixed**
-- If 2 Emblas treats same subjects, one overrides other, need to fix it -- **fixed**
-- Interpreting Calibration function produces sometimes a error `eval() arg 1 must be a string, bytes or code object` -- **fixed**
-- Error `File "DataStructure/Embla/Channel.py", line 209 in _read: b'\xff\xff\xff\xff'` -- **fixed**
-  - Happens in corrupted files, file will abort reading 
-  - Could be just unfinished session, must be observed
-- Error `"Parcel/parcel.py", line 158 in read: I/O operation on closed file.` -- **fixed**
 
 ## Need help!
 
@@ -166,19 +192,8 @@ Other corrections/suggestions/spell corections can be reported as issues on gitl
 
 ## Future plans
 
-- Transform the embla format to brainproducts -- **done**
-- Transform the embla format to EDF+ -- **done**
-- Implement segmented data  -- **done** using splitting into runs
 - Implement version check for ebm
-- Retrieve and control the information from json file -- **done**
 - Understand the filter
-- Understand the Calibration -- **done**
-- Option to not copy the original data to source -- **done**
-- Log file is appending, make it rotaing/new?
 - A task given in ini or cli can contain non alphanumeric characters, need to check and produce warning/error
-- Difficult distinguish start of next bidsifier form end of old -- **done**
 - Treat Frequency correction (how?)
-- Anonymization -- **done**
-- Copy auxiliary files into BIDS folder -- **done**
-- Pack script into executable -- **done**
 - Transform into C with cpython
