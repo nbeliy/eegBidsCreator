@@ -33,7 +33,7 @@ from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
 
 
-VERSION = '0.65r1'
+VERSION = 'dev0.7'
 
 
 def main(argv):
