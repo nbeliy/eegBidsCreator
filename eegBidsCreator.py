@@ -33,7 +33,7 @@ from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
 
 
-VERSION = 'dev0.7'
+VERSION = 'dev0.7r1'
 
 
 def main(argv):
@@ -501,7 +501,7 @@ def main(argv):
         if entry_points[2] in plugins:
             try:
                 result = 0
-                result = plugins[entry_points[2]](events, argv_plugin, parameters.items("PLUGINS"))
+                result = plugins[entry_points[2]](recording, argv_plugin, parameters.items("PLUGINS"))
                 if result != 0:
                     raise Exception("Plugin {} returned code {}".format(entry_points[2], result))
             except:
@@ -691,7 +691,7 @@ def main(argv):
                     if entry_points[4] in plugins:
                         try:
                             result = 0
-                            result = plugins[entry_points[4]](channels,l_data,argv_plugin, parameters.items("PLUGINS"))
+                            result = plugins[entry_points[4]](recording,l_data,argv_plugin, parameters.items("PLUGINS"))
                             if result != 0:
                                 raise Exception("Plugin {} returned code {}".format(entry_points[4], result))
                         except:
