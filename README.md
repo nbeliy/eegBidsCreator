@@ -50,10 +50,22 @@ optional arguments:
   -q,--quiet            Supress standard output
   --log {DEBUG,INFO,WARNING,ERROR,CRITICAL}
                         logging level
-  --mem MEM             allowed memury usage (in GiB)
+  --mem MEM             allowed memory usage (in GiB)
   --conversion {EDF,BV,MEEG}
                         performs conversion to given format
 ```
+## BIDS compliency
+
+The created folder structure and file names follows the BIDS standart 1.1.2 with BEP006 addition. 
+There are 3 deviations, that I can't fix for now:
+
+ - If choosen to include auxiliary files, they are stored in `auxiliaryfiles` directory in the BIDS root directory. This directory is not under BIDS and will make validator unhappy.
+ - The SPM12 MEEG file format is not supported by BIDS at all, and probably will never be.
+ - BIDS does not support the storage of events in separated EDF+ file.
+
+These points should be adressed in two ways.
+ - In `README` file in root directory, explaining why these files are nessesary.
+ - In `.bidsignore` file  in order to silence the validator errors. A working `.bidsignore` can be find in `Example/bidsignore`. Do not foget to add '.' when copying this file.
 
 ### Config File
 
@@ -119,9 +131,14 @@ The stand-alone executables are packed with help of PyInstaller for linux and Wi
 `bin/` directory. Their work was tested on Windows10 and Ubuntu machines, it should be tested on MacOSX and Windows7.
 
 The python packing is not a true compiling, so the launch of executables takes some time (of order of seconds).
-Installing python and using script directly is still preffered way to do.
+Installing python and using script directly is still preferred way to do.
 
-It is not clear how plugins with extra modules will interact with packed version.
+It is not clear how plugin with extra modules will interact with packed version.
+
+I use next command line to pack:
+```
+python3 -m PyInstaller -F --distpath=bin/ eegBidsCreator.py
+```
 
 **The executables are garanteed to correspond to a tagged commit, but I will not do this for each commit between tags**
 
@@ -145,30 +162,30 @@ The EDF+ format also supports the storage of the events in the same file, but it
 
 The file is composed of 3 parts: 
 
-- upper block of header, containing a metadata, like subject information, enregistrement information, starting time, duration etc.
+- upper block of header, containing a metadata, like subject information, recording information, starting time, duration etc.
 - lower block of header, containing description of all channels. In the EDF+ format first channel is reserved for the time stamps of records
 - data block, which is organized in records of fixed durations (1 - 10 seconds), containing 2 bit signed short integers as data.
 
-EDF+ supports discontinious data storage, but it is not yet implemented.
+EDF+ supports discontinuous data storage, but it is not yet implemented.
 Unlike the BrainVision format, the conversion from short to measured value is not performed via the scale but via the precision of physical and digital extrema. Thus allowing the incorporation of not only a scale of signal but also an offset.
 
-EDF+ supports also encoding of data using logaritmic scale, which is used if the constant relative precision is nessesary. As original Embla format works with ranges, this feature wasn't implemented.
+EDF+ supports also encoding of data using logarithmic scale, which is used if the constant relative precision is necessary. As original Embla format works with ranges, this feature wasn't implemented.
 
 ## Plugins
 
 Script supported a basic plug-ins. They are activated by giving a path to a py script containing user functions to `[PLUGINS] Plugin` function. Script will load corresponding file and look for following functions:
 
 - `RecordingEP(DataStructure.Generic.Record)`. This one is called just after loading meta-data and before creation of output folders. Allows to modify the metadata, for ex. Acquisition ID, fill JSON information, manipulate subject ID etc.
-- `ChannelsEP(list(DataStructure.Generic.Record))`. This one is called after loading list of channels, and allows to manipulate them. List must be manipulated in-place inorder to be changed in the main script.
+- `ChannelsEP(list(DataStructure.Generic.Record))`. This one is called after loading list of channels, and allows to manipulate them. List must be manipulated in-place in order to be changed in the main script.
 - `EventsEP(list(DataStructure.Generic.Record))`. Called after loading the list of events.
 - `RunsEP(list(tuple(datetime,datetime)))`. Called before processing data, and allows the manipulation of runs separation.
-- `DataEP(list(DataStructure.Generic.Record), list(list(int/float)))`. Called after loading the data in memory. Allows the manipulation/analisys of given data.
+- `DataEP(list(DataStructure.Generic.Record), list(list(int/float)))`. Called after loading the data in memory. Allows the manipulation/analysis of given data.
 
 Each of these functions must also accept parameters `cli_args = list(str)` and `cfg_args = list(tuple(str,str))`. The first one is a list of command line options passed after `--`, second is the list of tuples (key, value) representing all parameters in `PLUGINS` section of configuration file.
 
-Each function should return an integer 0, indicating that it was run succesfully. Any other returned value will indicate error and will stop execution.
+Each function should return an integer 0, indicating that it was run successfully. Any other returned value will indicate error and will stop execution.
 
-In oreder to incorporate printouts of plugin in the logging system, one should include 
+In order to incorporate printouts of plugin in the logging system, one should include 
 ```
 import logging
 Logger = logging.getLogger(__name__)
@@ -184,11 +201,11 @@ The Subject, Session, Task, and Acquisition can be changed only at `RecordingEP`
 
 **TEST** **TEST** **TEST** 
 
-So I need maindeuvre for extensive testing on existing data. You can run the script on your embla data, and verify that the retrieved information is correct and it is correctly formatted. 
+So I need main d'oeuvre for extensive testing on existing data. You can run the script on your embla data, and verify that the retrieved information is correct and it is correctly formatted. 
 
 If there some crash or an infinite loop, please run the script with `--log DEBUG --logfile <your task name>.log` options and send me the resulting file, and if possible the embla files.
 
-Other corrections/suggestions/spell corections can be reported as issues on gitlab. 
+Other corrections/suggestions/spell corrections can be reported as issues on gitlab. 
 
 ## Future plans
 
@@ -197,3 +214,6 @@ Other corrections/suggestions/spell corections can be reported as issues on gitl
 - A task given in ini or cli can contain non alphanumeric characters, need to check and produce warning/error
 - Treat Frequency correction (how?)
 - Transform into C with cpython
+- Implement frequency under-sampling
+- Implement list of channels for duplicated events
+- Pack created bids json files into separated module

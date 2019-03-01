@@ -60,6 +60,9 @@ def default_parameters():
                                     "SubjName"  :"John Doe",
                                     "BirthDate" :""
                                     }
+    parameters['BIDS'] = {
+                            "IncludeAuxiliary" :"no"
+                         }
     parameters['PLUGINS'] = {
                                     "Plugin" : ""
                             }
@@ -153,6 +156,10 @@ def check_configuration(parameters):
     passed = passed and check_time(parameters, sec, "StartDate", chop=3)
     passed = passed and check_string(parameters, sec, "SubjName")
     passed = passed and check_time(parameters, sec, "BirthDate", chop=3)
+
+    # BIDS
+    sec = "BIDS"
+    passed = passed and check_bool(parameters, sec, "IncludeAuxiliary")
 
     # PLUGINS
     sec = "PLUGINS"

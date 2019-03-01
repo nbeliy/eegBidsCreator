@@ -1,10 +1,14 @@
 import os
 import shutil
+import glob
+import logging
 
+Logger = logging.getLogger(__name__)
 
-def rmdir(path):
-    '''If path is a file, remove it. If path is directory, 
-    recursively removes its content'''
+def rrm(path, keepRoot=False):
+    '''Recursive remove of files and directories 
+    under given path. If keepRoot is True, the 
+    doesn't remove the path.'''
     if os.path.isfile(path):
         os.remove(path)
     else:
@@ -13,6 +17,8 @@ def rmdir(path):
                 os.remove(os.path.join(root, f))
             for d in dirs:
                 shutil.rmtree(os.path.join(root, d))
+            if not keepRoot:
+                shutil.rmtree(root)
 
 
 def humanbytes(B):
@@ -33,3 +39,43 @@ def humanbytes(B):
         return '{0:.2f} GB'.format(B / GB)
     elif TB <= B:
         return '{0:.2f} TB'.format(B / TB)
+
+def create_directory(path, toRemove="", allowDups=True):
+    """Checks if given path exists, and is a directory.
+    If create is True and path not exists, a directory will be created.
+    If toRemove is not '', will control if files with this name exist. 
+    If allowDups is True, such files will be removed. If
+    allowDups is False, an exception will be raised"""
+    if path[-1] != '/':
+        path += '/'
+    res = os.path.isdir(path)
+    if not res and os.path.isfile(path):
+        raise NotADirectoryError("{} is a file".format(path))
+    if not res:
+        Logger.info("Creating directory {}".format(path))
+        os.makedirs(path)
+    else:
+        Logger.debug("Directory {} exists".format(path))
+        if toRemove != "":
+            flist = glob.glob(path + toRemove)
+            if flist != []:
+                msg = "Found {} files with pattern '{}'.".format(len(flist), toRemove)
+                if allowDups:
+                    Logger.warning(msg)
+                    Logger.warning("They will be removed.")
+                    for f in flist:
+                        rrm(f)
+                else:
+                    raise FileExistsError(msg + "Please remove them.")
+
+def remove_empty_dir(path):
+    try:
+        os.rmdir(path)
+        Logger.info("Removed empty directory {}".format(path))
+    except OSError:
+        pass
+
+def remove_empty_dirs(path):
+    for root, dirnames, filenames in os.walk(path, topdown=False):
+        for dirname in dirnames:
+            remove_empty_dir(os.path.realpath(os.path.join(root, dirname)))

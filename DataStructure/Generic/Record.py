@@ -187,7 +187,7 @@ class Record(object):
         self.__prefix = prefix
         return prefix
 
-    def Path(self, app = "eeg"):
+    def Path(self, app = "eeg/"):
         return self.__path+"/"+app
 
     def ResetPath(self):
