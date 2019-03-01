@@ -33,7 +33,7 @@ from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
 
 
-VERSION = 'dev0.7r1'
+VERSION = 'dev0.71'
 
 
 def main(argv):
@@ -91,12 +91,12 @@ def main(argv):
     # then moved to output directory.
     try:
         tmpDir = tempfile.mkdtemp(
-                prefix=argv[0].replace("/","_") + "_") + "/"
+                prefix=os.path.basename(argv[0]) + "_") + "/"
     except FileNotFoundError:
         warnings.warn("TMPDIR: Failed to create temporary directory."
                       "Will try current directory")
         tmpDir = tempfile.mkdtemp(
-                prefix=argv[0].replace("/","_") + "_",dir=".") + "/"
+                prefix=os.path.basename(argv[0]) + "_",dir=".") + "/"
 
     # Alternate formatter:
     # logFormatter = logging.Formatter(
@@ -294,42 +294,32 @@ def main(argv):
         recording.ResetPrefix()
         recording.ResetPath()
         recording.SetEEGPath(prepath=parameters['GENERAL']['OutputFolder'])
-        if os.path.exists(recording.eegPath):
-            Logger.debug("Output directory already exists")
-            flist = glob.glob(recording.eegPath + recording.Prefix(app="*"))
-            if len(flist) != 0:
-                Logger.warning('In {}'.format(recording.eegPath))
-                Logger.warning('Duplicated files {}'.format(recording.Prefix(app="*")))
-                msg = "Found {} files with same identification.".format(len(flist))
-                if parameters["GENERAL"].getboolean("OverideDuplicated"):
-                    Logger.warning(msg)
-                    Logger.warning("They will be removed.")
-                    for f in flist:
-                        tools.rmdir(f)
-                else:
-                    raise Exception(msg + "Please remove them.")
-        else: 
-            Logger.info("Creating output directory {}"
-                        .format(recording.eegPath))
-            os.makedirs(recording.eegPath)
         Logger.info("EEG will be saved in " + recording.eegPath)
 
+        tools.create_directory(
+                path=recording.eegPath,
+                toRemove=recording.Prefix(app="*"),
+                allowDups=parameters["GENERAL"]
+			  .getboolean("OverideDuplicated"))
+
+        tools.create_directory(
+                path=parameters['GENERAL']['OutputFolder'] 
+                     + "sourcedata/log",
+                toRemove=recording.Prefix(app=".log"),
+                allowDups=True)
+
+        tools.create_directory(
+                path=parameters['GENERAL']['OutputFolder'] 
+                     + "sourcedata/configuration",
+                toRemove=recording.Prefix(app=".ini"),
+                allowDups=True)
+
         if parameters['GENERAL'].getboolean('CopySource'):
-            srcPath = parameters['GENERAL']['OutputFolder'] \
-                    + "sourcedata/" + recording.Path() + "/"
-            if os.path.exists(srcPath):
-                if os.path.exists(srcPath + basename):
-                    msg = '{} exists in sourcedata directory.'.format(basename)
-                    if parameters["GENERAL"].getboolean("OverideDuplicated"):
-                        Logger.warning(msg)
-                        Logger.warning('It will be erased.')
-                        tools.rmdir(srcPath + basename)
-                        shutil.rmtree(srcPath + basename)
-                    else:
-                        raise Exception(msg + "Please remove it.")
-            else:
-                Logger.info("Creating output directory {}".format(srcPath))
-                os.makedirs(srcPath)
+            tools.create_directory(
+		    path=srcPath,
+		    toRemove=recording.Prefix(app="*"),
+		    allowDups=
+			parameters["GENERAL"].getboolean("OverideDuplicated"))
             Logger.info("Copiyng original data to sourcedata folder")
             if extension == "":
                 shutil.copytree(parameters['GENERAL']['Path'],
@@ -420,7 +410,6 @@ def main(argv):
                 t_end = t_h
             Logger.info("New duration: {}".format(t_end - t_ref))
 
-        events = []
         Logger.info("Reading events info")
         to_keep =  []
         if parameters['EVENTS']['WhiteList'] != '':
@@ -490,10 +479,7 @@ def main(argv):
                         Time = main_channel.GetSequenceStart(t), 
                         Duration = main_channel.GetSequenceDuration(t))
                     ev.AddChannel(main_channel.GetId())
-                    if not ev in events:
-                        bisect.insort(events,ev)
-                    else :
-                        events[events.index(ev)].AddChannel(main_channel.GetId())
+                    recording.AddEvents(ev)
             else:
                 Logger.warning("Main Channel is not defined. Switching off IncludeSegmentStart")
                 parameters["EVENTS"]["IncludeSegmentStart"] = "no"
@@ -598,36 +584,45 @@ def main(argv):
                             c.GetReference(Void = "n/a"), sep = "\t", file = f
                             )
 
+            Logger.info("Creating events.json file")
+            with open(recording.eegPath+recording.Prefix(run=run,app="_events.json"), "w") as f:
+                ev_struct = {
+                        "responce_time" : {
+                            "Description": "Response time measured in seconds. \
+A negative response time can be used to represent preemptive responses \
+and “n/a” denotes a missed response.",
+                            "Units": "second"},
+                        "value"         : {
+                            "Description": "The event TTL trigger value \
+(EEG Marker value) associated with an event "}
+                        }
+                json.dump(ev_struct, f, indent="  ", separators=(',',':'))
+
             Logger.info("Creating events.tsv file")     
             with open(recording.eegPath+recording.Prefix(run=run,app="_events.tsv"), "w") as f:
                 print   (
                         "onset", "duration", "trial_type", 
-                        "responce_time", "value", "sample", 
+                        "responce_time", "value",
                         sep='\t', file = f
                         )
                 for ev in events:
                     if ev.GetChannelsSize() == 0 or parameters.getboolean("EVENTS","MergeCommonEvents"):
                         print   (  
-                                "%.3f\t%.2f\t%s\tn/a\tn/a\t%d" %(
+                                "%.3f\t%.2f\t%s\tn/a\tn/a" %(
                                     ev.GetOffset(t_ref), ev.GetDuration(), 
-                                    ev.GetName(Void = "n/a", ToReplace=("\t"," ")), 
-                                    ev.GetOffset(t_ref)*recording.Frequency), 
-                                file = f 
+                                    ev.GetName(Void="n/a", ToReplace=("\t"," ")), 
+                                    ), 
+                                file=f 
                                 )
                     else :
                         for c_id in ev.GetChannels():
                             print(
                                     "%.3f\t%.2f\t%s\tn/a\tn/a" %(
                                         ev.GetOffset(t_ref), ev.GetDuration(), 
-                                        ev.GetName(Void = "n/a", ToReplace=("\t"," "))), 
-                                    file = f, end=""
+                                        ev.GetName(Void="n/a", ToReplace=("\t"," "))), 
+                                    file=f
                                 )
-                            #This writes index with channel proper frequency
-                            #print("\t{}".format(channels[ev["Channel"]].GetIndexTime(ev["Time"], freqMultiplier = 1, StartTime=t_ref)), file = f)
-                            #This writes index with common frequency
-                            print("\t{}".format(ch_dict[c_id].GetIndexTime(ev.GetTime(),StartTime=t_ref)), file = f)
 
-                                
             outData = None
             if  parameters['GENERAL']['Conversion'] == "BV":
                 Logger.info("Converting to BrainVision format")
@@ -702,7 +697,7 @@ def main(argv):
                     t_count += 1
                 file_list.append("eeg/{}\t{}".format(
                         recording.Prefix(run=run,app="_eeg.vhdr"), 
-                        t[0].isoformat()))
+                        t_ref.isoformat()))
 
             #EDF part
             elif parameters['GENERAL']['Conversion'] == "EDF":
@@ -852,7 +847,7 @@ def main(argv):
                     t_count += 1
                 file_list.append("eeg/{}\t{}".format(
                         recording.Prefix(run=run,app="_eeg.mat"), 
-                        t[0].isoformat()))
+                        t_ref.isoformat()))
 
             # Copiyng original files if there no conversion
             elif parameters['GENERAL']["Conversion"] == "":
@@ -872,19 +867,29 @@ def main(argv):
                 raise Exception("Conversion to {} format not implemented"
                                 .format(parameters['GENERAL']["Conversion"]))
 
+            scansName = "sub-" + recording.SubjectInfo.ID
+            if recording.GetSession() != "":
+                scansName += "_ses-" + recording.GetSession()
+            scansName += "_scans.tsv"
             with open(parameters['GENERAL']['OutputFolder'] 
-                      + recording.Path(app="scans.tsv"), "a") as f:
+                      + recording.Path(app=scansName), "a") as f:
                 for l in file_list:
                     print(l, file=f)
 
         # Copiyng auxiliary files
-        Logger.info("Copying auxiliary files")
-        for f in recording.GetAuxFiles(path=parameters['GENERAL']['Path']):
-            Logger.debug("file: " + f)
-            shutil.copy2(
-                        parameters['GENERAL']['Path'] + f, 
-                        recording.eegPath + recording.Prefix(app="_" + f)
-                        )
+        if parameters["BIDS"].getboolean("IncludeAuxiliary"):
+            out = parameters['GENERAL']['OutputFolder'] + "auxiliaryfiles/" \
+                  + recording.Path()
+            tools.create_directory(
+                    path= out,
+                    toRemove=recording.Prefix(app="*"),
+                    allowDups=parameters["GENERAL"]
+                              .getboolean("OverideDuplicated"))
+            Logger.info("Copying auxiliary files. It not BIDS complient!")
+            for f in recording.GetAuxFiles(path=parameters['GENERAL']['Path']):
+                Logger.debug("file: " + f)
+                shutil.copy2(parameters['GENERAL']['Path'] + f, 
+                             out + recording.Prefix(app="_" + f))
 
         with open(parameters['GENERAL']['OutputFolder'] 
                   + "participants.tsv", "a") as f:
@@ -899,6 +904,48 @@ def main(argv):
                 s_age = str(time_limits[0][0].year 
                             - recording.SubjectInfo.Birth.year)
             print("{}\t{}\t{}".format(s_id, s_gen, s_age), file=f)
+        if not os.path.isfile(parameters['GENERAL']['OutputFolder'] 
+                              + "participants.json"):
+            with open(parameters['GENERAL']['OutputFolder'] 
+                      + "participants.json", "w") as f:
+                Logger.info("Creating json file for participants.tsv")
+                part_struct = {
+                        "age": {
+                            "LongName"    : "Age",
+                            "Description" : "Age of a subject",
+                            "Units"       : "year"},
+                        "sex": {
+                            "LongName"    : "Sex",
+                            "Description" : "Sex of a subject",
+                            "Levels"      : {
+                                "n/a" : "Not available",
+                                "F"   : "Female",
+                                "M"   : "Male"}
+                              }
+                        }
+                json.dump(part_struct, f, indent="  ", separators=(',',':'))
+                        
+        # Checking the data_description and README files
+        if not os.path.isfile(parameters['GENERAL']['OutputFolder']
+                              + "dataset_description.json"):
+            Logger.warning("BIDS requires 'dataset_description.json' file \
+in output folder.")
+        if not os.path.isfile(parameters['GENERAL']['OutputFolder']
+                              + "README"):
+            Logger.warning("BIDS recommends 'README' file \
+in output folder.")
+
+        # Cheking Plugin file
+        if len(plugins) != 0:
+            if not os.path.isfile(parameters['GENERAL']['OutputFolder']
+                                  + "code/" 
+                                  + parameters["PLUGINS"]["Plugin"]):
+                tools.create_directory(parameters['GENERAL']['OutputFolder']
+                                       + "code")
+                Logger.info("Copying plugin file to code/")
+                shutil.copy2(parameters["PLUGINS"]["Plugin"],
+                             parameters['GENERAL']['OutputFolder']
+                             + "code/.")
 
     except Exception as e:
         if ex_code == 0:
@@ -914,7 +961,7 @@ def main(argv):
             flist = glob.glob(recording.eegPath + recording.Prefix(app="*"))
             if len(flist) != 0:
                 for f in flist:
-                    tools.rmdir(f)
+                    tools.rrm(f)
         Logger.info("Command: '" + "' '".join(argv) + "'")
 
     try:
@@ -923,12 +970,15 @@ def main(argv):
         Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
         if recording and recording.eegPath:
             shutil.copy2(tmpDir + "/logfile",
-                         recording.eegPath + recording.Prefix(app=".log"))
+                         parameters["GENERAL"]["OutputFolder"] 
+                         + "sourcedata/log/"
+                         + recording.Prefix(app=".log"))
             shutil.copy2(tmpDir + "/configuration",
-                         recording.eegPath + recording.Prefix(app=".ini")) 
+                         parameters["GENERAL"]["OutputFolder"] 
+                         + "sourcedata/configuration/"
+                         + recording.Prefix(app=".ini")) 
             fileHandler.close()
-            tools.rmdir(tmpDir)
-            shutil.rmtree(tmpDir)
+            tools.rrm(tmpDir)
         else:
             Logger.warning("Output path is not defined. See in "
                            + tmpDir + "logfile for more details.")

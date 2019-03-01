@@ -363,10 +363,7 @@ class GenChannel(object):
             return self._baseChannel.GetValue(point, sequence, raw)
 
     def __getValue__(self,point, sequence, raw):
-        if raw:
-            return 0
-        else:
-            return 0.
+        raise NotImplementedError()
 
     def GetValueVector(self, timeStart, timeEnd, default=0, freq_mult = None, raw = False):
         if freq_mult == None:
@@ -377,7 +374,7 @@ class GenChannel(object):
             return self._baseChannel.GetValueVector(timeStart, timeEnd, default, freq_mult, raw)
 
     def __getValueVector__(self, timeStart, timeEnd, default, freq_mult, raw):
-        return []
+        raise NotImplementedError()
 
     """< operator for sorting functions"""
     def __lt__(self, other):

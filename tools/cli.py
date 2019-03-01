@@ -43,7 +43,7 @@ def parce_CLI(argv, VERSION):
                         help='logging level')
     parser.add_argument('--mem', 
                         nargs=1, type=int, 
-                        help='allowed memury usage (in GiB)')
+                        help='allowed memory usage (in GiB)')
     parser.add_argument('--conversion', 
                         dest="conv", choices=["EDF","BV","MEEG"], 
                         help="performs conversion to given format")
