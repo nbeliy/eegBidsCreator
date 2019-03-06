@@ -1,6 +1,9 @@
 import math
 from datetime import datetime
 from datetime import timedelta
+import logging
+
+Logger = logging.getLogger(__name__)
 
 class GenChannel(object):
     """An intendent virtual class serving as parent to other, format specific channel classes"""
@@ -35,10 +38,21 @@ class GenChannel(object):
     _MAXSHORT = 32767
     _MINSHORT = -32768
 
-    "Dictionary of standard SI prefixes (as defined in EDF+ standard)"
-    _SIprefixes = {24:'Y', 21:'Z', 18:'E', 15:'P', 12:'T', 9:'G', 6:'M', 3:'K', 2:'H', 1:'D', 0:'', -1:'d', -2:'c', -3:'m', -6:'u', -9:'n', -12:'p', -15:'f', -18:'a', -21:'z', -24:'y'}
-    "Inverted dictionary of standard SI prefixes (as defined in EDF+ standard)"
-    _SIorders   = {'Y':24, 'Z':21, 'E':18, 'P':15, 'T':12,'G': 9,'M': 6,'K': 3,'H': 2,'D': 1, 0:'', 'd':-1, 'c':-2, 'm':-3, 'u':-6, 'n':-9, 'p':-12, 'f':-15, 'a':-18, 'z':21, 'y':-24}
+    """Dictionary of standard SI prefixes, as defined in BIDS"""
+    _SIprefixes = {24:'Y', 21:'Z', 18:'E', 15:'P', 12:'T', 9:'G',
+                   6:'M', 3:'k', 2:'h', 1:'da', 0:'', -1:'d', 
+                   -2:'c', -3:'m', -6:'μ', -9:'n', -12:'p', 
+                   -15:'f', -18:'a', -21:'z', -24:'y'}
+
+    """Inverted dictionary of standard SI prefixes, as defined in BIDS"""
+    _SIorders   = {'Y':24, 'Z':21, 'E':18, 'P':15, 'T':12,'G':9, 
+                   'M': 6,'k': 3,'h': 2,'da': 1, 0:'', 'd':-1, 
+                   'c':-2, 'm':-3, 'μ':-6, 'n':-9, 'p':-12, 
+                   'f':-15, 'a':-18, 'z':21, 'y':-24}
+
+    _BIDStypes = ["AUDIO", "EEG", "HEOG", "VEOG", "EOG", "ECG", "EKG",
+                  "EMG", "EYEGAZE", "GSR", "PUPIL", "REF", "RESP", 
+                  "SYSCLOCK", "TEMP", "TRIG", "MISC"]
 
     def __init__(self):
         self._scale = 1.
@@ -163,6 +177,29 @@ class GenChannel(object):
             return self._type
         else:
             return Void
+
+    def BidsifyType(self):
+        """Replace the type of channel by a BIDS supported type.
+        Matching is performed by searching string from _BIDStypes
+        in original type. If not found, a MISC type is attributed.
+        """
+        if self._type == "EKG":
+            self._type = "ECG"
+        if self._type in self._BIDStypes:
+            # Type already BIDS complient
+            return
+
+        bids_type = "MISC"
+        for t in self._BIDStypes:
+            if t in self._type:
+                bids_type = t
+                break
+        if bids_type == "EKG":
+            bids_type = "ECG"
+        Logger.debug("{}:Changing type from {} to {}".format(
+                     self._name, self._type, t))
+        self._type = t
+
     def SetDescription(self, name):
         if not (isinstance(name, str)):
             raise TypeError(self.__class__+": Description must be a string")

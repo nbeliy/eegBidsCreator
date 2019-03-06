@@ -61,7 +61,8 @@ def default_parameters():
                                     "BirthDate" :""
                                     }
     parameters['BIDS'] = {
-                            "IncludeAuxiliary" :"no"
+                            "IncludeAuxiliary" :"no",
+                            "OriginalTypes"    :"no"
                          }
     parameters['PLUGINS'] = {
                                     "Plugin" : ""
@@ -160,6 +161,7 @@ def check_configuration(parameters):
     # BIDS
     sec = "BIDS"
     passed = passed and check_bool(parameters, sec, "IncludeAuxiliary")
+    passed = passed and check_bool(parameters, sec, "OriginalTypes")
 
     # PLUGINS
     sec = "PLUGINS"

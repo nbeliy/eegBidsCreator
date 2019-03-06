@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Developpement]
 
+### Fixed
+- Incorrect path for source data
+
+### Added 
+- An option `[BIDS]OriginalTypes`, wich allow to change the original channel types to BIDS accepted ones.
+
+### Changed
+- Measurement units prefixes now follows SI as suggested in BIDS, except if conversion is performed into EDF, then prefixes follows EDF+ standard.
+
 ## [dev0.71] - 2018-03-01
 
 ### Fixed
