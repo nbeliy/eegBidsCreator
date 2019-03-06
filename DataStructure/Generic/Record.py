@@ -372,13 +372,17 @@ class Record(object):
             
 
     """Channels related functions"""
-    def AddChannels(self, channels, white_list=[], black_list=[] ):
+    def AddChannels(self, channels, white_list=[], black_list=[], bidsify=False ):
+        """Add chennels to recording. If white_list is given, only channels 
+        with names in it are accepted. Channels with names in blacklist
+        are ignored. If bidsify, then channels are forced to be BIDS complient.
+        """
         if isinstance(channels, list):
             for c in channels:
                 self.__addChannel(c,white_list, black_list)
         else:
             self.__addChannel(channels, white_list, black_list)
-        self.InitChannels()
+        self.InitChannels(bidsify=bidsify)
         
     def __addChannel(self, c, white_list=[], black_list=[]):
         if not isinstance(c, Channel):
@@ -411,7 +415,7 @@ class Record(object):
         return self._mainChannel
 
 
-    def InitChannels(self, resetFrequency=False):
+    def InitChannels(self, resetFrequency=False, bidsify=False):
         """Sort, rebuild and updates dictionary, frequency and min/max times"""
         #Sorting by Id
         self.Channels.sort()
@@ -442,6 +446,8 @@ class Record(object):
                 self.AddFrequency(c.GetFrequency())
                 if fr != self.__Frequency:
                         Logger.info("Updated common sampling frequency to {} Hz".format(self.__Frequency))
+            if bidsify:
+                c.BidsifyType()
 
 
     """Event related functions"""

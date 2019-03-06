@@ -315,9 +315,11 @@ def main(argv):
                 allowDups=True)
 
         if parameters['GENERAL'].getboolean('CopySource'):
+            srcPath = parameters['GENERAL']['OutputFolder']\
+                      + "sourcedata/"
             tools.create_directory(
 		    path=srcPath,
-		    toRemove=recording.Prefix(app="*"),
+		    toRemove=basename,
 		    allowDups=
 			parameters["GENERAL"].getboolean("OverideDuplicated"))
             Logger.info("Copiyng original data to sourcedata folder")
@@ -352,11 +354,18 @@ def main(argv):
         if eegform == "embla":
             channels = [EbmChannel(c) for c in
                         glob.glob(parameters['GENERAL']['Path'] + "*.ebm")]
+        #    if not parameters["BIDS"].getboolean("OriginalTypes"):
+        #        for ch in channels:
+        #            ch.BidsifyType()
         else:
             raise Exception(
                     "EEG format {} not implemented (yet)".format(eegform))
 
-        recording.AddChannels(channels, white_list=to_keep, black_list=to_drop)           
+        recording.AddChannels(channels,
+                              white_list=to_keep,
+                              black_list=to_drop,
+                              bidsify=not parameters["BIDS"]\
+                                      .getboolean("OriginalTypes"))           
         recording.SetMainChannel(parameters["CHANNELS"]["MainChannel"])
         if recording.GetStartTime() and recording.GetStopTime():
             ddt = recording.GetMaxTime() - recording.GetMinTime()
