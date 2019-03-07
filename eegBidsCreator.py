@@ -181,7 +181,8 @@ def main(argv):
     Logger.debug(str(os.sys.argv))
     Logger.debug("Process PID: " + str(os.getpid()))
     Logger.debug("Temporary directory: " + tmpDir)
-    with open(tmpDir + "configuration", 'w') as configfile: 
+    with open(tmpDir + "configuration", 
+              'w', encoding='utf-8') as configfile: 
         parameters.write(configfile)
 
     Logger.info("File: {}".format(parameters['GENERAL']['Path']))
@@ -484,7 +485,10 @@ def main(argv):
                 raise
 
         Logger.info("Creating eeg.json file")
-        with open(recording.eegPath+"/"+recording.Prefix(app="_eeg.json"), "w") as f:
+        with open(
+                  recording.eegPath + "/" + recording.Prefix(app="_eeg.json"), 
+                  "w",
+                  encoding='utf-8') as f:
             recording.UpdateJSON()
             res = recording.CheckJSON()
             if len(res[0]) > 0:
@@ -563,7 +567,10 @@ def main(argv):
                 Logger.info("Run {}: duration: {}".format(run, t_end - t_ref))
             
             Logger.info("Creating channels.tsv file")
-            with open(recording.eegPath+recording.Prefix(run=run,app="_channels.tsv"), "w") as f:
+            with open(recording.eegPath 
+                      + recording.Prefix(run=run,app="_channels.tsv"), 
+                      "w", 
+                      encoding='utf-8') as f:
                 print("name", "type", "units", "description", "sampling_frequency", "reference", 
                     sep='\t', file = f)
                 for c in channels:
@@ -578,7 +585,10 @@ def main(argv):
                                       run=run,
                                       app="_events.json"))
             Logger.info("Creating events.tsv file")     
-            with open(recording.eegPath+recording.Prefix(run=run,app="_events.tsv"), "w") as f:
+            with open(recording.eegPath 
+                      + recording.Prefix(run=run,app="_events.tsv"), 
+                      "w", 
+                      encoding='utf-8') as f:
                 print   (
                         "onset", "duration", "trial_type", 
                         "responce_time", "value", "channels",
@@ -875,7 +885,8 @@ def main(argv):
                 scansName += "_ses-" + recording.GetSession()
             scansName += "_scans.tsv"
             with open(parameters['GENERAL']['OutputFolder'] 
-                      + recording.Path(app=scansName), "a") as f:
+                      + recording.Path(app=scansName), "a",
+                      encoding='utf-8') as f:
                 for l in file_list:
                     print(l, file=f)
 
@@ -895,7 +906,8 @@ def main(argv):
                              out + recording.Prefix(app="_" + f))
 
         with open(parameters['GENERAL']['OutputFolder'] 
-                  + "participants.tsv", "a") as f:
+                  + "participants.tsv", "a",
+                  encoding='utf-8') as f:
             s_id = recording.SubjectInfo.ID
             s_gen = "n/a"
             if recording.SubjectInfo.Gender == 1: 
