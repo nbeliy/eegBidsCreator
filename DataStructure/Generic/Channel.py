@@ -5,6 +5,18 @@ import logging
 
 Logger = logging.getLogger(__name__)
 
+def ReplaceInField(In_string, Void = "", ToReplace = None):
+    if not isinstance(In_string, str) or not isinstance(Void, str):
+        raise TypeError("ReplaceInField: In_string and Void must be a string")
+    if ToReplace != None:
+        if not isinstance(ToReplace, tuple) or len(ToReplace) != 2 or not isinstance(ToReplace[0], str) or not isinstance(ToReplace[1], str):
+            raise TypeError("ReplaceInField: ToReplace must be either None or (str,str)")
+    if In_string == "" :
+        return Void
+    if ToReplace != None:
+        return In_string.replace(ToReplace[0], ToReplace[1])
+    return In_string
+
 class GenChannel(object):
     """An intendent virtual class serving as parent to other, format specific channel classes"""
     __base_slots__ = [
@@ -162,21 +174,15 @@ class GenChannel(object):
         if not (isinstance(name, str)):
             raise TypeError(self.__class__+": Name must be a string")
         self._name = name
-    def GetName(self, Void = ""):
-        if self._name != "":
-            return self._name
-        else:
-            return Void
+    def GetName(self, Void = "", ToReplace=None):
+        return ReplaceInField(self._name, Void, ToReplace)
 
     def SetType(self, name):
         if not (isinstance(name, str)):
             raise TypeError(self.__class__+": Type must be a string")
         self._type = name
-    def GetType(self, Void = ""):
-        if self._type != "":
-            return self._type
-        else:
-            return Void
+    def GetType(self, Void = "", ToReplace=None):
+        return ReplaceInField(self._type, Void, ToReplace)
 
     def BidsifyType(self):
         """Replace the type of channel by a BIDS supported type.
