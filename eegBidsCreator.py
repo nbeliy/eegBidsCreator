@@ -16,6 +16,7 @@ import psutil
 import tools.cfi as cfi
 import tools.cli as cli
 import tools.tools as tools
+import tools.json as tjson
 
 from Parcel.parcel import Parcel
 from DataStructure.Generic.Record import Record as GRecord
@@ -33,7 +34,7 @@ from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
 
 
-VERSION = 'dev0.71'
+VERSION = 'dev0.72'
 
 
 def main(argv):
@@ -265,26 +266,8 @@ def main(argv):
                 ex_code = 100 + 0 + result
                 raise
 
-        JSONdata = dict()
         if parameters['GENERAL']['JsonFile'] != "":
-            if parameters['GENERAL']['JsonFile'][-5:] != ".json": 
-                parameters['GENERAL']['JsonFile'] = \
-                        os.path.realpath(parameters['GENERAL']['JsonFile']) \
-                        + recording.GetTask() + ".json"
-            Logger.info("JSON File: {}"
-                        .format(parameters['GENERAL']['JsonFile']))
-            with open(parameters['GENERAL']['JsonFile']) as f:
-                JSONdata = json.load(f)
-            recording.JSONdata = JSONdata
-            if "SamplingFrequency" in recording.JSONdata:
-                recording.Frequency = recording.JSONdata["SamplingFrequency"]
-            if "TaskName" in recording.JSONdata and \
-                    recording.JSONdata["TaskName"] != recording.GetTask():
-                raise Exception(
-                        "Task name '{}' in JSON file "
-                        "mismach name in record '{}'"
-                        .format(recording.JSONdata["TaskName"],
-                                recording.GetTask()))
+            recording.LoadJson(parameters['GENERAL']['JsonFile'])
 
         Logger.info("Patient Id: {}".format(recording.SubjectInfo.ID))
         Logger.info("Session Id: " + recording.GetSession())
@@ -354,9 +337,6 @@ def main(argv):
         if eegform == "embla":
             channels = [EbmChannel(c) for c in
                         glob.glob(parameters['GENERAL']['Path'] + "*.ebm")]
-        #    if not parameters["BIDS"].getboolean("OriginalTypes"):
-        #        for ch in channels:
-        #            ch.BidsifyType()
         else:
             raise Exception(
                     "EEG format {} not implemented (yet)".format(eegform))
@@ -517,7 +497,7 @@ def main(argv):
                 Logger.warning("JSON: Contains next non BIDS fields: "+ str(res[3]))
             json.dump(recording.JSONdata, f, skipkeys=False, indent="  ", separators=(',',':'))
 
-        #Updating channels frequency multiplier and starting time
+        # Updating channels frequency multiplier and starting time
         for c in recording.Channels:
             c.SetFrequencyMultiplyer(int(recording.Frequency/c.GetFrequency()))
             #c.SetStartTime(t_ref)
@@ -554,11 +534,11 @@ def main(argv):
         file_list = list()
         mem_requested = float(parameters["GENERAL"]["MemoryUsage"])*(1024**3)
         if parameters['GENERAL']['Conversion'] == "EDF":
-            mem_1s = 32*sum(ch.GetFrequency() for ch in channels)
+            mem_1s = 32*sum(ch.GetFrequency() for ch in recording.Channels)
         elif parameters['GENERAL']['Conversion'] == "BV": 
-            mem_1s = 32*len(channels)*recording.Frequency
+            mem_1s = 32*len(recording.Channels)*recording.Frequency
         elif parameters['GENERAL']['Conversion'] == "MEEG": 
-            mem_1s = 32*len(channels)*recording.Frequency
+            mem_1s = 32*len(recording.Channels)*recording.Frequency
 
         for count,t in enumerate(time_limits):
             t_ref = t[0].replace(microsecond=0)
@@ -593,25 +573,15 @@ def main(argv):
                             c.GetReference(Void = "n/a"), sep = "\t", file = f
                             )
 
-            Logger.info("Creating events.json file")
-            with open(recording.eegPath+recording.Prefix(run=run,app="_events.json"), "w") as f:
-                ev_struct = {
-                        "responce_time" : {
-                            "Description": "Response time measured in seconds. \
-A negative response time can be used to represent preemptive responses \
-and “n/a” denotes a missed response.",
-                            "Units": "second"},
-                        "value"         : {
-                            "Description": "The event TTL trigger value \
-(EEG Marker value) associated with an event "}
-                        }
-                json.dump(ev_struct, f, indent="  ", separators=(',',':'))
-
+            tjson.eventsJson(recording.eegPath
+                                  + recording.Prefix(
+                                      run=run,
+                                      app="_events.json"))
             Logger.info("Creating events.tsv file")     
             with open(recording.eegPath+recording.Prefix(run=run,app="_events.tsv"), "w") as f:
                 print   (
                         "onset", "duration", "trial_type", 
-                        "responce_time", "value",
+                        "responce_time", "value", "channels",
                         sep='\t', file = f
                         )
                 for ev in events:
@@ -620,15 +590,31 @@ and “n/a” denotes a missed response.",
                                 "%.3f\t%.2f\t%s\tn/a\tn/a" %(
                                     ev.GetOffset(t_ref), ev.GetDuration(), 
                                     ev.GetName(Void="n/a", ToReplace=("\t"," ")), 
-                                    ), 
+                                    ),
+                                end="",
                                 file=f 
                                 )
+                        ch_list = "\t"
+                        if ev.GetChannelsSize() == 0:
+                            ch_list += "n/a"
+                        else:
+                            for c_id in ev.GetChannels():
+                                ch = recording.GetChannelById(c_id)
+                                ch_list += ch.GetName(Void="n/a",
+                                                      ToReplace=("\t"," "))
+
+                                ch_list += ","
+                        print(ch_list, file=f)
                     else :
                         for c_id in ev.GetChannels():
                             print(
-                                    "%.3f\t%.2f\t%s\tn/a\tn/a" %(
+                                    "%.3f\t%.2f\t%s\tn/a\tn/a\t%s" %(
                                         ev.GetOffset(t_ref), ev.GetDuration(), 
-                                        ev.GetName(Void="n/a", ToReplace=("\t"," "))), 
+                                        ev.GetName(Void="n/a",
+                                                   ToReplace=("\t"," ")),
+                                        recording.GetChannelById(c_id)\
+                                                .GetName(Void="n/a", 
+                                                         ToReplace=("\t"," "))),
                                     file=f
                                 )
 
@@ -657,7 +643,11 @@ and “n/a” denotes a missed response.",
                         outData.MarkerFile.AddMarker(ev.GetName(ToReplace = (",","\1")), ev.GetTime(), ev.GetDuration(), -1, "")
                     else:
                         for c in ev.GetChannels():
-                            outData.MarkerFile.AddMarker(ev.GetName(ToReplace = (",","\1")), ev.GetTime(), ev.GetDuration(), channels.index(ch_dict[c]), "")
+                            outData.MarkerFile.AddMarker(
+                                    ev.GetName(ToReplace = (",","\1")), 
+                                    ev.GetTime(), ev.GetDuration(), 
+                                    channels.index(recording.GetChannelById(c)),
+                                    "")
                 outData.MarkerFile.Write()
 
                 Logger.info("Creating eeg data file")
@@ -736,7 +726,11 @@ and “n/a” denotes a missed response.",
                         outData.AddEvent(ev.GetName(), ev.GetTime(), ev.GetDuration(), -1, "")
                     else:
                         for c in ev.GetChannels():
-                            outData.AddEvent(ev.GetName(), ev.GetTime(), ev.GetDuration(), channels.index(ch_dict[c]), "")
+                            outData.AddEvent(
+                                    ev.GetName(), ev.GetTime(), 
+                                    ev.GetDuration(), 
+                                    channels.index(recording.GetChannelById(c)), 
+                                    "")
                 outData.WriteEvents()
                     
                 Logger.info("Creating eeg.edf file")
@@ -915,25 +909,10 @@ and “n/a” denotes a missed response.",
             print("{}\t{}\t{}".format(s_id, s_gen, s_age), file=f)
         if not os.path.isfile(parameters['GENERAL']['OutputFolder'] 
                               + "participants.json"):
-            with open(parameters['GENERAL']['OutputFolder'] 
-                      + "participants.json", "w") as f:
-                Logger.info("Creating json file for participants.tsv")
-                part_struct = {
-                        "age": {
-                            "LongName"    : "Age",
-                            "Description" : "Age of a subject",
-                            "Units"       : "year"},
-                        "sex": {
-                            "LongName"    : "Sex",
-                            "Description" : "Sex of a subject",
-                            "Levels"      : {
-                                "n/a" : "Not available",
-                                "F"   : "Female",
-                                "M"   : "Male"}
-                              }
-                        }
-                json.dump(part_struct, f, indent="  ", separators=(',',':'))
-                        
+            tjson.participantsJson(
+                    parameters['GENERAL']['OutputFolder'] 
+                    + "participants.json")
+                
         # Checking the data_description and README files
         if not os.path.isfile(parameters['GENERAL']['OutputFolder']
                               + "dataset_description.json"):

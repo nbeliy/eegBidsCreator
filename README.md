@@ -215,5 +215,3 @@ Other corrections/suggestions/spell corrections can be reported as issues on git
 - Treat Frequency correction (how?)
 - Transform into C with cpython
 - Implement frequency under-sampling
-- Implement list of channels for duplicated events
-- Pack created bids json files into separated module

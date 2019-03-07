@@ -1,32 +1,38 @@
 from datetime import datetime
-import glob, os
+import glob
+import os
 import logging
 import bisect
+import json
 
 from DataStructure.Generic.Channel import GenChannel as Channel
-from DataStructure.Generic.Event   import GenEvent   as Event
+from DataStructure.Generic.Event import GenEvent as Event
 
 Logger = logging.getLogger(__name__)
 
+
 class Subject(object):
-    __slots__ = ["ID", "Name", "Address", "__gender", "Birth", "Notes", "Height", "Weight", "Head"]
+    __slots__ = ["ID", "Name", "Address", "__gender", "Birth",
+                 "Notes", "Height", "Weight", "Head"]
+
     def __init__(self):
-        self.ID   = ""
+        self.ID = ""
         self.Name = ""
         self.Address = ""
-        self.Gender  = 0
-        self.Birth   = datetime.min
-        self.Notes   = ""
-        self.Height  = 0
-        self.Weight  = 0
-        self.Head    = 0
+        self.Gender = 0
+        self.Birth = datetime.min
+        self.Notes = ""
+        self.Height = 0
+        self.Weight = 0
+        self.Head = 0
 
     @property
     def Gender(self):
         return self.__gender
+
     @Gender.setter
     def Gender(self, value):
-        if value == None:
+        if value is None:
             self.__gender = 0
             return
         if isinstance(value, str):
@@ -36,40 +42,45 @@ class Subject(object):
             if value in ["F", "f", "W", "w"]:
                 self.__gender = 1
                 return
-            raise ValueError("Unknown Gender identification: "+value)
+            raise ValueError("Unknown Gender identification: " + value)
         if isinstance(value, int):
             if value in [0,1,2]:
                 self.__gender = value
                 return
-            raise ValueError("Unknown Gender identification: "+value)
+            raise ValueError("Unknown Gender identification: " + value)
         raise ValueError("Gender identification must be integer or string")
-    
+
 
 class Device(object):
     __slots__ = ["Type", "ID", "Name", "Manufactor", "Model", "Version"]
+
     def __init__(self):
         self.Type = ""
-        self.ID   = ""
+        self.ID = ""
         self.Name = ""
         self.Manufactor = ""
-        self.Model= ""
+        self.Model = ""
         self.Version = ""
+
 
 class Record(object):
     __slots__ = ["JSONdata", "SubjectInfo", "DeviceInfo", "Type", 
-            "__StartTime", "__StopTime",#Time when registrement actually starts and stops
-            "__MinTime", "__MaxTime", #Time where the first and last data point are taken
-            "__RefTime", "__EndTime", #Time limits concidered for confertion
-            "__task", "__acquisition", "__session",
-            "Channels", "_chDict", "_dropped","_mainChannel",
-            "Events",
-            "__Frequency",
-            "__path", "__prefix",
-            "_aDate",
-            "_extList",
-            "_eegPath"
-            ]
-    #__JSONfields contains the full list of fields in JSON with a tags:
+                 # Time when registrement actually starts and stops
+                 "__StartTime", "__StopTime",
+                 # Time where the first and last data point are taken
+                 "__MinTime", "__MaxTime", 
+                 # Time limits concidered for confertion
+                 "__RefTime", "__EndTime",
+                 "__task", "__acquisition", "__session",
+                 "Channels", "_chDict", "_dropped","_mainChannel",
+                 "Events",
+                 "__Frequency",
+                 "__path", "__prefix",
+                 "_aDate",
+                 "_extList",
+                 "_eegPath"
+                ]
+    # __JSONfields contains the full list of fields in JSON with a tags:
     #   0 - required
     #   1 - recommended
     #   2 - optional
@@ -335,6 +346,37 @@ class Record(object):
         self.DeviceInfo.Model= model
         self.DeviceInfo.Version = version
 
+    def LoadJson(self, filename):
+        """Loads JSOn file. If Given filename doesn't contain '.json'
+        extension, a task name will be appended together with extension.
+        """
+        if not isinstance(filename,str):
+            raise TypeError("filename must be a string")
+
+        if filename[-5:] != ".json":
+            filename += self.__task + ".json" 
+        filename = os.path.realpath(filename)
+        Logger.info("JSON File: {}".format(filename))
+        if not os.path.isfile(filename):
+            raise FileNotFoundError("JSON file {} not found".format(filename))
+        try:
+            with open(filename) as f:
+                self.JSONdata = json.load(f)
+        except json.JSONDecodeError as ex:
+            Logger.error("Unable to decode JSON file {}".format(filename))
+            raise
+        if "SamplingFrequency" in self.JSONdata:
+            self.Frequency = self.JSONdata["SamplingFrequency"]
+        if "TaskName" in self.JSONdata and \
+                self.JSONdata["TaskName"] != self.GetTask():
+            raise Exception(
+                    "Task name '{}' in JSON file "
+                    "mismach name in record '{}'"
+                    .format(self.JSONdata["TaskName"],
+                            self.GetTask()))
+
+
+
     def UpdateJSON(self):
         if not ("TaskName" in self.JSONdata):
             self.JSONdata["TaskName"] = self.__task
@@ -449,6 +491,11 @@ class Record(object):
             if bidsify:
                 c.BidsifyType()
 
+    def GetChannelById(self, Id):
+        if Id in self._chDict:
+            return self._chDict[Id]
+        else:
+            raise KeyError("Id {} not in the list of channels")
 
     """Event related functions"""
     #self.Events

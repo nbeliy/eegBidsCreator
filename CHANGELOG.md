@@ -5,14 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Developpement]
 
+## [dev0.72] - 2018-03-07
+
 ### Fixed
 - Incorrect path for source data
+- The call to ch\_dict where this dictionary doesn't exists
 
 ### Added 
 - An option `[BIDS]OriginalTypes`, wich allow to change the original channel types to BIDS accepted ones.
+- List of channels triggering a particular event in channels.tsv file
 
 ### Changed
 - Measurement units prefixes now follows SI as suggested in BIDS, except if conversion is performed into EDF, then prefixes follows EDF+ standard.
+- JSON file creation functions are moved to `tools.json`
 
 ## [dev0.71] - 2018-03-01
 
