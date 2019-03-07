@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Developpement]
 
+### Fixed
+- Forced utf-8 encoding for output files for non-unicode systems
+
 ## [dev0.72] - 2018-03-07
 
 ### Fixed
