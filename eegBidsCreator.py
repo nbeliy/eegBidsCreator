@@ -34,13 +34,14 @@ from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
 
 
-VERSION = 'dev0.72'
+VERSION = 'dev0.72r1'
 
 
 def main(argv):
 
     process = psutil.Process(os.getpid())
     recording = None
+    outData = None
 
     argv_plugin = None
     if '--' in argv:
@@ -546,7 +547,7 @@ def main(argv):
 
         for count,t in enumerate(time_limits):
             t_ref = t[0].replace(microsecond=0)
-            t_end = t[1].replace(microsecond=0, second=t[1].second+1)
+            t_end = t[1].replace(microsecond=0) + timedelta(seconds=1)
 
             #Getting list of channels and events
             channels = recording.Channels
@@ -628,7 +629,6 @@ def main(argv):
                                     file=f
                                 )
 
-            outData = None
             if  parameters['GENERAL']['Conversion'] == "BV":
                 Logger.info("Converting to BrainVision format")
                 outData = BrainVision(recording.eegPath, recording.Prefix(run=run), AnonymDate=ANONYM_DATE)
@@ -958,6 +958,7 @@ in output folder.")
                          + str(l[1]) + " in " + l[2] + ":")
         Logger.error(type(e).__name__ + ": " + str(e))
         if recording is not None and recording.eegPath is not None:
+            if not outData is None: del outData
             flist = glob.glob(recording.eegPath + recording.Prefix(app="*"))
             if len(flist) != 0:
                 for f in flist:
