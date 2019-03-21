@@ -26,11 +26,11 @@ Logger.info("Path: {}".format(path))
 dirs = [os.path.basename(d)[4:] for d in glob.glob(path + "/sub-*")]
 
 Logger.info("Reading subjects list")
-f = open(path+"/participants.tsv")
+f = open(path + "/participants.tsv")
 subj = [l.split("\t") for l in set(f.readlines())]
 f.close()
 
-subj = [s for s in subj if s[0] in dirs ]
+subj = [s for s in subj if s[0] in dirs]
 subj.sort(key=lambda s: s[0])
 if subj == [] or dirs == []:
     raise Exception("Couldn't find subjects in {}".format(path))
@@ -44,7 +44,7 @@ for d in dirs:
 
 # Add security measure if writ
 Logger.info("Writting subject list")
-f = open(path+"/participants.tsv", "w")
+f = open(path + "/participants.tsv", "w")
 print("\t".join(["participant_id", "sex", "age"]), file=f)
 for s in subj:
     print("\t".join(s), end='', file=f)
@@ -58,7 +58,7 @@ for sc in glob.glob(path + "/**/*scans.tsv", recursive=True):
     files = [fl.split('\t') for fl in set(f.readlines())]
     f.close()
     files = [fl for fl in files if os.path.isfile(loc_path + "/" + fl[0])]
-    
+
     full_list = glob.glob(loc_path + "/*/*", recursive=True)
     prefixes = []
     for pr in files:

@@ -5,6 +5,7 @@ import logging
 
 Logger = logging.getLogger(__name__)
 
+
 def rrm(path, keepRoot=False):
     '''Recursive remove of files and directories 
     under given path. If keepRoot is True, the 
@@ -40,6 +41,7 @@ def humanbytes(B):
     elif TB <= B:
         return '{0:.2f} TB'.format(B / TB)
 
+
 def create_directory(path, toRemove="", allowDups=True):
     """Checks if given path exists, and is a directory.
     If create is True and path not exists, a directory will be created.
@@ -59,7 +61,8 @@ def create_directory(path, toRemove="", allowDups=True):
         if toRemove != "":
             flist = glob.glob(path + toRemove)
             if flist != []:
-                msg = "Found {} files with pattern '{}'.".format(len(flist), toRemove)
+                msg = "Found {} files with pattern '{}'."\
+                      .format(len(flist), toRemove)
                 if allowDups:
                     Logger.warning(msg)
                     Logger.warning("They will be removed.")
@@ -68,12 +71,14 @@ def create_directory(path, toRemove="", allowDups=True):
                 else:
                     raise FileExistsError(msg + "Please remove them.")
 
+
 def remove_empty_dir(path):
     try:
         os.rmdir(path)
         Logger.info("Removed empty directory {}".format(path))
     except OSError:
         pass
+
 
 def remove_empty_dirs(path):
     for root, dirnames, filenames in os.walk(path, topdown=False):

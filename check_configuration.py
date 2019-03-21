@@ -3,14 +3,13 @@ import tools.cfi as cfi
 
 
 def check_configuration(filename):
-    
     parameters = cfi.default_parameters()
     cfi.read_parameters(parameters, filename)
     if cfi.check_configuration(parameters):
-        print("File "+ filename + " seems to be correct")
+        print("File " + filename + " seems to be correct")
         return 0
     else:
-        print("File "+ filename + " contains errors")
+        print("File " + filename + " contains errors")
         return 1
 
 
