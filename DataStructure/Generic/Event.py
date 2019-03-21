@@ -1,56 +1,62 @@
 from datetime import datetime
 
-def ReplaceInField(In_string, Void = "", ToReplace = None):
+
+def ReplaceInField(In_string, Void="", ToReplace=None):
     if not isinstance(In_string, str) or not isinstance(Void, str):
         raise TypeError("ReplaceInField: In_string and Void must be a string")
-    if ToReplace != None:
-        if not isinstance(ToReplace, tuple) or len(ToReplace) != 2 or not isinstance(ToReplace[0], str) or not isinstance(ToReplace[1], str):
-            raise TypeError("ReplaceInField: ToReplace must be either None or (str,str)")
+    if ToReplace is not None:
+        if not isinstance(ToReplace, tuple)\
+           or len(ToReplace) != 2\
+           or not isinstance(ToReplace[0], str)\
+           or not isinstance(ToReplace[1], str):
+            raise TypeError("ReplaceInField: "
+                            "ToReplace must be either None or (str,str)")
     if In_string == "" :
         return Void
-    if ToReplace != None:
+    if ToReplace is not None:
         return In_string.replace(ToReplace[0], ToReplace[1])
     return In_string
 
+
 class GenEvent(object):
-    """An intendent virtual class serving as parent to other, format specific event classes"""
+    """An intendent virtual class serving as parent to other,
+    format specific event classes"""
     __base_slots__ = ["_name", "_time", "_duration", "_channels", "_baseEvent"]
-
     __slots__ = __base_slots__
-
 
     def __copy__(self, source):
         if not isinstance(source, GenEvent):
-            raise TypeError(self.__class__+": Source object must be a daughter of "+self.__class__)
+            raise TypeError("Source object must be a daughter of " 
+                            + self.__class__.__name__)
         for f in self.__base_slots__:
             setattr(self, f, getattr(source, f))
         self._baseEvent = source
 
-    def __init__(self, Name = "", Time = datetime.min, Duration = 0):
-        self._name      = Name
-        self._time      = Time
-        self._duration  = Duration
-        self._channels  = []
+    def __init__(self, Name="", Time=datetime.min, Duration=0):
+        self._name = Name
+        self._time = Time
+        self._duration = Duration
+        self._channels = []
         self._baseEvent = self
 
     def SetName(self, Name):
         if not isinstance(Name, str):
-            raise TypeError(self.__class__+": Name must be a string")
+            raise TypeError("Name must be a string")
         self._name = Name
 
-    def SetTime(self, Time = None, Duration = None):
-        if Time == None:
+    def SetTime(self, Time=None, Duration=None):
+        if Time is None:
             Time = self._time
-        if Duration == None:
+        if Duration is None:
             Duration = self._duration
         if not (isinstance(Duration, int) or isinstance(Duration, float)):
-            raise TypeError(self.__class__+ ": Duration must be a number")
-        if not isinstance(StartTime, datetime):
-            raise TypeError(self.__class__+ ": Time must be a datetime object")
+            raise TypeError("Duration must be a number")
+        if not isinstance(Time, datetime):
+            raise TypeError("Time must be a datetime object")
         self._time = Time
         self._duration = Duration
 
-    def GetName(self, Void = "", ToReplace = None ):
+    def GetName(self, Void="", ToReplace=None):
         return ReplaceInField(self._name, Void, ToReplace)
 
     def GetTime(self):
@@ -61,14 +67,14 @@ class GenEvent(object):
 
     def GetOffset(self, Time):
         if not isinstance(Time, datetime):
-            raise TypeError(self.__class__+ ": Time must be a datetime object")
-        return (self._time - Time ).total_seconds()
+            raise TypeError("Time must be a datetime object")
+        return (self._time - Time).total_seconds()
 
     def AddChannel(self, Id):
         if isinstance(Id, list):
             for ref in Id:
                 self.AddChannel(ref)
-        elif not Id in self._channels:
+        elif Id not in self._channels:
             self._channels.append(Id)
 
     def GetChannels(self):
@@ -77,8 +83,8 @@ class GenEvent(object):
     def GetChannelsSize(self):
         return len(self._channels)
 
-    def RemoveChannel(self, Id = None):
-        if Id == None:
+    def RemoveChannel(self, Id=None):
+        if Id is None:
             self._channels = []
         if isinstance(Id, list):
             for ref in Id:
@@ -88,15 +94,17 @@ class GenEvent(object):
 
     def __eq__(self, other):
         if type(other) != type(self):
-            raise TypeError(self.__class__+": Comparaison arguments must be of the same class")
-        if self._time == other._time and self._name == other._name and self._duration == other._duration : 
+            raise TypeError("Comparaison arguments must be of the same class")
+        if self._time == other._time\
+           and self._name == other._name\
+           and self._duration == other._duration : 
             return True
         else:
             return False
 
     def __lt__(self, other):
         if type(other) != type(self):
-            raise TypeError(self.__class__+": Comparaison arguments must be of the same class")
+            raise TypeError("Comparaison arguments must be of the same class")
         if self._time != other._time:
             return self._time < other._time
         if self._name != other._name:
@@ -104,10 +112,10 @@ class GenEvent(object):
         if self._duration != other._duration:
             return self._duration < other._duration
         return False
- 
+
     def __gt__(self, other):
         if type(other) != type(self):
-            raise TypeError(self.__class__+": Comparaison arguments must be of the same class")
+            raise TypeError("Comparaison arguments must be of the same class")
         if self._time != other._time:
             return self._time > other._time
         if self._name != other._name:

@@ -6,7 +6,12 @@ Logger = logging.getLogger(__name__)
 
 """Module with functions treating all JSON related staff"""
 
+
 def loadJson(filename, app=""):
+    """Reads JSON file and returns the resulting json object
+    If given filename do not ends with '.json', forms new
+    filename as follows: 'filename''app'.json
+    """
     if not isinstance(filename,str):
         raise TypeError("filename must be a string")
     if not isinstance(app,str):
@@ -25,25 +30,33 @@ def loadJson(filename, app=""):
         Logger.error("Unable to decode JSON file {}".format(filename))
         raise
 
+
 def eventsJson(filename):
+    """Writes events.json file describing the events.tsv
+    file fields."""
     Logger.info("Creating events.json file")
     ev_struct = {
                 "responce_time" : {
-                    "Description": "Response time measured in seconds. \
-A negative response time can be used to represent preemptive responses \
-and “n/a” denotes a missed response.",
+                    "Description": "Response time measured in seconds. "
+                                   "A negative response time can be used "
+                                   "to represent preemptive responses "
+                                   "and “n/a” denotes a missed response.",
                     "Units": "second"},
                 "value"         : {
-                    "Description": "The event TTL trigger value \
-(EEG Marker value) associated with an event "},
+                    "Description": "The event TTL trigger value "
+                                   "(EEG Marker value) associated "
+                                   "with an event "},
                 "channels"      : {
-                    "Description": "Comma separated list of channels triggering an event"
+                    "Description": "Comma separated list of channels "
+                                   "triggering an event"
                     }
                 }
     return dumpJson(filename, ev_struct)
 
 
 def participantsJson(filename):
+    """Writes participants.json file describing the participants.tsv
+    file fields."""
     Logger.info("Creating participantss.json file")
     part_struct = {
                     "age": {
@@ -63,6 +76,7 @@ def participantsJson(filename):
 
 
 def dumpJson(filename, data):
+    """Writes a dictionary in data into json file"""
     if not isinstance(filename, str):
         raise TypeError("filename must be a string")
     if filename[-5:] != ".json":
@@ -75,5 +89,3 @@ def dumpJson(filename, data):
 
     with open(filename, 'w') as f:
             return json.dump(data, f, indent="  ", separators=(',',':'))
-
-
