@@ -415,20 +415,15 @@ class GenChannel(object):
             raise IndexError("index (" + str(index) + ")is out of the range")
         return StartTime + index / (self._frequency * freqMultiplier)
 
-    def GetIndexTime(self, time, StartTime=None, freqMultiplier=None):
+    def GetIndexTime(self, time, freqMultiplier=None):
         """Returns index of corresponding time """
-        if StartTime is None:
-            StartTime = self._startTime
         if freqMultiplier is None:
-            freqMultiplier = self._frMultiplier
-        if not isinstance(StartTime, datetime):
-            raise TypeError("StartTime must be datetime object")
+            freqMultiplier = 1
         if not (isinstance(freqMultiplier,int) or freqMultiplier > 0):
             raise TypeError("freqMultiplier must be a positive integer") 
         if not isinstance(time, datetime):
             raise TypeError("time must be datetime object")
-        return int((time - StartTime).total_seconds()
-                   * (self._frequency * freqMultiplier))
+        return self._getLocalIndex(time, freqMultiplier)
 
     def GetLocalIndex(self, index, StartTime=None, freqMultiplier=None):
         """Returns the (sequence, loc_index) for given data point.
@@ -436,7 +431,7 @@ class GenChannel(object):
         if StartTime is None:
             StartTime = self._startTime
         if freqMultiplier is None:
-            freqMultiplier = self._frMultiplier
+            freqMultiplier = 1
         if not isinstance(StartTime, datetime):
             raise TypeError("StartTime must be datetime object")
         if not (isinstance(freqMultiplier,int) or freqMultiplier > 0):
@@ -460,32 +455,338 @@ class GenChannel(object):
             if index < 0:
                 return (seq,-1)
 
-    def GetValue(self, point, sequence=None, raw=False):
-        """Pure virtual functions for retrieving data"""
-        if self._baseChannel == self:
-            return self.__getValue__(point, sequence, raw)
-        else:
-            return self._baseChannel.GetValue(point, sequence, raw)
+    def GetValue(self, point, default=0, 
+                 sequence=None, StartTime=None, 
+                 raw=False):
+        """
+        Retrieves value of a particular time point. If given hannel is 
+        a copy of an original channel, the values are retrieved from 
+        the original one. In such case the sequences and start times are
+        also treated by original channel.
 
-    def __getValue__(self,point, sequence, raw):
-        raise NotImplementedError()
+        This is virtual function, a particular implementation depends
+        on daughter class.
+
+        Parameters
+        ----------
+        point : int 
+            the index of the point to be retrieved
+            If sequence is not given, a global index is used
+        point : datetime
+            the time of point to be retrieved
+        point : timedelta
+            the index of the point to be retrieved 
+            by time passed from beginning of sequence
+        default : int, 0
+            returned value if asked point not available
+            e.g. not in sequence
+        sequence : int, optional
+            specifies the sequence in which data will be retrieved. 
+            Points outside given sequence will return default value.
+            If pont parameter is given by time, sequence is ignored
+        StartTime : datetime, optional
+            if point is given by timedelta, specifies the reference time.
+            If set to None, the channel-defined value is used.
+            If sequence is specified, StartTime is ignored and 
+            the beginning of given sequence is used as reference
+        raw : bool, False
+            If set to true, the raw, unscaled value is retrieved
+
+        Returns
+        ---------
+        float or int
+            the value of required point
+
+        Raises
+        --------
+        TypeError
+            if given parameters are of wrong type
+        NotImplementedError
+            if class do not implements data retrieval in 
+            _getValue function
+        """
+        # In case of copied channel, all sequences and times are
+        # treated by original channel
+        if self._baseChannel != self:
+            return self._baseChannel.GetValue(point, default,
+                                              sequence, StartTime, raw)
+
+        if not (isinstance(point, int) 
+                or isinstance(point, datetime) 
+                or isinstance(point, timedelta)):
+            raise TypeError("point must be either int, datetime or timedelta")
+        if not (sequence is None or isinstance(sequence, int)):
+            raise TypeError("sequence must be either None or int")
+        if not isinstance(raw, bool):
+            raise TypeError("raw must be a bool")
+
+        if sequence is not None:
+            if StartTime is not None:
+                Logger.warning("StartTime is defined together "
+                               "with sequence. StartTime will be ignored")
+            if sequence < 0 or sequence > self.GetNsequences():
+                return default
+            StartTime = self.GetSequenceStart(sequence)
+        if StartTime is None:
+            StartTime = self._startTime
+
+        # point by time
+        if isinstance(point, datetime):
+            if sequence is not None:
+                Logger.warning("sequence parameter is defined "
+                               "but point is passed by absolute time. "
+                               "sequence will be ignored")
+            # converting time to index
+            point, sequence = self._getLocalIndex(point)
+
+        # point by timedelta
+        elif isinstance(point, timedelta):
+            if sequence is not None:
+                point = round(point.total_seconds() * self._frequency)
+                if point > self.GetSequenceSize(sequence):
+                    point = -1
+            else:
+                point = StartTime + point
+                point, sequence = self._getLocalIndex(point)
+
+        # point by index
+        else:
+            if sequence is not None: 
+                if point > self.GetSequenceSize(sequence):
+                    point = -1
+            else:
+                point = self._startTime + timedelta(seconds=point
+                                                    / self._frequency)
+                point, sequence = self._getLocalIndex(point)
+
+        if point < 0 or sequence < 0:
+            return default
+
+        value = self._getValue(point, sequence)
+        if raw:
+            return value
+        else:
+            return self._fromRaw(value)
+
+    def _getValue(self, point, sequence):
+        """
+        Retrieves value of a particular time point.
+        This is virtual function and will always raise
+        NotImplemented error.
+
+        The reimplementation of function is not expected to check 
+        the validity of parameters and ranges.
+
+        Parameters
+        ----------
+        point : int
+            the index of the point to be retrieved
+        sequence : int
+            specifies the sequence in which data will be retrieved
+
+        Returns
+        -------
+        float or int
+            the value of required point
+
+        Raises
+        ------
+        NotImplementedError
+            if _getValue is not implemented for given format
+        """
+        raise NotImplementedError("_getValue")
 
     def GetValueVector(self, timeStart, timeEnd, 
                        default=0, freq_mult=None, raw=False):
-        if freq_mult is None:
-            freq_mult = self._frMultiplier
-        if self._baseChannel == self:
-            return self.__getValueVector__(timeStart, timeEnd, 
-                                           default, freq_mult, raw)
-        else:
+        """
+        Reads and returns datapoints in range [timeStart, timeEnd[.
+        The data point coresponding to timeEnd is not retrieved to avoid
+        overlaps in sequential reading. If timeEnd - timeStart < 1/frequency
+        no data will be readed.
+
+        If given hannel is a copy of an original channel, the values 
+        are retrieved from the original one. In such case the sequences 
+        and start times are also treated by original channel.
+
+        All values that are output data sequences are filled with 
+        default value.
+
+        This functions calls _getValueVector virtual function
+
+        Parameters
+        ----------
+        timeStart : datetime
+            Start time point for reading data
+        timeEnd : datetime
+            End time point for reading data. Must be equal or bigger than
+            timeStart. Data point at timeEnd is not retrieved.
+        timeEnd : timedelta
+            time range from startTime to be read. Must be positive.
+        default : float, 0
+            default value for result, if data fals out of sequences
+        freq_mult : int, None
+            If set, resulting list will be oversampled by this value.
+            Each additional cells will be filled with preceeding value
+        raw : bool, False
+            If set to true, the retrieved values will be unscaled
+
+        Raises
+        ------
+        TypeError
+            if passed parameters are of wrong type
+        ValueError
+            if timeStart is greater than stopTime
+        NotImplemented
+            if _getValueVector is not implemented for used format
+        """
+        if self._baseChannel != self:
             return self._baseChannel.GetValueVector(timeStart, timeEnd,
                                                     default, freq_mult, raw)
+        if not (isinstance(timeStart, datetime)):
+            raise TypeError("timeStart must be datetime")
+        if not (isinstance(timeEnd, datetime)
+                or isinstance(timeEnd, timedelta, float)):
+            raise TypeError("timeEnd must be either "
+                            "datetime, timedelta or float")
+        if freq_mult is None:
+            freq_mult = 1
+        if not (isinstance(freq_mult, int)):
+            raise TypeError("freq_mult must be int")
+        if not (isinstance(raw, bool)):
+            raise TypeError("raw must be boolean")
 
-    def __getValueVector__(self, timeStart, timeEnd, default, freq_mult, raw):
-        raise NotImplementedError()
+        dt = timeEnd
+        if isinstance(dt, datetime):
+            dt = (dt - timeStart).total_seconds()
+        elif isinstance(dt, timedelta):
+            timeEnd = timeStart + dt
+            dt = dt.total_seconds()
+        if dt < 0:
+            raise ValueError("time span must be positif")
+
+        # total size of data to retrieve
+        points = int(dt * self._frequency)
+        res = [default] * int(dt * self._frequency * freq_mult)
+        seq = -1
+
+        for seq_start, seq_size, seq_time\
+                in zip(self._seqStart, self._seqSize, self._seqStartTime):
+            seq += 1
+            # Sequance starts after end time
+            if seq_time >= timeEnd: break
+            # offset of sequance start relative to start time
+            offset = round((timeStart - seq_time).total_seconds()
+                           * self._frequency)
+
+            # Sequence ends before time start
+            if (offset) >= seq_size:
+                continue
+
+            to_read = 0
+            # Index to point in res
+            index = 0
+            read_start = 0
+
+            # Case 1: sequence started before timeStart, offset is negative
+            # We fill from beginning of res list,
+            # but reading data from middle of sequence
+            if offset >= 0 :
+                # number of points to the end of sequence
+                to_read = min(seq_size - offset, points)
+                read_start = offset
+
+            # Case 2: sequence starts after timeStart, offset is positive
+            # We read from start of sequence,
+            # but fill in the middle of res vector
+            else:
+                offset = -offset
+                if offset * freq_mult > len(res): break
+                to_read = min(seq_size, points - offset)
+                index = offset * freq_mult
+
+            d = self._getValueVector(read_start, to_read, seq)
+            if len(d) != to_read:
+                raise Exception("Sequence {}: readed {} points, "
+                                "{} expected".format(
+                                    seq, len(d), to_read))
+            for i in range(0, to_read):
+                # res[index] = struct.unpack(self.Endian\
+                #              + self._Marks[b'\x20\x00\x00\x00'].Format,
+                #              data[i:i+self._dataSize])[0]
+                res[index] = d[i]
+                if res[index] > self._digMax: res[index] = self._digMax
+                if res[index] < self._digMin: res[index] = self._digMin
+                if not raw:
+                    res[index] = self._fromRaw(res[index])
+                # filling the interpoint space with previous value
+                for j in range(index + 1, index + freq_mult):
+                    res[j] = res[index]
+                index += freq_mult
+        return res
+
+    def _getValueVector(self, index, size, sequence):
+        """
+        Reads maximum size points from a given sequence
+        starting from index.
+
+        This is virtual function and will always raise
+        NotImplemented error.
+
+        The reimplementation of function is not expected to check 
+        the validity of parameters and ranges.
+
+        Parameters
+        ----------
+        index : int
+            a valid index from where data will be read
+        size : int
+            number of data-points retrieved, will not stop if reaches 
+            end of sequence or end of file
+        sequence :
+            index of sequence to be read from
+
+        Returns
+        -------
+        list(int)
+            a list of readed data
+        """
+        raise NotImplementedError("_getValueVector")
 
     def __lt__(self, other):
         """< operator for sorting functions"""
-        if type(other) != type(self):
-            raise TypeError("Comparaison arguments must be of the same class")
         return self._name < other._name
+
+    def _getLocalIndex(self, time, freqMultiplier=1):
+        """
+        Retrieves point index and sequence for a given time. If there 
+        no corresponding index and/or sequence, will return -1 as 
+        corresponding value.
+
+        Do not checks for types
+
+        Parameters
+        ----------
+        time : datetime
+        freqMultiplier : int
+            specifies the frequence multiplier for index calculation
+
+        Returns
+        -------
+        (int, int)
+            a tuple of (point, sequence). If time is before the start 
+            of first sequence, sequence will be set to -1, else 
+            sequence will be the latest sequence before the given time.
+            If time is after the sequence end, the index will be set to -1
+        """
+        ind = -1
+        seq = -1
+        for t in self._seqStartTime:
+            if time < t:
+                break
+            seq += 1
+        if seq >= 0:
+            ind = round((time - self.GetSequenceStart(seq)).total_seconds()
+                        * self._frequency * freqMultiplier)
+            if ind >= self.GetSequenceSize(seq):
+                ind = -1
+        return (ind, seq)
