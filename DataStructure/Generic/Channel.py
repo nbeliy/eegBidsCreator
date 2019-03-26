@@ -781,7 +781,8 @@ class GenChannel(object):
         ind = -1
         seq = -1
         for t in self._seqStartTime:
-            if time < t:
+            if round((time - t).total_seconds()
+                  * self._frequency * freqMultiplier) < 0:
                 break
             seq += 1
         if seq >= 0:
