@@ -10,6 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - The end time of a run will no longer crash at second==59
 - Forcing delete on outData in case of exception, making it release the output files
 
+### Changed
+- `__getvalue__` retrive now data only within given sequence and becomes `_getValue`
+- `__getValueVector__` becomes now `_getValueVector` and retrieves only raw data without oversampling
+- `Getvalue` accepts now datetime, timedelta and index parameters to retrieve data points
+- `Getvaluevector` accepts date and timedelta to retrieve the data. main algo movet to Generic Channel, and use reimplementations of `_getValueVector` to access data from disk
+- `GetIndexTime` now uses `_getLocalIndex` soubroutine for index and sequence retrieval
+
+### Added
+- A warinig if a Calibration function is used in Embla channel
+
+
 ## [dev0.72] - 2018-03-07
 
 ### Fixed
