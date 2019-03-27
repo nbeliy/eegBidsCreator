@@ -373,10 +373,38 @@ class GenChannel(object):
     given the common time origin, and common frequency, or by local index
     defined its position in its sequence.
     """
-    def GetIndex(self, sequence, point, StartTime=None, freqMultiplier=None):
+    def GetGlobalIndex(self, point, sequence,
+                       StartTime=None, freqMultiplier=None):
         """
-        Return global index given sequence, local index,
-        reference time and frequency multiplier
+        Converts local index from a sequence to a global one
+        Do not check if given point is actually exists in sequence
+
+        It uses round to get the index if StartTime is not synchronized
+        with sequence time
+
+        Parameters
+        ----------
+        point : int
+            local index of data point in sequence
+        sequence : int
+            index of a sequence
+        StartTime : datetime, optional
+            the time from which the global index should be calculated
+            if not defined, channel's start time is used
+        freqMultiplier : int, optional
+            frequency multiplier used to convert from local channel
+            frequency to a common  one. If not set, channel defined
+            multiplier is used
+
+        Returns
+        -------
+        int
+            the global index
+
+        Raises
+        ------
+        IndexError
+            if sequence is out of range
         """
         if StartTime is None:
             StartTime = self._startTime
@@ -391,69 +419,166 @@ class GenChannel(object):
         if sequence < 0 or sequence >= len(self._seqStartTime):
             raise IndexError("sequence (" + str(sequence) 
                              + ")is out of the range")
-        if point < 0 or point >= self._seqSize[sequence]:
-            raise IndexError("point (" + str(point) 
-                             + ")is out of the range")
 
-        time = self._seqStartTime[sequence]\
-            - (self._startTime - StartTime).total_seconds()
-        return int((time * self._frequency + point) * freqMultiplier)
+        time = self._getTime(point, self._seqStartTime[sequence], 1) 
+        index = (time - StartTime).total_seconds()\
+            / (self._frequency * freqMultiplier)
+        return round(index)
 
-    def GetTimeIndex(self, index, StartTime=None, freqMultiplier=None):
-        """Returns time of corresponding data point"""
+    def GetLocalindex(self, point, StartTime=None, freqMultiplier=None):
+        """
+        Converts global index to a local one. returns 
+        a tuple (index, sequence).
+        If point happens before start of data, sequence will be -1
+        If point outside of sequence size, index will be -1
+
+        Parameters
+        ----------
+        point : int
+            global index of data point
+        StartTime : datetime, optional
+            starting time for global index. If not set, the channel's
+            defined will be used
+        freqMultiplier : int, optional
+            frequency multiplier for calculation of global frequency
+            If not set, channel's defined one will be used
+
+        Returns
+        -------
+        (int, int)
+            the tuple (index, sequence) of corresponding local index
+        """
         if StartTime is None:
             StartTime = self._startTime
         if freqMultiplier is None:
             freqMultiplier = self._frMultiplier
+        if not isinstance(point, int):
+            raise TypeError("point must be int")
         if not isinstance(StartTime, datetime):
             raise TypeError("StartTime must be datetime object")
         if not (isinstance(freqMultiplier,int) or freqMultiplier > 0):
             raise TypeError("freqMultiplier must be a positive integer") 
-        if not isinstance(index, int):
-            raise TypeError("index must be integer")
-        if index < 0 :
-            raise IndexError("index (" + str(index) + ")is out of the range")
-        return StartTime + index / (self._frequency * freqMultiplier)
+        time = self._getTime(point, StartTime, freqMultiplier)
+        return self._getLocalIndex(time)
 
-    def GetIndexTime(self, time, freqMultiplier=None):
-        """Returns index of corresponding time """
-        if freqMultiplier is None:
-            freqMultiplier = 1
-        if not (isinstance(freqMultiplier,int) or freqMultiplier > 0):
-            raise TypeError("freqMultiplier must be a positive integer") 
-        if not isinstance(time, datetime):
-            raise TypeError("time must be datetime object")
-        return self._getLocalIndex(time, freqMultiplier)
+    def GetTimeFromIndex(self, point, sequence=None, 
+                         StartTime=None, freqMultiplier=None):
+        """
+        Converts local or global index to a corresponding time.
+        Parameters sequence and (Starttime, frqMultiplier) are
+        mutually exclusive as they used to distinguish between
+        local and global index
 
-    def GetLocalIndex(self, index, StartTime=None, freqMultiplier=None):
-        """Returns the (sequence, loc_index) for given data point.
-        If there no valid sequence/index, corresponding value will be -1"""
+        Parameters
+        ----------
+        point : int
+            index to data point
+        sequence : int, optional
+            index to a sequence. If set, index will be concidered 
+            as local
+        StartTime : datetime, optional
+            the start time for a global index. If not set and 
+            index is global, channel-defined start time will 
+            be used
+        freqMultiplier : int, optional
+            frequency multiplier used for calculating global frequency.
+            If not set, channel-defined will be used
+
+        Returns
+        -------
+        datetime
+            time corresponding to current index
+
+        Raises
+        ------
+        TypeError
+            if passed parameters are of invalid type
+        RuntimeError
+            if passed parameters are incompatible
+        IndexError
+            if sequence index is invalid
+        """
+        if sequence is not None:
+            if StartTime is not None or freqMultiplier is not None:
+                raise RuntimeError("parameters sequence and (StartTime, "
+                                   "freqMultiplier) are mutually exclusive")
         if StartTime is None:
             StartTime = self._startTime
         if freqMultiplier is None:
-            freqMultiplier = 1
+            freqMultiplier = self._frMultiplier
+
+        if not isinstance(point, int):
+            raise TypeError("point must be int")
+        if not isinstance(sequence, int):
+            raise TypeError("sequence must be int")
         if not isinstance(StartTime, datetime):
-            raise TypeError("StartTime must be datetime object")
-        if not (isinstance(freqMultiplier,int) or freqMultiplier > 0):
-            raise TypeError("freqMultiplier must be a positive integer") 
-        if not isinstance(index, int):
-            raise TypeError("index must be integer")
-        if index < 0 :
-            raise IndexError("index (" + str(index) + ")is out of the range")
-        index = math.floor(index / freqMultiplier)
-        index -= (self._seqStartTime[0] - StartTime).total_seconds()\
-            * self._frequency
-        if index < 0 :
-            return (-1,-1)
-        seq = 0
-        while seq < len(self._seqStartTime):
-            if index < self._seqSize[seq]:
-                return (seq, index)
-            seq += 1
-            index -= (self._seqStartTime[seq] - self._seqStartTime[seq - 1])\
-                * self._frequency  
-            if index < 0:
-                return (seq,-1)
+            raise TypeError("StartTime must be datetime")
+        if not isinstance(freqMultiplier, int):
+            raise TypeError("freqMultiplier must be int")
+
+        if sequence is None:
+            return self._getTime(point, StartTime, freqMultiplier)
+        else:
+            if sequence < 0 or sequence > self.GetNsequences():
+                raise IndexError("sequence out of range")
+            return self._getTime(point, self._seqStartTime[sequence], 1)
+
+    def GetLocalIndexFromTime(self, time):
+        """
+        Converts time to local index. If time is before 
+        the first sequence, returned sequence is set to -1.
+        If there no data point at given time, returned index
+        will be set to -1
+
+        Parameters
+        ----------
+        time : datetime
+
+        Returns
+        -------
+        (int, int)
+            a tuple (index, sequence)
+
+        Raises
+        ------
+        TypeError
+            if passed parameter is of invalid type
+        """
+        if not isinstance(time, datetime):
+            raise TypeError("time must be datetime object")
+        return self._getLocalIndex(time)
+
+    def GetGlobalIndexFromTime(self, time, 
+                               StartTime=None, freqMultiplier=None):
+        """
+        Converts time to global index. 
+
+        Parameters
+        ----------
+        time : datetime
+
+        Returns
+        -------
+        (int, int)
+            a tuple (index, sequence)
+
+        Raises
+        ------
+        TypeError
+            if passed parameter is of invalid type
+        """
+        if StartTime is None:
+            StartTime = self._startTime
+        if freqMultiplier is None:
+            freqMultiplier = self._frMultiplier
+        if not isinstance(time, datetime):
+            raise TypeError("time must be datetime object")
+        if not isinstance(StartTime, datetime):
+            raise TypeError("StartTime must be datetime")
+        if not isinstance(freqMultiplier, int):
+            raise TypeError("freqMultiplier must be int")
+        dt = (time - StartTime).total_seconds()
+        return round(dt * self.frequency * freqMultiplier)
 
     def GetValue(self, point, default=0, 
                  sequence=None, StartTime=None, 
@@ -756,7 +881,7 @@ class GenChannel(object):
         """< operator for sorting functions"""
         return self._name < other._name
 
-    def _getLocalIndex(self, time, freqMultiplier=1):
+    def _getLocalIndex(self, time):
         """
         Retrieves point index and sequence for a given time. If there 
         no corresponding index and/or sequence, will return -1 as 
@@ -767,8 +892,6 @@ class GenChannel(object):
         Parameters
         ----------
         time : datetime
-        freqMultiplier : int
-            specifies the frequence multiplier for index calculation
 
         Returns
         -------
@@ -782,12 +905,58 @@ class GenChannel(object):
         seq = -1
         for t in self._seqStartTime:
             if round((time - t).total_seconds()
-                  * self._frequency * freqMultiplier) < 0:
+                     * self._frequency) < 0:
                 break
             seq += 1
         if seq >= 0:
             ind = round((time - self.GetSequenceStart(seq)).total_seconds()
-                        * self._frequency * freqMultiplier)
+                        * self._frequency)
             if ind >= self.GetSequenceSize(seq):
                 ind = -1
         return (ind, seq)
+
+    def _getTime(self, point, StartTime, freqMultiplier):
+        """
+        Retrieves time corresponding to a index given starting time 
+        and frequency multiplier. 
+
+        Do not check for parameters validity
+
+        Parameters
+        ----------
+        point : int
+            global index of a data point
+        SatrtTime : datetime
+            Starting time of data
+        freqMultiplier : int
+            frequency multiplier to convert channel frequency to 
+            global one
+
+        Returns
+        -------
+        datetime
+            time corresponding to given index
+        """
+        return StartTime + self._getDeltaTime(point, freqMultiplier)
+
+    def _getDeltaTime(self, point, freqMultiplier):
+        """
+        Retrieves the time passed since the reference time,
+        given data point index and frequency multiplier.
+
+        Do not check for parameters validity.
+
+        Parameters
+        ----------
+        point : int
+            index of data point
+        freqMultiplier : int
+            frequency multiplier to convert channel frequency to 
+            global one
+
+        Returns
+        -------
+        timedelta
+            time passed since start
+        """
+        return timedelta(seconds=point / (self._frequency * freqMultiplier))
