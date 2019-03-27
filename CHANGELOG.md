@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [Developpement]
+## [Development]
 
 ### Fixed
 - Forced utf-8 encoding for output files for non-unicode systems
@@ -11,14 +11,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Forcing delete on outData in case of exception, making it release the output files
 
 ### Changed
-- `__getvalue__` retrive now data only within given sequence and becomes `_getValue`
+- `__getvalue__` retrieve now data only within given sequence and becomes `_getValue`
 - `__getValueVector__` becomes now `_getValueVector` and retrieves only raw data without oversampling
 - `Getvalue` accepts now datetime, timedelta and index parameters to retrieve data points
-- `Getvaluevector` accepts date and timedelta to retrieve the data. main algo movet to Generic Channel, and use reimplementations of `_getValueVector` to access data from disk
-- `GetIndexTime` now uses `_getLocalIndex` soubroutine for index and sequence retrieval
+- `Getvaluevector` accepts date and timedelta to retrieve the data. main algo moved to Generic Channel, and use reimplementation of `_getValueVector` to access data from disk
+- `GetIndexTime` now uses `_getLocalIndex` subroutine for index and sequence retrieval
 
 ### Added
-- A warinig if a Calibration function is used in Embla channel
+- A warning if a Calibration function is used in Embla channel
+- Set of Channel function to pass from measurement time to local/global indexes and vice-versa
+- Several docstrings
 
 
 ## [dev0.72] - 2018-03-07
@@ -28,7 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - The call to ch\_dict where this dictionary doesn't exists
 
 ### Added 
-- An option `[BIDS]OriginalTypes`, wich allow to change the original channel types to BIDS accepted ones.
+- An option `[BIDS]OriginalTypes`, which allow to change the original channel types to BIDS accepted ones.
 - List of channels triggering a particular event in channels.tsv file
 
 ### Changed
@@ -53,8 +55,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - `participants.json` with `participants.tsv` fields description will be created, if it is missing
 - tools.create\_directory function that checks if given directory exists and creates one if not. Also controls if directory contains files needed to be removed.
 - `post_processing.py` script which will scan given bids folder, remove duplicates from lists, add headers and clean up files
-- plugin file, if loaded will be saved in `code` directory
-- Option `[BIDS]IncludeAuxiliary` to save the auxiliery files in `auxiliaryfiles` folder. This is not BIDS compolient.
+- Plugin file, if loaded will be saved in `code` directory
+- Option `[BIDS]IncludeAuxiliary` to save the auxiliary files in `auxiliaryfiles` folder. This is not BIDS compliant.
 - `bidsignore` file that silence the known incompatibilities with bids standard 
 - `tools.create_directory` function, that creates directories if these not existing, and checks for files following a pattern inside.
 
@@ -69,7 +71,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - packed executables for Linux and Windows in `bin` folder
 - Anonymization by date and name
 - Restriction of memory usage
-- Copying of auxiliery files
+- Copying of auxiliary files
 - If there no conversion, the original embla files are copied to output
 - Plugin system
 - Conversion to MEEG (SPM12) format
@@ -86,9 +88,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Events from blacklisted channels will no more produce a warning
 - Error if unable to create default temporary directory 
 - Wrong sample number for events.tsv
-- Lenghts restrictions in EDF header
+- Lengths restrictions in EDF header
 - Duplicated events behaviour in EDF file
-- BrainVision '%' symbol uncorrect behaviour
+- BrainVision '%' symbol incorrect behaviour
 - BrainVision event association to channel
 
 
