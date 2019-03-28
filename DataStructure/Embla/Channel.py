@@ -337,7 +337,7 @@ class EbmChannel(GenChannel):
         """
         Retrieves value of a particular time point.
         This is reimplementation of Generic _getValue for Embla format
-        
+
         It doesn't check the validity of parameters.
 
         Parameters
@@ -363,8 +363,9 @@ class EbmChannel(GenChannel):
 
     def _getValueVector(self, index, size, sequence):
         """
-        Reads maximum 'size' points from a given sequence
-        starting from index. Will stop at end of sequence
+        Reads maximum size points from a given sequence
+        starting from index. If size is negative, will
+        retrieve data till the end of sequence.
 
         Parameters
         ----------
@@ -385,7 +386,8 @@ class EbmChannel(GenChannel):
         IOError
             if reaches EOF before reading requested data
         """
-        size = min(size, self._seqSize[sequence] - index)
+        if size < 0 or size > self._seqSize[sequence] - index:
+            size = self._seqSize[sequence] - index
         self._stream.seek(self._seqStart[sequence] + index * self._dataSize)
         data = self._stream.read(self._dataSize * size)
         if len(data) != size * self._dataSize:
