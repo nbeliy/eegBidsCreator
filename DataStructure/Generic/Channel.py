@@ -578,7 +578,7 @@ class GenChannel(object):
         if not isinstance(freqMultiplier, int):
             raise TypeError("freqMultiplier must be int")
         dt = (time - StartTime).total_seconds()
-        return round(dt * self.frequency * freqMultiplier)
+        return round(dt * self._frequency * freqMultiplier)
 
     def GetValue(self, point, default=0, 
                  sequence=None, StartTime=None, 
@@ -692,34 +692,6 @@ class GenChannel(object):
             return value
         else:
             return self._fromRaw(value)
-
-    def _getValue(self, point, sequence):
-        """
-        Retrieves value of a particular time point.
-        This is virtual function and will always raise
-        NotImplemented error.
-
-        The reimplementation of function is not expected to check 
-        the validity of parameters and ranges.
-
-        Parameters
-        ----------
-        point : int
-            the index of the point to be retrieved
-        sequence : int
-            specifies the sequence in which data will be retrieved
-
-        Returns
-        -------
-        float or int
-            the value of required point
-
-        Raises
-        ------
-        NotImplementedError
-            if _getValue is not implemented for given format
-        """
-        raise NotImplementedError("_getValue")
 
     def GetValueVector(self, timeStart, timeEnd, 
                        default=0, freq_mult=None, raw=False):
@@ -849,38 +821,6 @@ class GenChannel(object):
                 index += freq_mult
         return res
 
-    def _getValueVector(self, index, size, sequence):
-        """
-        Reads maximum size points from a given sequence
-        starting from index.
-
-        This is virtual function and will always raise
-        NotImplemented error.
-
-        The reimplementation of function is not expected to check 
-        the validity of parameters and ranges.
-
-        Parameters
-        ----------
-        index : int
-            a valid index from where data will be read
-        size : int
-            number of data-points retrieved, will not stop if reaches 
-            end of sequence or end of file
-        sequence :
-            index of sequence to be read from
-
-        Returns
-        -------
-        list(int)
-            a list of readed data
-        """
-        raise NotImplementedError("_getValueVector")
-
-    def __lt__(self, other):
-        """< operator for sorting functions"""
-        return self._name < other._name
-
     def _getLocalIndex(self, time):
         """
         Retrieves point index and sequence for a given time. If there 
@@ -960,3 +900,78 @@ class GenChannel(object):
             time passed since start
         """
         return timedelta(seconds=point / (self._frequency * freqMultiplier))
+
+    def _getValue(self, point, sequence):
+        """
+        Retrieves value of a particular time point.
+        This is virtual function and will always raise
+        NotImplemented error.
+
+        The reimplementation of function is not expected to check 
+        the validity of parameters and ranges.
+
+        Parameters
+        ----------
+        point : int
+            the index of the point to be retrieved
+        sequence : int
+            specifies the sequence in which data will be retrieved
+
+        Returns
+        -------
+        float or int
+            the value of required point
+
+        Raises
+        ------
+        NotImplementedError
+            if _getValue is not implemented for given format
+        """
+        raise NotImplementedError("_getValue")
+
+    def _getValueVector(self, index, size, sequence):
+        """
+        Reads maximum size points from a given sequence
+        starting from index. If size is negative, will
+        retrieve data till the end of sequence.
+        Will stop at end of sequence.
+
+        This is virtual function and will always raise
+        NotImplemented error.
+
+        The reimplementation of function is not expected to check 
+        the validity of parameters and ranges.
+
+        Parameters
+        ----------
+        index : int
+            a valid index from where data will be read
+        size : int
+            number of data-points retrieved, will not stop if reaches 
+            end of sequence or end of file
+        sequence :
+            index of sequence to be read from
+
+        Returns
+        -------
+        list(int)
+            a list of readed data
+
+        Raises
+        ------
+        IOError
+            if reaches EOF before reading requested data
+        NotImplementedError
+            if function is not defined for given format
+        """
+        raise NotImplementedError("_getValueVector")
+
+    def __lt__(self, other):
+        """
+        Less operator for sorting
+
+        Returns
+        -------
+        bool
+        """
+        return self._name < other._name
