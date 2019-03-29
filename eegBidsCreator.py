@@ -608,7 +608,7 @@ def main(argv):
 
             # Run definition
             run = ""
-            if parameters["RUNS"]["SplitRuns"] != "":
+            if len(time_limits) > 1 or parameters["RUNS"]["SplitRuns"] != "":
                 run = str(count + 1)
                 Logger.info("Run {}: duration: {}".format(run, t_end - t_ref))
 
