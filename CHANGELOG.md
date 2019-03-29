@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Forced utf-8 encoding for output files for non-unicode systems
 - The end time of a run will no longer crash at second==59
 - Forcing delete on outData in case of exception, making it release the output files
+- Lack of run label for plugin-defined runs if SlitRuns is deactivated in configuration
 
 ## [dev0.72] - 2018-03-07
 
