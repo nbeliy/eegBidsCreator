@@ -205,7 +205,8 @@ def main(argv):
             raise Exception(
                 "Path {} is not valid".format(parameters['GENERAL']['Path']))
 
-        recording = GRecord("")
+        recording = GRecord()
+        recording.SetOutputPath(parameters['GENERAL']['OutputFolder'])
 
         if eegform == "embla":
             Logger.info("Detected {} format".format(eegform))
@@ -275,13 +276,10 @@ def main(argv):
         Logger.info("Task    Id: " + recording.GetTask())
         Logger.info("Acq     Id: " + recording.GetAcquisition())
 
-        recording.ResetPrefix()
-        recording.ResetPath()
-        recording.SetEEGPath(prepath=parameters['GENERAL']['OutputFolder'])
-        Logger.info("EEG will be saved in " + recording.eegPath)
+        recording.Lock()
 
         tools.create_directory(
-                path=recording.eegPath,
+                path=recording.Path(),
                 toRemove=recording.Prefix(app="*"),
                 allowDups=parameters["GENERAL"]
                 .getboolean("OverideDuplicated"))
@@ -513,8 +511,8 @@ def main(argv):
                 raise
 
         Logger.info("Creating eeg.json file")
-        with open(
-                  recording.eegPath + "/" + recording.Prefix(app="_eeg.json"), 
+        with open(recording.Path()
+                  + recording.Prefix(app="_eeg.json"),
                   "w",
                   encoding='utf-8') as f:
             recording.UpdateJSON()
@@ -607,14 +605,14 @@ def main(argv):
                 c.SetStartTime(t_ref)
 
             # Run definition
-            run = ""
+            run = None
             if parameters["RUNS"]["SplitRuns"] != "":
-                run = str(count + 1)
+                run = count + 1
                 Logger.info("Run {}: duration: {}".format(run, t_end - t_ref))
 
             Logger.info("Creating channels.tsv file")
-            with open(recording.eegPath 
-                      + recording.Prefix(run=run,app="_channels.tsv"), 
+            with open(recording.Path()
+                      + recording.Prefix(run=run, app="_channels.tsv"),
                       "w", 
                       encoding='utf-8') as f:
                 print("name",
@@ -633,10 +631,11 @@ def main(argv):
                           c.GetReference(Void="n/a"), 
                           sep="\t", file=f)
 
-            tjson.eventsJson(recording.eegPath
-                             + recording.Prefix(run=run, app="_events.json"))
+            tjson.eventsJson(recording.Path()
+                             + recording.Prefix(run=run, 
+                                                app="_events.json"))
             Logger.info("Creating events.tsv file")     
-            with open(recording.eegPath 
+            with open(recording.Path()
                       + recording.Prefix(run=run,app="_events.tsv"),
                       "w", encoding='utf-8') as f:
                 print("onset", 
@@ -680,7 +679,7 @@ def main(argv):
             # BV format
             if parameters['GENERAL']['Conversion'] == "BV":
                 Logger.info("Converting to BrainVision format")
-                outData = BrainVision(recording.eegPath,
+                outData = BrainVision(recording.Path(),
                                       recording.Prefix(run=run),
                                       AnonymDate=ANONYM_DATE)
                 outData.SetEncoding(parameters['BRAINVISION']['Encoding'])
@@ -792,7 +791,7 @@ def main(argv):
             # EDF part
             elif parameters['GENERAL']['Conversion'] == "EDF":
                 Logger.info("Converting to EDF+ format")
-                outData = EDF(recording.eegPath,
+                outData = EDF(recording.Path(),
                               recording.Prefix(run=run),
                               AnonymDate=ANONYM_DATE)
                 outData.Patient["Code"] = metadata["PatientInfo"]["ID"]
@@ -910,7 +909,7 @@ def main(argv):
             # Matlab SPM12 eeg format
             elif parameters['GENERAL']["Conversion"] == "MEEG":
                 Logger.info("Converting to Matlab SPM format")
-                outData = MEEG(recording.eegPath,
+                outData = MEEG(recording.Path(),
                                recording.Prefix(run=run),
                                AnonymDate=ANONYM_DATE)
                 outData.SetStartTime(t_ref)
@@ -972,8 +971,8 @@ def main(argv):
                     Logger.debug("file: " + f)
                     shutil.copy2(
                             parameters['GENERAL']['Path'] + f, 
-                            recording.eegPath + recording.Prefix(app="_" + f)
-                            )
+                            recording.Path(appendix=recording
+                                           .Prefix(app="_" + f)))
                 file_list.append("eeg/{}\t{}".format(
                             recording.Prefix(run=run,app="_Recording.esrc"),
                             t_ref.isoformat()))
@@ -986,16 +985,16 @@ def main(argv):
             if recording.GetSession() != "":
                 scansName += "_ses-" + recording.GetSession()
             scansName += "_scans.tsv"
-            with open(parameters['GENERAL']['OutputFolder'] 
-                      + recording.Path(app=scansName), "a",
+            with open(recording.Path(appendix="")
+                      + scansName,
+                      "a",
                       encoding='utf-8') as f:
                 for l in file_list:
                     print(l, file=f)
 
         # Copiyng auxiliary files
         if parameters["BIDS"].getboolean("IncludeAuxiliary"):
-            out = parameters['GENERAL']['OutputFolder'] + "auxiliaryfiles/" \
-                  + recording.Path()
+            out = recording.Path(prefix="auxiliaryfiles")
             tools.create_directory(path=out,
                                    toRemove=recording.Prefix(app="*"),
                                    allowDups=parameters["GENERAL"]
@@ -1058,9 +1057,10 @@ in output folder.")
             Logger.error('File "' + l[0] + '", line '
                          + str(l[1]) + " in " + l[2] + ":")
         Logger.error(type(e).__name__ + ": " + str(e))
-        if recording is not None and recording.eegPath is not None:
+        if recording is not None and recording.IsLocked():
             if outData is not None: del outData
-            flist = glob.glob(recording.eegPath + recording.Prefix(app="*"))
+            flist = glob.glob(recording.Path()
+                              + recording.Prefix(app="*"))
             if len(flist) != 0:
                 for f in flist:
                     tools.rrm(f)
@@ -1070,7 +1070,7 @@ in output folder.")
         Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
         Logger.info("Took {} seconds".format(tm.process_time()))
         Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
-        if recording and recording.eegPath:
+        if recording and recording.IsLocked():
             shutil.copy2(tmpDir + "/logfile",
                          parameters["GENERAL"]["OutputFolder"] 
                          + "sourcedata/log/"
