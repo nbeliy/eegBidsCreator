@@ -16,11 +16,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - `Getvalue` accepts now datetime, timedelta and index parameters to retrieve data points
 - `Getvaluevector` accepts date and timedelta to retrieve the data. main algo moved to Generic Channel, and use reimplementation of `_getValueVector` to access data from disk
 - `GetIndexTime` now uses `_getLocalIndex` subroutine for index and sequence retrieval
+- Streamlined output path treatment and locking mechanism.
+- Run now can be only a number
 
 ### Added
 - A warning if a Calibration function is used in Embla channel
 - Set of Channel function to pass from measurement time to local/global indexes and vice-versa
 - Several docstrings
+- Checks for BIDS compliency in ID labels.
 
 
 ## [dev0.72] - 2018-03-07
