@@ -118,10 +118,68 @@ class Record(object):
                     "SoftwareVersions":1,
                     "SubjectArtefactDescription":2}
 
+    @staticmethod
+    def IsValidInput(inputPath):
+        """
+        a virtual static method that checks if folder in inputPath is
+        a valid input for a subclass
+
+        Parameters
+        ----------
+        inputPath : str
+            path to input folder
+
+        Returns
+        -------
+        bool
+            true if input is valid for given subclass
+
+        Raises
+        ------
+        TypeError
+            if parameters are of invalid type
+        FileNotFoundError
+            if path not found or is not a directory
+        NotImplementedError
+            if readers are not defined for given subclass
+        """
+        if not isinstance(inputPath, str):
+            raise TypeError("inputPath must be a string")
+        if not os.path.isdir(inputPath):
+            raise FileNotFoundError("Path '{}' don't exists "
+                                    "or not a directory".format(inputPath))
+        return Record._isValidInput(inputPath)
+
+    @staticmethod
+    def _isValidInput(inputPath):
+        """
+        a pure virtual function thats checks if a folder in inputPath is
+        a valid input for a subclass
+
+        always rises NotImplementedError
+
+        Parameters
+        ----------
+        inputPath : str
+            path to input folder
+
+        Returns
+        -------
+        bool
+            true if input is valid for given subclass
+
+        Raises
+        ------
+        NotImplementedError
+            if readers are not defined for given subclass
+        """
+        raise NotImplementedError("virtual _isValidInput not implemented")
+
     def __init__(self, task="", session="", acquisition="",
                  AnonymDate=None):
         self.__locked = False
         self._outPath = None
+        self._inPath = None
         self.JSONdata = dict()
         self.SubjectInfo = Subject()
         self.DeviceInfo = Device()
@@ -144,6 +202,62 @@ class Record(object):
         self._aDate = AnonymDate
 
         self._extList = []
+
+    def SetInputPath(self, inputPath):
+        """
+        sets the path to directory of source files. inputPath must 
+        exist and be a directory. All source files are expected 
+        to be found inside
+
+        Always ends with '/'
+
+        Parameters
+        ----------
+        inputPath : str
+            path to the input directory
+
+        Returns
+        -------
+        str
+            absolute input path
+
+        Raises
+        ------
+        TypeError
+            if parameters are of invalid type
+        FileNotFoundError
+            if input path do not exists
+        """
+        if not isinstance(inputPath, str):
+            raise TypeError("inputPath must be a string")
+        if not os.path.isdir(inputPath):
+            raise FileNotFoundError("Invalid path ''".format(inputPath))
+        self._inPath = os.path.realpath(inputPath) + '/'
+        return self._inPath
+
+    def InputPath(self, appendix=""):
+        """
+        returns the path to input directory with an attached appendix
+        Do not checks if path with appendix exists
+
+        Parameters
+        ----------
+        appendix : str
+            appendix to attach to the path
+
+        Returns
+        -------
+        str
+            path with attached appendix
+
+        Raises
+        ------
+        TypeError
+            if parameters are of invalid type
+        """
+        if not isinstance(appendix, str):
+            raise TypeError("appendix must be a string")
+        return os.path.join(self._inPath, appendix)
 
     def SetOutputPath(self, outputPath):
         """
@@ -172,10 +286,11 @@ class Record(object):
             raise TypeError("outputPath must be a string")
         if self.__locked:
             raise ValueError("record is locked")
-        if not os.path.exists(outputPath): 
+        if not os.path.isdir(outputPath): 
             raise FileNotFoundError("Output folder {} don't exists."
                                     .format(outputPath))
         self._outPath = os.path.realpath(outputPath)
+        Logger.info("Output will be found at '{}'".format(self._outPath))
         return self._outPath
 
     def Lock(self):

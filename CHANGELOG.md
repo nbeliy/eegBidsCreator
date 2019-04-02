@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Set of Channel function to pass from measurement time to local/global indexes and vice-versa
 - Several docstrings
 - Checks for BIDS compliency in ID labels.
+- Virtual static IsBalidInput function to Generic.Record, wich will allow to detect the input format
+- InputPath() function to Generic.Record returning the path to input folder
 
 
 ## [dev0.72] - 2018-03-07

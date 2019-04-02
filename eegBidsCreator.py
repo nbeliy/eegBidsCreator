@@ -187,7 +187,6 @@ def main(argv):
 
     Logger.info("File: {}".format(parameters['GENERAL']['Path']))
     basename = os.path.basename(parameters['GENERAL']['Path'][0:-1])
-    extension = os.path.splitext(basename)[1]
     try:
         if not os.path.exists(parameters['GENERAL']['Path']):
             raise Exception(
@@ -195,35 +194,27 @@ def main(argv):
         if os.path.isdir(parameters['GENERAL']['Path']):
             if len(glob.glob(parameters['GENERAL']['Path'] + '*.ebm')) > 0:
                 eegform = "embla"
-        elif extension == '.edf':
-            eegform = "edf"
         else:
             raise Exception("Unable determine eeg format")
 
-        Logger.info("Output: {}".format(parameters['GENERAL']['OutputFolder']))
-        if not os.path.isdir(parameters['GENERAL']['Path']):
-            raise Exception(
-                "Path {} is not valid".format(parameters['GENERAL']['Path']))
-
         recording = GRecord()
         recording.SetOutputPath(parameters['GENERAL']['OutputFolder'])
+        recording.SetInputPath(parameters['GENERAL']['Path'])
 
         if eegform == "embla":
             Logger.info("Detected {} format".format(eegform))
             recording._extList = \
                 [".ebm",".ead",".esedb",".ewp",".esrc",".esev"]
-            if len(glob.glob(parameters['GENERAL']['Path']
-                   + 'Recording.esrc')) != 1:
+            if len(glob.glob(recording.InputPath('Recording.esrc'))) != 1:
                 raise FileNotFoundError(
                     "Couldn't find Recording.escr file, "
                     "needed for recording proprieties")
-            if len(glob.glob(parameters['GENERAL']['Path'] + '*.esedb')) == 0:
+            if len(glob.glob(recording.InputPath('*.esedb'))) == 0:
                 Logger.warning("No .esedb files containing events found. "
                                "Event list will be empty.")
             # Reading metadata
-            esrc = olefile.OleFileIO(
-                parameters['GENERAL']['Path'] + 'Recording.esrc').\
-                openstream('RecordingXML')
+            esrc = olefile.OleFileIO(recording.InputPath('Recording.esrc'))\
+                .openstream('RecordingXML')
             xml = esrc.read().decode("utf_16_le")[2:-1]
             metadata = ParceRecording(xml)
 
@@ -305,12 +296,8 @@ def main(argv):
                     allowDups=parameters["GENERAL"]
                     .getboolean("OverideDuplicated"))
             Logger.info("Copiyng original data to sourcedata folder")
-            if extension == "":
-                shutil.copytree(parameters['GENERAL']['Path'],
-                                srcPath + basename)
-            else:
-                shutil.copy2(parameters['GENERAL']['Path'],
-                             srcPath + basename)
+            shutil.copytree(recording.InputPath(),
+                            srcPath + basename)
 
         t_ev_min = datetime.max
         t_ev_max = datetime.min
@@ -335,7 +322,7 @@ def main(argv):
 
         if eegform == "embla":
             channels = [EbmChannel(c) for c in
-                        glob.glob(parameters['GENERAL']['Path'] + "*.ebm")]
+                        glob.glob(recording.InputPath("*.ebm"))]
         else:
             raise Exception(
                     "EEG format {} not implemented (yet)".format(eegform))
@@ -411,7 +398,7 @@ def main(argv):
                        for p in parameters['EVENTS']['BlackList'].split(',')]
 
         if eegform == "embla":
-            for evfile in glob.glob(parameters['GENERAL']['Path'] + "*.esedb"):
+            for evfile in glob.glob(recording.InputPath("*.esedb")):
                 esedb = olefile.OleFileIO(evfile)\
                         .openstream('Event Store/Events')
                 root = Parcel(esedb)
@@ -967,10 +954,10 @@ def main(argv):
             elif parameters['GENERAL']["Conversion"] == "":
                 Logger.info("Copying original files")
                 for f in recording.GetMainFiles(
-                            path=parameters['GENERAL']['Path']):
+                            path=recording.InputPath()):
                     Logger.debug("file: " + f)
                     shutil.copy2(
-                            parameters['GENERAL']['Path'] + f, 
+                            recording.InputPath(f), 
                             recording.Path(appendix=recording
                                            .Prefix(app="_" + f)))
                 file_list.append("eeg/{}\t{}".format(
@@ -1000,9 +987,9 @@ def main(argv):
                                    allowDups=parameters["GENERAL"]
                                    .getboolean("OverideDuplicated"))
             Logger.info("Copying auxiliary files. It not BIDS complient!")
-            for f in recording.GetAuxFiles(path=parameters['GENERAL']['Path']):
+            for f in recording.GetAuxFiles(path=recording.InputPath()):
                 Logger.debug("file: " + f)
-                shutil.copy2(parameters['GENERAL']['Path'] + f, 
+                shutil.copy2(recording.InputPath(f), 
                              out + recording.Prefix(app="_" + f))
 
         with open(parameters['GENERAL']['OutputFolder'] 
