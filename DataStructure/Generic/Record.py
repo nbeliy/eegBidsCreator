@@ -5,6 +5,7 @@ import os
 import logging
 import bisect
 import json
+import re
 
 from DataStructure.Generic.Channel import GenChannel as Channel
 from DataStructure.Generic.Event import GenEvent as Event
@@ -13,11 +14,11 @@ Logger = logging.getLogger(__name__)
 
 
 class Subject(object):
-    __slots__ = ["ID", "Name", "Address", "__gender", "Birth",
+    __slots__ = ["_id", "Name", "Address", "__gender", "Birth",
                  "Notes", "Height", "Weight", "Head"]
 
     def __init__(self):
-        self.ID = ""
+        self._id = ""
         self.Name = ""
         self.Address = ""
         self.Gender = 0
@@ -26,6 +27,16 @@ class Subject(object):
         self.Height = 0
         self.Weight = 0
         self.Head = 0
+
+    @property
+    def ID(self):
+        return self._id
+
+    @ID.setter
+    def ID(self, value):
+        if not isinstance(value, str):
+            raise TypeError("value must be a string")
+        self._id = value
 
     @property
     def Gender(self):
@@ -77,9 +88,10 @@ class Record(object):
                  "Events",
                  "__Frequency",
                  "__path", "__prefix",
+                 "_inPath", "_outPath",
                  "_aDate",
                  "_extList",
-                 "_eegPath"
+                 "__locked"
                  ]
 
     # __JSONfields contains the full list of fields in JSON with a tags:
@@ -106,9 +118,68 @@ class Record(object):
                     "SoftwareVersions":1,
                     "SubjectArtefactDescription":2}
 
+    @staticmethod
+    def IsValidInput(inputPath):
+        """
+        a virtual static method that checks if folder in inputPath is
+        a valid input for a subclass
+
+        Parameters
+        ----------
+        inputPath : str
+            path to input folder
+
+        Returns
+        -------
+        bool
+            true if input is valid for given subclass
+
+        Raises
+        ------
+        TypeError
+            if parameters are of invalid type
+        FileNotFoundError
+            if path not found or is not a directory
+        NotImplementedError
+            if readers are not defined for given subclass
+        """
+        if not isinstance(inputPath, str):
+            raise TypeError("inputPath must be a string")
+        if not os.path.isdir(inputPath):
+            raise FileNotFoundError("Path '{}' don't exists "
+                                    "or not a directory".format(inputPath))
+        return Record._isValidInput(inputPath)
+
+    @staticmethod
+    def _isValidInput(inputPath):
+        """
+        a pure virtual function thats checks if a folder in inputPath is
+        a valid input for a subclass
+
+        always rises NotImplementedError
+
+        Parameters
+        ----------
+        inputPath : str
+            path to input folder
+
+        Returns
+        -------
+        bool
+            true if input is valid for given subclass
+
+        Raises
+        ------
+        NotImplementedError
+            if readers are not defined for given subclass
+        """
+        raise NotImplementedError("virtual _isValidInput not implemented")
+
     def __init__(self, task="", session="", acquisition="",
-                 run="", AnonymDate=None):
-        self._eegPath = None
+                 AnonymDate=None):
+        self.__locked = False
+        self._outPath = None
+        self._inPath = None
         self.JSONdata = dict()
         self.SubjectInfo = Subject()
         self.DeviceInfo = Device()
@@ -120,7 +191,7 @@ class Record(object):
         self.__RefTime = None
         self.__EndTime = None
         self.SetId(session, task, acquisition)
-        self.ResetPath()
+        self.ResetPrefix()
 
         self.Channels = list()
         self._mainChannel = None
@@ -132,23 +203,160 @@ class Record(object):
 
         self._extList = []
 
-    @property
-    def eegPath(self):
-        return self._eegPath
+    def SetInputPath(self, inputPath):
+        """
+        sets the path to directory of source files. inputPath must 
+        exist and be a directory. All source files are expected 
+        to be found inside
 
-    def SetEEGPath(self, prepath='.'):
-        if not isinstance(prepath, str):
-            raise TypeError("prepath must be a string")
-        if self._eegPath is not None:
-            Logger.warning("EEG path is locked")
-            return self._eegPath
-        if not os.path.exists(prepath): 
-            raise FileNotFoundError("Pre-path {} don't exists."
-                                    .format(prepath))
-        self._eegPath = os.path.realpath(prepath + '/' + self.Path()) + '/'
-        return self._eegPath
+        Always ends with '/'
+
+        Parameters
+        ----------
+        inputPath : str
+            path to the input directory
+
+        Returns
+        -------
+        str
+            absolute input path
+
+        Raises
+        ------
+        TypeError
+            if parameters are of invalid type
+        FileNotFoundError
+            if input path do not exists
+        """
+        if not isinstance(inputPath, str):
+            raise TypeError("inputPath must be a string")
+        if not os.path.isdir(inputPath):
+            raise FileNotFoundError("Invalid path ''".format(inputPath))
+        self._inPath = os.path.realpath(inputPath) + '/'
+        return self._inPath
+
+    def InputPath(self, appendix=""):
+        """
+        returns the path to input directory with an attached appendix
+        Do not checks if path with appendix exists
+
+        Parameters
+        ----------
+        appendix : str
+            appendix to attach to the path
+
+        Returns
+        -------
+        str
+            path with attached appendix
+
+        Raises
+        ------
+        TypeError
+            if parameters are of invalid type
+        """
+        if not isinstance(appendix, str):
+            raise TypeError("appendix must be a string")
+        return os.path.join(self._inPath, appendix)
+
+    def SetOutputPath(self, outputPath):
+        """
+        sets the output path within a directory given in outputPath variable
+
+        Parameters
+        ----------
+        outputPath: str
+            root path to strore folder
+
+        Returns
+        -------
+        str
+            the setted output path
+
+        Raises
+        ------
+        TypeError
+            if provided options are of incorrect type
+        FileNotFoundError
+            if output path do not exists
+        ValueError
+            if record is locked
+        """
+        if not isinstance(outputPath, str):
+            raise TypeError("outputPath must be a string")
+        if self.__locked:
+            raise ValueError("record is locked")
+        if not os.path.isdir(outputPath): 
+            raise FileNotFoundError("Output folder {} don't exists."
+                                    .format(outputPath))
+        self._outPath = os.path.realpath(outputPath)
+        Logger.info("Output will be found at '{}'".format(self._outPath))
+        return self._outPath
+
+    def Lock(self):
+        """
+        Forbids any futher changes in IDs and paths.
+        If output path not set, will raise AttributeError
+
+        Raises
+        ------
+        AttributeError
+            if output path is not set
+        """
+        if self._outPath is None:
+            raise AttributeError("Must set output path prior of locking IDs")
+        reg = re.compile("[a-zA-Z0-9]*")
+        if reg.fullmatch(self.SubjectInfo.ID) is None:
+            Logger.warning("Subject Id '{} contains illegal characters. "
+                           "Dataset will not be BIDS coplient"
+                           .format(self.SubjectInfo.ID))
+        if reg.fullmatch(self.__task) is None:
+            Logger.warning("Task Id '{}' contains illegal characters. "
+                           "Dataset will not be BIDS coplient"
+                           .format(self.__task))
+        if reg.fullmatch(self.__session) is None:
+            Logger.warning("Session Id '{}' contains illegal characters. "
+                           "Dataset will not be BIDS coplient"
+                           .format(self.__session))
+        if reg.fullmatch(self.__acquisition) is None:
+            Logger.warning("Acquisition Id '{}' contains illegal characters. "
+                           "Dataset will not be BIDS coplient"
+                           .format(self.__acquisition))
+        self.__locked = True
+        Logger.info("ID locked. EEG will be saved in " + self.Path())
+
+    def IsLocked(self):
+        """
+        checks if current recor is locked (i.e. its IDs are allowed to change)
+
+        Returns
+        -------
+        bool
+            the locked status
+        """
+        return self.__locked
 
     def GetAuxFiles(self, path="."):
+        """
+        provides a list of paths to the auxiliary files in path directory.
+        File is considered as auxiliary if his extention is not in list of
+        assotiated extentions (_extList)
+
+        Parameters
+        ----------
+        path, str
+            path to eeg files
+
+        Returns
+        -------
+        list(str)
+            list of paths to auxiliary files
+
+        Raises
+        ------
+        TypeError
+            if provided options are of incorrect type
+        """
         if not isinstance(path, str):
             raise TypeError("Path must be a string")
         return [os.path.basename(f) 
@@ -157,6 +365,26 @@ class Record(object):
                 ]
 
     def GetMainFiles(self, path="."):
+        """
+        provides a list of paths to the eeg files in path directory.
+        File is considered as eeg file if his extention is in list of
+        assotiated extentions (_extList)
+
+        Parameters
+        ----------
+        path, str
+            path to eeg files
+
+        Returns
+        -------
+        list(str)
+            list of paths to eeg files
+
+        Raises
+        ------
+        TypeError
+            if provided options are of incorrect type
+        """
         if not isinstance(path, str):
             raise TypeError("Path must be a string")
         return [os.path.basename(f) 
@@ -165,34 +393,114 @@ class Record(object):
                 ]
 
     def SetId(self, session="", task="", acquisition=""):
-        if self._eegPath is not None:
-            Logger.warning("Recording IDs are locked")
-            return
+        """
+        sets the identification of sample -- session, task and acquisition
+        prefixes and paths will also be recalculated
+
+        Parameters        
+        ----------
+        session: str
+            logical grouping of neuroimaging and behavioral data consistent 
+            across subjects
+        task: str
+            a set of structured activities performed by the participant
+        acquisition : str
+            a continuous uninterrupted block of time during which 
+            a brain scanning instrument was acquiring data according 
+            to particular scanning sequence/protocol
+
+        Raises
+        ------
+        TypeError
+            if passed parameter are of wrong type
+        ValueError
+            if record is locked 
+        """
+        if not (isinstance(session, str) and isinstance(task, str)
+                and isinstance(acquisition, str)):
+            raise TypeError("session, task and acquisition must be str")
+        if self.__locked:
+            raise ValueError("record is locked")
         self.__session = session
         self.__acquisition = acquisition
         self.__task = task
         self.ResetPrefix()
-        self.ResetPath()
 
     def GetSession(self):
+        """
+        provides session label
+        """
         return self.__session
 
     def GetTask(self):
+        """
+        provides task label
+        """
         return self.__task
 
     def GetAcquisition(self):
+        """
+        provides acquisition label
+        """
         return self.__acquisition
 
-    def Prefix(self, run="", app=""):
-        if run == "":
+    def Prefix(self, run=None, app=""):
+        """
+        provides bids-formatted prefix from the dataset id:
+        sub-<sunbId>_task-<taskId>[_ses-<sesid>][_run-<runId>]
+        If app is specifies, appends its value to prefix
+
+        Parameters
+        ----------
+        run: int, optional
+            the id of the run
+        app: str
+            appendix for prefix, for example file extention
+
+        Returns
+        -------
+        str
+            bids-formatted prefix
+
+        Raises
+        ------
+        TypeError
+            if parameters have incorrect type
+        """
+        if run is not None:
+            if not isinstance(run, int):
+                raise TypeError("run must be a int")
+            if run < 0:
+                raise ValueError("run must be positive or 0")
+        if not isinstance(app, str):
+            raise TypeError("app must be a string")
+        if run is None:
             return self.__prefix + app
         else: 
-            return self.__prefix + "_run-" + run + app
+            return self.__prefix + "_run-" + str(run) + app
 
     def ResetPrefix(self):
-        if self._eegPath is not None:
-            Logger.warning("EEG path is locked")
-            return
+        """
+        updates bids-formatted prefix and sub-path. Need to be called
+        after changings in record IDs
+
+        Returns
+        -------
+        str
+            updated prefix
+
+        Raises
+        ------
+        ValueError
+            if record is locked
+        """
+        if self.__locked:
+            raise ValueError("record IDs is locked")
+        path = "sub-" + self.SubjectInfo.ID
+        if self.__session != "": 
+            path = path + "/ses-" + self.__session 
+        self.__path = path
+
         prefix = "sub-" + self.SubjectInfo.ID
         if self.__session != "":
             prefix += "_ses-" + self.__session
@@ -200,20 +508,44 @@ class Record(object):
         if self.__acquisition != "": 
             prefix = prefix + "_acq-" + self.__acquisition 
         self.__prefix = prefix
-        return prefix
 
-    def Path(self, app="eeg/"):
-        return self.__path + "/" + app
+        return self.__prefix
 
-    def ResetPath(self):
-        if self._eegPath is not None:
-            Logger.warning("EEG path is locked")
-            return
-        path = "sub-" + self.SubjectInfo.ID
-        if self.__session != "": 
-            path = path + "/ses-" + self.__session 
-        self.__path = path
-        return self.Path()
+    def Path(self, prefix="", appendix="eeg/"):
+        """
+        generates a path string in the output folder of the form
+        'outputFolder[/prefix]/sub-<label>[/ses-<label>][/appendix]/'
+        It ensures that returned path ends with '/'
+
+        Record IDs must be locked prior using this function
+
+        Parameters
+        ----------
+        prefix : str
+            prefix to add to the path
+        appendix : str
+            appendix to add to the path
+
+        Returns
+        -------
+        str
+            path string
+
+        Raises
+        ------
+        TypeError
+            if passed parameters are of wrong type
+        ValueError
+            if record is not locked
+        """
+        if not isinstance(prefix, str):
+            raise TypeError("prefix must be a string")
+        if not isinstance(appendix, str):
+            raise TypeError("appendix must be a string")
+        if not self.__locked:
+            raise ValueError("Record IDs must be locked prior acessing paths")
+        path = os.path.join(self._outPath, prefix, self.__path, appendix)
+        return os.path.normpath(path) + "/"
 
     @property
     def Frequency(self): return self.__Frequency
@@ -241,8 +573,35 @@ class Record(object):
 
     """Time-related functions"""
     def SetStartTime(self, t_start=None, t_end=None):
-        """Sets recording start/end times to given values.
-        Returns resulting times in tuple"""
+        """
+        sets recording start/end times to given values
+
+        There is three kind of time range:
+        Start/Stop time: the recording time as specified in header
+        Reference/End time: time range which serves as reference for
+            data samples. There will be no data outside this range
+        Min/Max time: time interval coresponding to first-last 
+            data taken
+
+        Parameters
+        ----------
+        t_start: datetime
+            the start time value
+        t_end: datetime
+            the end time value
+
+        Returns
+        -------
+        (datetime, datetime)
+            a tuple of start/stop time
+
+        Raises
+        ------
+        TypeError
+            if passed parameters are of incorrect type
+        ValueError
+            if stop time is less than start time
+        """
         if t_start and not isinstance(t_start, datetime):
             raise TypeError("Start time must be a datetime object")
         if t_end and not isinstance(t_end, datetime):
@@ -257,10 +616,37 @@ class Record(object):
         return (self.__StartTime, self.__StopTime)
 
     def SetReferenceTime(self, t_ref=None, t_end=None):
-        """Setes the reference times to given values.
-        If no values given, set to (in oreder):
-        recording time, or main channel times, or min/max times
-        """ 
+        """
+        sets recording reference times to given values
+        if the time is not specified, will be set to in order
+        Start/Stop or Min/Max time
+
+        There is three kind of time range:
+        Start/Stop time: the recording time as specified in header
+        Reference/End time: time range which serves as reference for
+            data samples. There will be no data outside this range
+        Min/Max time: time interval coresponding to first-last 
+            data taken
+
+        Parameters
+        ----------
+        t_start: datetime
+            the reference time value
+        t_end: datetime
+            the end time value
+
+        Returns
+        -------
+        (datetime, datetime)
+            a tuple of reference/end time
+
+        Raises
+        ------
+        TypeError
+            if passed parameters are of incorrect type
+        ValueError
+            if stop time is less than start time
+        """
         if t_ref == datetime.min or t_ref == datetime.max: t_ref = None
         if t_end == datetime.min or t_end == datetime.max: t_end = None
 
@@ -283,10 +669,13 @@ class Record(object):
         return (self.__RefTime, self.__EndTime)
 
     def CropTime(self, t_low=None, t_high=None):
-        """Crops the reference time to given values.
-        if values are None or outside of actual reference times,
-        no cropping is performed. To enlarge reference interval
-        use SetReferenceTime"""
+        """
+        reduces the reference time to given values, if values are 
+        None or outside of actual reference times, reference 
+        will remain unchainged is performed. 
+
+        To enlarge reference interval use SetReferenceTime
+        """
         if t_low == datetime.min or t_low == datetime.max: t_low = None
         if t_high == datetime.min or t_high == datetime.max: t_high = None
 

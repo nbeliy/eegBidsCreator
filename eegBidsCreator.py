@@ -187,7 +187,6 @@ def main(argv):
 
     Logger.info("File: {}".format(parameters['GENERAL']['Path']))
     basename = os.path.basename(parameters['GENERAL']['Path'][0:-1])
-    extension = os.path.splitext(basename)[1]
     try:
         if not os.path.exists(parameters['GENERAL']['Path']):
             raise Exception(
@@ -195,34 +194,27 @@ def main(argv):
         if os.path.isdir(parameters['GENERAL']['Path']):
             if len(glob.glob(parameters['GENERAL']['Path'] + '*.ebm')) > 0:
                 eegform = "embla"
-        elif extension == '.edf':
-            eegform = "edf"
         else:
             raise Exception("Unable determine eeg format")
 
-        Logger.info("Output: {}".format(parameters['GENERAL']['OutputFolder']))
-        if not os.path.isdir(parameters['GENERAL']['Path']):
-            raise Exception(
-                "Path {} is not valid".format(parameters['GENERAL']['Path']))
-
-        recording = GRecord("")
+        recording = GRecord()
+        recording.SetOutputPath(parameters['GENERAL']['OutputFolder'])
+        recording.SetInputPath(parameters['GENERAL']['Path'])
 
         if eegform == "embla":
             Logger.info("Detected {} format".format(eegform))
             recording._extList = \
                 [".ebm",".ead",".esedb",".ewp",".esrc",".esev"]
-            if len(glob.glob(parameters['GENERAL']['Path']
-                   + 'Recording.esrc')) != 1:
+            if len(glob.glob(recording.InputPath('Recording.esrc'))) != 1:
                 raise FileNotFoundError(
                     "Couldn't find Recording.escr file, "
                     "needed for recording proprieties")
-            if len(glob.glob(parameters['GENERAL']['Path'] + '*.esedb')) == 0:
+            if len(glob.glob(recording.InputPath('*.esedb'))) == 0:
                 Logger.warning("No .esedb files containing events found. "
                                "Event list will be empty.")
             # Reading metadata
-            esrc = olefile.OleFileIO(
-                parameters['GENERAL']['Path'] + 'Recording.esrc').\
-                openstream('RecordingXML')
+            esrc = olefile.OleFileIO(recording.InputPath('Recording.esrc'))\
+                .openstream('RecordingXML')
             xml = esrc.read().decode("utf_16_le")[2:-1]
             metadata = ParceRecording(xml)
 
@@ -275,13 +267,10 @@ def main(argv):
         Logger.info("Task    Id: " + recording.GetTask())
         Logger.info("Acq     Id: " + recording.GetAcquisition())
 
-        recording.ResetPrefix()
-        recording.ResetPath()
-        recording.SetEEGPath(prepath=parameters['GENERAL']['OutputFolder'])
-        Logger.info("EEG will be saved in " + recording.eegPath)
+        recording.Lock()
 
         tools.create_directory(
-                path=recording.eegPath,
+                path=recording.Path(),
                 toRemove=recording.Prefix(app="*"),
                 allowDups=parameters["GENERAL"]
                 .getboolean("OverideDuplicated"))
@@ -307,12 +296,8 @@ def main(argv):
                     allowDups=parameters["GENERAL"]
                     .getboolean("OverideDuplicated"))
             Logger.info("Copiyng original data to sourcedata folder")
-            if extension == "":
-                shutil.copytree(parameters['GENERAL']['Path'],
-                                srcPath + basename)
-            else:
-                shutil.copy2(parameters['GENERAL']['Path'],
-                             srcPath + basename)
+            shutil.copytree(recording.InputPath(),
+                            srcPath + basename)
 
         t_ev_min = datetime.max
         t_ev_max = datetime.min
@@ -337,7 +322,7 @@ def main(argv):
 
         if eegform == "embla":
             channels = [EbmChannel(c) for c in
-                        glob.glob(parameters['GENERAL']['Path'] + "*.ebm")]
+                        glob.glob(recording.InputPath("*.ebm"))]
         else:
             raise Exception(
                     "EEG format {} not implemented (yet)".format(eegform))
@@ -413,7 +398,7 @@ def main(argv):
                        for p in parameters['EVENTS']['BlackList'].split(',')]
 
         if eegform == "embla":
-            for evfile in glob.glob(parameters['GENERAL']['Path'] + "*.esedb"):
+            for evfile in glob.glob(recording.InputPath("*.esedb")):
                 esedb = olefile.OleFileIO(evfile)\
                         .openstream('Event Store/Events')
                 root = Parcel(esedb)
@@ -513,8 +498,8 @@ def main(argv):
                 raise
 
         Logger.info("Creating eeg.json file")
-        with open(
-                  recording.eegPath + "/" + recording.Prefix(app="_eeg.json"), 
+        with open(recording.Path()
+                  + recording.Prefix(app="_eeg.json"),
                   "w",
                   encoding='utf-8') as f:
             recording.UpdateJSON()
@@ -607,14 +592,14 @@ def main(argv):
                 c.SetStartTime(t_ref)
 
             # Run definition
-            run = ""
-            if len(time_limits) > 1 or parameters["RUNS"]["SplitRuns"] != "":
-                run = str(count + 1)
+            run = None
+            if parameters["RUNS"]["SplitRuns"] != "":
+                run = count + 1
                 Logger.info("Run {}: duration: {}".format(run, t_end - t_ref))
 
             Logger.info("Creating channels.tsv file")
-            with open(recording.eegPath 
-                      + recording.Prefix(run=run,app="_channels.tsv"), 
+            with open(recording.Path()
+                      + recording.Prefix(run=run, app="_channels.tsv"),
                       "w", 
                       encoding='utf-8') as f:
                 print("name",
@@ -633,10 +618,11 @@ def main(argv):
                           c.GetReference(Void="n/a"), 
                           sep="\t", file=f)
 
-            tjson.eventsJson(recording.eegPath
-                             + recording.Prefix(run=run, app="_events.json"))
+            tjson.eventsJson(recording.Path()
+                             + recording.Prefix(run=run, 
+                                                app="_events.json"))
             Logger.info("Creating events.tsv file")     
-            with open(recording.eegPath 
+            with open(recording.Path()
                       + recording.Prefix(run=run,app="_events.tsv"),
                       "w", encoding='utf-8') as f:
                 print("onset", 
@@ -680,7 +666,7 @@ def main(argv):
             # BV format
             if parameters['GENERAL']['Conversion'] == "BV":
                 Logger.info("Converting to BrainVision format")
-                outData = BrainVision(recording.eegPath,
+                outData = BrainVision(recording.Path(),
                                       recording.Prefix(run=run),
                                       AnonymDate=ANONYM_DATE)
                 outData.SetEncoding(parameters['BRAINVISION']['Encoding'])
@@ -792,7 +778,7 @@ def main(argv):
             # EDF part
             elif parameters['GENERAL']['Conversion'] == "EDF":
                 Logger.info("Converting to EDF+ format")
-                outData = EDF(recording.eegPath,
+                outData = EDF(recording.Path(),
                               recording.Prefix(run=run),
                               AnonymDate=ANONYM_DATE)
                 outData.Patient["Code"] = metadata["PatientInfo"]["ID"]
@@ -910,7 +896,7 @@ def main(argv):
             # Matlab SPM12 eeg format
             elif parameters['GENERAL']["Conversion"] == "MEEG":
                 Logger.info("Converting to Matlab SPM format")
-                outData = MEEG(recording.eegPath,
+                outData = MEEG(recording.Path(),
                                recording.Prefix(run=run),
                                AnonymDate=ANONYM_DATE)
                 outData.SetStartTime(t_ref)
@@ -968,12 +954,12 @@ def main(argv):
             elif parameters['GENERAL']["Conversion"] == "":
                 Logger.info("Copying original files")
                 for f in recording.GetMainFiles(
-                            path=parameters['GENERAL']['Path']):
+                            path=recording.InputPath()):
                     Logger.debug("file: " + f)
                     shutil.copy2(
-                            parameters['GENERAL']['Path'] + f, 
-                            recording.eegPath + recording.Prefix(app="_" + f)
-                            )
+                            recording.InputPath(f), 
+                            recording.Path(appendix=recording
+                                           .Prefix(app="_" + f)))
                 file_list.append("eeg/{}\t{}".format(
                             recording.Prefix(run=run,app="_Recording.esrc"),
                             t_ref.isoformat()))
@@ -986,24 +972,24 @@ def main(argv):
             if recording.GetSession() != "":
                 scansName += "_ses-" + recording.GetSession()
             scansName += "_scans.tsv"
-            with open(parameters['GENERAL']['OutputFolder'] 
-                      + recording.Path(app=scansName), "a",
+            with open(recording.Path(appendix="")
+                      + scansName,
+                      "a",
                       encoding='utf-8') as f:
                 for l in file_list:
                     print(l, file=f)
 
         # Copiyng auxiliary files
         if parameters["BIDS"].getboolean("IncludeAuxiliary"):
-            out = parameters['GENERAL']['OutputFolder'] + "auxiliaryfiles/" \
-                  + recording.Path()
+            out = recording.Path(prefix="auxiliaryfiles")
             tools.create_directory(path=out,
                                    toRemove=recording.Prefix(app="*"),
                                    allowDups=parameters["GENERAL"]
                                    .getboolean("OverideDuplicated"))
             Logger.info("Copying auxiliary files. It not BIDS complient!")
-            for f in recording.GetAuxFiles(path=parameters['GENERAL']['Path']):
+            for f in recording.GetAuxFiles(path=recording.InputPath()):
                 Logger.debug("file: " + f)
-                shutil.copy2(parameters['GENERAL']['Path'] + f, 
+                shutil.copy2(recording.InputPath(f), 
                              out + recording.Prefix(app="_" + f))
 
         with open(parameters['GENERAL']['OutputFolder'] 
@@ -1058,9 +1044,10 @@ in output folder.")
             Logger.error('File "' + l[0] + '", line '
                          + str(l[1]) + " in " + l[2] + ":")
         Logger.error(type(e).__name__ + ": " + str(e))
-        if recording is not None and recording.eegPath is not None:
+        if recording is not None and recording.IsLocked():
             if outData is not None: del outData
-            flist = glob.glob(recording.eegPath + recording.Prefix(app="*"))
+            flist = glob.glob(recording.Path()
+                              + recording.Prefix(app="*"))
             if len(flist) != 0:
                 for f in flist:
                     tools.rrm(f)
@@ -1070,7 +1057,7 @@ in output folder.")
         Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
         Logger.info("Took {} seconds".format(tm.process_time()))
         Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
-        if recording and recording.eegPath:
+        if recording and recording.IsLocked():
             shutil.copy2(tmpDir + "/logfile",
                          parameters["GENERAL"]["OutputFolder"] 
                          + "sourcedata/log/"
