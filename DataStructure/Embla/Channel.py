@@ -227,6 +227,11 @@ class EbmChannel(GenChannel):
         if isinstance(self.CalFunc, str) and self.CalFunc != "":
             # God help us all
             # x is used implicetly in eval
+            Logger.warning("Channel uses calibration function '" 
+                           + self.CalFunc + 
+                           "'. Actually only linear calibrations "
+                           "are supported. If function is not linear, "
+                           "retrieved values will be incorrect.")
             x = self.GetPhysMin()
             new_min = eval(self.CalFunc)
             x = self.GetPhysMax()
@@ -328,111 +333,72 @@ class EbmChannel(GenChannel):
                             getattr(self, fname) + [list(unpacked)])
         return self._stream.tell() - start
 
-    def __getValue__(self, point, sequence, raw):
-        """ Returns value of given measure point.
-        If sequance is given, the point should be in correspondent sequance.
-        If no suequance is given, the point is interpreted as global one."""
-        if sequence is None:
-            point, sequence = self.getRelPoint(point)
+    def _getValue(self, point, sequence):
+        """
+        Retrieves value of a particular time point.
+        This is reimplementation of Generic _getValue for Embla format
+
+        It doesn't check the validity of parameters.
+
+        Parameters
+        ----------
+        point : int
+            the index of the point to be retrieved
+        sequence : int
+            specifies the sequence in which data will be retrieved
+
+        Returns
+        -------
+        float or int
+            the value of required point
+        """
 
         self._stream.seek(self._seqStart[sequence] + (point) * self._dataSize)
         val = struct.unpack(
                 self.Endian + self._Marks[b'\x20\x00\x00\x00'].Format,
                 self._stream.read(self._dataSize))[0]
-        if val > self._digMax:
-            val = self._digMax
-        if val < self._digMin:
-            val = self._digMin
-        if raw :
-            return val
-        else:
-            return val * self._scale + self._offset
+        if val > self._digMax: val = self._digMax
+        if val < self._digMin: val = self._digMin
+        return val
 
-    def __getValueVector__(self, timeStart, timeEnd, default, freq_mult, raw):
-        if freq_mult is None:
-            freq_mult = 1
-        if timeStart > timeEnd:
-            raise Exception("Starting time must be lower than ending time")
-        if type(freq_mult) != int or freq_mult <= 0:
-            raise Exception("Frequance multiplicator must be positve integer")
+    def _getValueVector(self, index, size, sequence):
+        """
+        Reads maximum size points from a given sequence
+        starting from index. If size is negative, will
+        retrieve data till the end of sequence.
 
-        # getting list of sequences
-        # Points = number of data points to read
-        dt = (timeEnd - timeStart).total_seconds()
-        points = int(dt * self._frequency)
-        # resulting list of size point*freq_mult
-        res = [default] * int(dt * self._frequency * freq_mult)
+        Parameters
+        ----------
+        index : int
+            a valid index from where data will be read
+        size : int
+            number of data-points retrieved
+        sequence :
+            index of sequence to be read from
 
-        for seq_start, seq_size, seq_time\
-                in zip(self._seqStart, self._seqSize, self._seqStartTime):
-            # Sequance starts after end time
-            if seq_time >= timeEnd: break
-            # offset of sequance start relative to start time
-            offset = round((timeStart - seq_time).total_seconds()
-                           * self._frequency)
+        Returns
+        -------
+        list(int)
+            a list of readed data
 
-            # Sequence ends before time start
-            if (offset) >= seq_size:
-                continue
-
-            to_read = 0
-            # Index to point in res
-            index = 0
-
-            # Case 1: sequence started before timeStart, offset is negative
-            # We fill from beginning of res list,
-            # but reading data from middle of sequence
-            if offset >= 0 :
-                self._stream.seek(seq_start + offset * self._dataSize)
-                # number of points to the end of sequence
-                to_read = min(seq_size - offset, points)
-
-            # Case 2: sequence starts after timeStart, offset is positive
-            # We read from start of sequence,
-            # but fill in the middle of res vector
-            else:
-                offset = -offset
-                if offset * freq_mult > len(res): break
-                self._stream.seek(seq_start)
-                to_read = min(seq_size, points - offset)
-                index = offset * freq_mult
-
-            data = self._stream.read(self._dataSize * to_read)
-            if len(data) != self._dataSize * to_read:
-                raise Exception("Unexpected end of stream for channel {}, "
-                                "expected {}*{} data, read {}"
-                                .format(self.ChannName,
-                                        self._dataSize, 
-                                        to_read, 
-                                        len(data))
-                                )
-            if len(res) < index + to_read * freq_mult:
-                raise Exception("Unexpected end of list for channel {}. "
-                                "Need {}+{}*{} cells, got {}"
-                                .format(self.ChannName,
-                                        index, 
-                                        to_read,
-                                        freq_mult,
-                                        len(res))
-                                )
-            d = struct.unpack(self.Endian
-                              + self._Marks[b'\x20\x00\x00\x00'].Format
-                              * to_read, data)
-            for i in range(0, to_read):
-                # res[index] = struct.unpack(self.Endian\
-                #              + self._Marks[b'\x20\x00\x00\x00'].Format,
-                #              data[i:i+self._dataSize])[0]
-                res[index] = d[i]
-                if res[index] > self._digMax: res[index] = self._digMax
-                if res[index] < self._digMin: res[index] = self._digMin
-                if not raw:
-                    res[index] = res[index] * self._scale + self._offset
-                # filling the interpoint space with previous value
-                for j in range(index + 1, index + freq_mult):
-                    res[j] = res[index]
-                index += freq_mult
-
-        return res
+        Raises
+        ------
+        IOError
+            if reaches EOF before reading requested data
+        """
+        if size < 0 or size > self._seqSize[sequence] - index:
+            size = self._seqSize[sequence] - index
+        self._stream.seek(self._seqStart[sequence] + index * self._dataSize)
+        data = self._stream.read(self._dataSize * size)
+        if len(data) != size * self._dataSize:
+            raise IOError("Got {} entries insted of expected {} "
+                          "while reading {}".format(len(data), size, 
+                                                    self._stream.name)
+                          )
+        d = struct.unpack(self.Endian
+                          + self._Marks[b'\x20\x00\x00\x00'].Format
+                          * size, data)
+        return d
 
     def __lt__(self, other):
         if type(other) != type(self):
