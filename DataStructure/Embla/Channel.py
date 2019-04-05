@@ -40,7 +40,7 @@ class Field(object):
         return (self.Entries == 1)
 
 
-class EbmChannel(GenChannel):
+class EmbChannel(GenChannel):
     """ Class containing all information retrieved from ebm file.
     The data instead to be loaded in the memory, 
     are readed directly from file """
@@ -117,7 +117,7 @@ class EbmChannel(GenChannel):
                          "_seqStart", "_totSize", "_dataSize"]
 
     def __init__(self, filename):
-        super(EbmChannel, self).__init__()
+        super(EmbChannel, self).__init__()
         for f in self.__slots__:
             if f[0:1] != "_":
                 setattr(self, f, None)

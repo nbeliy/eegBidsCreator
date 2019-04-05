@@ -118,8 +118,8 @@ class Record(object):
                     "SoftwareVersions":1,
                     "SubjectArtefactDescription":2}
 
-    @staticmethod
-    def IsValidInput(inputPath):
+    @classmethod
+    def IsValidInput(cls, inputPath):
         """
         a virtual static method that checks if folder in inputPath is
         a valid input for a subclass
@@ -148,7 +148,7 @@ class Record(object):
         if not os.path.isdir(inputPath):
             raise FileNotFoundError("Path '{}' don't exists "
                                     "or not a directory".format(inputPath))
-        return Record._isValidInput(inputPath)
+        return cls._isValidInput(inputPath)
 
     @staticmethod
     def _isValidInput(inputPath):
@@ -652,23 +652,27 @@ class Record(object):
 
         if t_ref:
             self.__RefTime = t_ref
-        elif self.__StartTime:
+        elif self.__RefTime is not None:
+            pass
+        elif self.__StartTime is not None:
             self.__RefTime = self.__StartTime
-        elif self._mainChannel:
+        elif self._mainChannel is not None:
             self.__RefTime = self._mainChannel.GetSequenceStart(0)
         else:
             self.__RefTime = self.__MinTime
         if t_end:
             self.__EndTime = t_end
-        elif self.__StopTime:
+        elif self.__EndTime is not None:
+            pass
+        elif self.__StopTime is not None:
             self.__EndTime = self.__StopTime
-        elif self._mainChannel:
+        elif self._mainChannel is not None:
             self.__EndTime = self._mainChannel.GetSequenceEnd(-1)
         else:
             self.__EndTime = self.__MaxTime
         return (self.__RefTime, self.__EndTime)
 
-    def CropTime(self, t_low=None, t_high=None):
+    def CropTime(self, t_low=None, t_high=None, verbose=False):
         """
         reduces the reference time to given values, if values are 
         None or outside of actual reference times, reference 
@@ -678,12 +682,31 @@ class Record(object):
         """
         if t_low == datetime.min or t_low == datetime.max: t_low = None
         if t_high == datetime.min or t_high == datetime.max: t_high = None
+        
+        old_duration = self.__EndTime - self.__RefTime
+        if t_low and t_low > self.__RefTime: 
+            if verbose:
+                Logger.info("Cropping reference time by {}"
+                            .format(self.__RefTime - t_low))
+                Logger.debug("from {} to {}".format(
+                    self._returnTime(self.__RefTime, True), 
+                    self._returnTime(t_low, True)))
+            self.__RefTime = t_low 
+        if t_high and t_high > self.__EndTime: 
+            if verbose:
+                Logger.info("Cropping end time by {}"
+                            .format(self.__EndTime - t_high))
+                Logger.debug("from {} to {}".format(
+                    self._returnTime(self.__EndTime, True), 
+                    self._returnTime(t_high, True)))
+            self.__EndTime = t_high 
+        new_duration = self.__EndTime - self.__RefTime
+        if verbose and old_duration != new_duration:
+            Logger.info("New duration: {}"
+                        .format(old_duration - new_duration))
 
-        if t_low and t_low < self.__RefTime: t_low = self.__RefTime
-        if t_high and t_high > self.__EndTime: t_high = self.__EndTime
-
-        if t_high != self.__EndTime or t_low != self.__RefTime:
-            self.SetReferenceTime(t_low, t_high)
+        if new_duration < timedelta():
+            ValueError("New duration {} is negative".format(new_duration))
         return (self.__RefTime, self.__EndTime)
 
     def GetStartTime(self, striso=False):
@@ -823,12 +846,80 @@ class Record(object):
         return (res1,res2,res3,res4)
 
     """Channels related functions"""
+    def ReadChannels(self, name=None,
+                     white_list=[], black_list=[], 
+                     bidsify=False):
+        """
+        reads and add channels from input folder.
+        If white list is non empty, only channels with name in list 
+        are concidered.
+        If black list non empty, exclude channels with name in list.
+
+        Parameters
+        ----------
+        name : str, optional
+            name of channel to read, if None, all channels will be read
+        white_list : list(str)
+            list of channel names to concider
+        black_list : list(str)
+            list of channel names to ignore
+        bidsify : bool
+            set to True for force channel types to comply to BIDS
+        """
+        channels = self._readChannels(name)
+        for c in channels:
+            self.__addChannel(c,white_list, black_list)
+        self.InitChannels(bidsify=bidsify)
+
+    def _readChannels(self, name=None):
+        """
+        pure virtual function that read given channel form file.
+        If name not defined, all available channels will be readed.
+
+        Always raise NotImplementedError
+
+        Parameters
+        ----------
+        name : str, optional
+            name of channel to read, if not set, 
+            reads all available channels
+
+        Raises
+        ------
+        NotImplementedError
+            if function is not overloaded for given class
+
+        Returns
+        -------
+        list(GenChannel)
+            the type of channel depends on implementation, but always inherits
+            DataStructure.Generic.GenChannel
+        """
+        raise NotImplementedError
+
     def AddChannels(self, channels,
                     white_list=[], black_list=[],
                     bidsify=False):
-        """Add chennels to recording. If white_list is given, only channels 
-        with names in it are accepted. Channels with names in blacklist
-        are ignored. If bidsify, then channels are forced to be BIDS complient.
+        """
+        add channel from list to record.  
+        If white list is non empty, only channels with name in list 
+        are concidered.
+        If black list non empty, exclude channels with name in list.
+
+        Parameters
+        ----------
+        channels : list(GenChannel)
+            list of channels to add, must inherits from 
+            DataStructure.Generic.GenChannel
+        channels : GenChannel
+            channel to add, must inherits from 
+            DataStructure.Generic.GenChannel
+        white_list : list(str)
+            list of channel names to concider
+        black_list : list(str)
+            list of channel names to ignore
+        bidsify : bool
+            set to True for force channel types to comply to BIDS
         """
         if isinstance(channels, list):
             for c in channels:
@@ -842,13 +933,15 @@ class Record(object):
             raise TypeError("Variable {} is not of a channel type".format(c))
         if black_list != [] and (c.GetName() in black_list): 
             self._dropped.append(c.GetName())
-            return
+            return False
         if white_list == [] or (c.GetName() in white_list):
             self.Channels.append(c)
             Logger.debug("Channel {}, type {}, Sampling {} Hz".format(
                 c.GetName(), c.GetId(), int(c.GetFrequency())))
+            return True
         else:
             self._dropped.append(c.GetName())
+            return False
 
     def SetMainChannel(self, chan_name=""):
         if not isinstance(chan_name, str):
@@ -913,6 +1006,25 @@ class Record(object):
             raise KeyError("Id {} not in the list of channels")
 
     """Event related functions"""
+    def ReadEvents(self, white_list=[], black_list=[]):
+        """
+        reads and add events from input
+        If white list is non empty, only events with name in list 
+        are concidered.
+        If black list non empty, exclude events with name in list.
+
+        Parameters
+        ----------
+        white_list : list(str)
+            list of events names to concider
+        black_list : list(str)
+            list of events names to ignore
+        """
+        self.AddEvents(self._readEvents(), white_list, black_list)
+
+    def _readEvents(self):
+        raise NotImplemented
+
     def AddEvents(self, events, white_list=[], black_list=[]):
         if isinstance(events, list):
             for ev in events:
@@ -925,7 +1037,7 @@ class Record(object):
             raise TypeError("Variable {} is not of a event type".format(ev))
         if black_list != [] and ev.GetName() in black_list:
             return
-        if white_list == [] or (ev.GetName in white_list):
+        if white_list == [] or (ev.GetName() in white_list):
             c_list = [c_id for c_id in ev.GetChannels()
                       if c_id in self._chDict]
             c_drop = [c_id for c_id in ev.GetChannels()
@@ -954,6 +1066,146 @@ class Record(object):
 
         return [ev for ev in self.Events
                 if (ev.GetTime() >= t_low and ev.GetTime() <= t_high)]
+
+    def SearchEvent(self, event, pos=0, MinTime=None):
+        """
+        search and return index to the first event of given name after
+        (inclusive) position start and after time MinTime
+
+        Parameters
+        ----------
+        event : str
+            name for event to search
+        pos : int
+            starting position for searching
+        MinTime : datetime, optional
+            if set, ignore events before this time
+
+        Returns
+        -------
+        int
+            index of found event
+        None
+            if event not found, or pos out of events range
+
+        Raises
+        ------
+        TypeError
+            if parameters are of wrong type
+        """
+        if not isinstance(event, str):
+            raise TypeError("event mus be a string")
+        if not isinstance(pos, int):
+            raise TypeError("pos must be an int")
+        if MinTime is not None and not isinstance(MinTime, datetime):
+            raise TypeError("minTime must be a datetime")
+        if pos < 0 : pos += len(self.Events)
+        if pos < 0 or pos >= len(self.Events) : return None
+
+        for i in range(pos, len(self.Events) ):
+            if MinTime is not None:
+                if self.Events[i].GetTime() < MinTime:
+                    continue
+            if self.Events[i].Getname() == name:
+                return i
+
+        return None
+
+    def RSearchEvent(self, event, pos=-1, MaxTime=None):
+        """
+        reverse search and return index to the last event of given name
+        before (inclusive) position start and before time MaxTime
+
+        Parameters
+        ----------
+        event : str
+            name for event to search
+        pos : int
+            starting position for searching
+        MinTime : datetime, optional
+            if set, ignore events before this time
+
+        Returns
+        -------
+        int
+            index of found event
+        None
+            if event not found, or pos out of events range
+
+        Raises
+        ------
+        TypeError
+            if parameters are of wrong type
+        """
+        if not isinstance(event, str):
+            raise TypeError("event mus be a string")
+        if not isinstance(pos, int):
+            raise TypeError("pos must be an int")
+        if MinTime is not None and not isinstance(MinTime, datetime):
+            raise TypeError("minTime must be a datetime")
+        if pos < 0 : pos += len(self.Events)
+        if pos < 0 or pos >= len(self.Events) : return None
+
+        for i in range(pos, -1, -1):
+            if MinTime is not None:
+                if self.Events[i].GetTime() > MaxTime:
+                    continue
+            if self.Events[i].Getname() == name:
+                return i
+
+        return None
+
+    def SearchEventByTime(self, MinTime):
+        """
+        search and returns index to the first event after given time
+        returns None if not found
+
+        Parameters
+        ----------
+        MinTime : datetime
+            time from which serarch for event
+
+        Returns
+        -------
+        int
+            index to the first event after MinTime
+
+        Raises
+        ------
+        TypeError
+            if parameters are of uncorrect type
+        """
+        if MinTime is not None and not isinstance(MinTime, datetime):
+            raise TypeError("MinTime must be a datetime")
+        for i, ev in enumerate(self.Events):
+            if ev.GetTime() >= MinTime: return i
+        return None
+
+    def RSearchEventByTime(self, MaxTime):
+        """
+        reverse search and returns index to the last event before 
+        given time. Returns None if not found
+
+        Parameters
+        ----------
+        MaxTime : datetime
+            time to which serarch for event
+
+        Returns
+        -------
+        int
+            index to the last event before MaxTime
+
+        Raises
+        ------
+        TypeError
+            if parameters are of uncorrect type
+        """
+        if MaxTime is not None and not isinstance(MaxTime, datetime):
+            raise TypeError("MaxTime must be a datetime")
+        for i, ev in enumerate(self.Events):
+            if ev.GetTime() <= MaxTime: return i
+        return None
 
     def GetRuns(self, openingEvents=[], closingEvents=[], min_span=0):
         res = []
@@ -1018,3 +1270,33 @@ class Record(object):
         ts = max(t_s1, t_s2)
         te = min(t_e1, t_e2)
         return (ts, te)
+
+    # Virtual functions for input data processing
+    def LoadMetadata(self):
+        """
+        loads metadata from imput files and performs preliminary checks. 
+        Input path must be defined
+
+        Raises
+        ------
+        ValueError
+            if input path is not defined
+        FileNotFoundError
+            if one of manadatory files not found
+        """
+        if self._inPath is None:
+            raise ValueError("Input path is not defined")
+        self._loadMetadata()
+
+    def _loadMetadata(self):
+        """
+        pure virtual function that loads metadata from imput files 
+        and performs preliminary checks.
+
+        Always raises NotImplementedError
+
+        Raises
+        ------
+        NotImplementedError
+        """
+        raise NotImplementedError

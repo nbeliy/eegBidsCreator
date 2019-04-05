@@ -5,11 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Development]
 
+## [dev0.73] - 2019-04-05
+
 ### Fixed
 - Forced utf-8 encoding for output files for non-unicode systems
 - The end time of a run will no longer crash at second==59
 - Forcing delete on outData in case of exception, making it release the output files
 - Lack of run label for plugin-defined runs if SlitRuns is deactivated in configuration
+- Misspelled name of Embla channel, now class id EmbChannel
 
 ### Changed
 - `__getvalue__` retrieve now data only within given sequence and becomes `_getValue`
@@ -19,15 +22,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - `GetIndexTime` now uses `_getLocalIndex` subroutine for index and sequence retrieval
 - Streamlined output path treatment and locking mechanism.
 - Run now can be only a number
+- SetReferenceTime do not recalculate reference times if RefTime is defined and parameter passed is None 
 
 ### Added
 - A warning if a Calibration function is used in Embla channel
 - Set of Channel function to pass from measurement time to local/global indexes and vice-versa
 - Several docstrings
-- Checks for BIDS compliency in ID labels.
+- Checks for BIDS compliance in ID labels.
 - Virtual static IsBalidInput function to Generic.Record, wich will allow to detect the input format
 - InputPath() function to Generic.Record returning the path to input folder
-
+- Embla Record class now inherits from Generic record. All Embla specific functions are moved to DataStructure.Embla.Record
+- Added GenRecord.IsValidInput static function. Will return true if input is of a given format
+- Added SearchEvent, RSearchEvent SearchEventTime, and RSearchEventTime which implements a search algorithm for an event
 
 ## [dev0.72] - 2018-03-07
 

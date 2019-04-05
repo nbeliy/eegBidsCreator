@@ -2,7 +2,6 @@ import logging
 import os
 import json
 import glob
-import olefile
 import traceback
 import tempfile
 import warnings
@@ -11,6 +10,7 @@ import time as tm
 import importlib.util
 import shutil
 import psutil
+import olefile
 
 import tools.cfi as cfi
 import tools.cli as cli
@@ -23,8 +23,8 @@ from DataStructure.Generic.Event import GenEvent
 
 from DataStructure.SPM12.MEEG import MEEG
 
-from DataStructure.Embla.Record import ParceRecording
-from DataStructure.Embla.Channel import EbmChannel
+from DataStructure.Embla.Record import EmbRecord
+from DataStructure.Embla.Channel import EmbChannel
 
 from DataStructure.BrainVision.BrainVision import BrainVision
 from DataStructure.BrainVision.Channel import BvChannel
@@ -33,7 +33,7 @@ from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
 
 
-VERSION = 'dev0.72r1'
+VERSION = 'dev0.73'
 
 
 def main(argv):
@@ -187,63 +187,22 @@ def main(argv):
 
     Logger.info("File: {}".format(parameters['GENERAL']['Path']))
     basename = os.path.basename(parameters['GENERAL']['Path'][0:-1])
+    recording = None
     try:
-        if not os.path.exists(parameters['GENERAL']['Path']):
-            raise Exception(
-                "Path {} is not valid".format(parameters['GENERAL']['Path']))
-        if os.path.isdir(parameters['GENERAL']['Path']):
-            if len(glob.glob(parameters['GENERAL']['Path'] + '*.ebm')) > 0:
+        if EmbRecord.IsValidInput(parameters['GENERAL']['Path']):
                 eegform = "embla"
+                recording = EmbRecord()
         else:
             raise Exception("Unable determine eeg format")
 
-        recording = GRecord()
         recording.SetOutputPath(parameters['GENERAL']['OutputFolder'])
         recording.SetInputPath(parameters['GENERAL']['Path'])
 
-        if eegform == "embla":
-            Logger.info("Detected {} format".format(eegform))
-            recording._extList = \
-                [".ebm",".ead",".esedb",".ewp",".esrc",".esev"]
-            if len(glob.glob(recording.InputPath('Recording.esrc'))) != 1:
-                raise FileNotFoundError(
-                    "Couldn't find Recording.escr file, "
-                    "needed for recording proprieties")
-            if len(glob.glob(recording.InputPath('*.esedb'))) == 0:
-                Logger.warning("No .esedb files containing events found. "
-                               "Event list will be empty.")
-            # Reading metadata
-            esrc = olefile.OleFileIO(recording.InputPath('Recording.esrc'))\
-                .openstream('RecordingXML')
-            xml = esrc.read().decode("utf_16_le")[2:-1]
-            metadata = ParceRecording(xml)
+        recording.SetId(session=parameters['GENERAL']["SessionId"], 
+                        task=parameters['GENERAL']["TaskId"],
+                        acquisition=parameters['GENERAL']["AcquisitionId"])
 
-            recording.SetId(session=parameters['GENERAL']["SessionId"], 
-                            task=parameters['GENERAL']["TaskId"],
-                            acquisition=parameters['GENERAL']["AcquisitionId"])
-
-            birth = datetime.min
-            if "DateOfBirth" in metadata["PatientInfo"]:
-                birth = metadata["PatientInfo"]["DateOfBirth"]
-
-            recording.SetSubject(id=metadata["PatientInfo"]["ID"],
-                                 name="",
-                                 birth=birth,
-                                 gender=metadata["PatientInfo"]["Gender"],
-                                 notes=metadata["PatientInfo"]["Notes"],
-                                 height=metadata["PatientInfo"]["Height"],
-                                 weight=metadata["PatientInfo"]["Weight"])
-            recording.SetDevice(type=metadata["Device"]["DeviceTypeID"],
-                                id=metadata["Device"]["DeviceID"],
-                                name=metadata["Device"]["DeviceName"],
-                                manufactor="RemLogic")
-            recording.SetStartTime(metadata["RecordingInfo"]["StartTime"],
-                                   metadata["RecordingInfo"]["StopTime"])
-            esrc.close()
-
-        else:
-            raise Exception(
-                    "EEG format {} not implemented (yet)".format(eegform))
+        recording.LoadMetadata()
 
         if entry_points[0] in plugins:
             try:
@@ -299,9 +258,6 @@ def main(argv):
             shutil.copytree(recording.InputPath(),
                             srcPath + basename)
 
-        t_ev_min = datetime.max
-        t_ev_max = datetime.min
-
         if not recording.GetStartTime():
             Logger.warning("Unable to get StartTime of record. "
                            "Will be set to first data point.")
@@ -320,19 +276,12 @@ def main(argv):
             to_drop = [p.strip() for p in
                        parameters['CHANNELS']['BlackList'].split(',')]
 
-        if eegform == "embla":
-            channels = [EbmChannel(c) for c in
-                        glob.glob(recording.InputPath("*.ebm"))]
-        else:
-            raise Exception(
-                    "EEG format {} not implemented (yet)".format(eegform))
-
-        recording.AddChannels(channels,
-                              white_list=to_keep,
-                              black_list=to_drop,
-                              bidsify=not parameters["BIDS"]
-                              .getboolean("OriginalTypes"))           
+        recording.ReadChannels(white_list=to_keep,
+                               black_list=to_drop,
+                               bidsify=not parameters["BIDS"]
+                               .getboolean("OriginalTypes"))
         recording.SetMainChannel(parameters["CHANNELS"]["MainChannel"])
+
         if recording.GetStartTime() and recording.GetStopTime():
             ddt = recording.GetMaxTime() - recording.GetMinTime()
             ddt -= recording.GetStopTime() - recording.GetStartTime()
@@ -377,15 +326,7 @@ def main(argv):
         if parameters['DATATREATMENT']['EndTime'] != '':
             t_h = datetime.strptime(parameters['DATATREATMENT']['StartTime'],
                                     "%Y-%m-%d %H:%M:%S")
-        if t_l or t_h:
-            t_l, t_h = recording.CropTime(t_l, t_h)
-            if t_l != t_ref:
-                Logger.info("Cropping start time by {}".format(t_l - t_ref))
-                t_ref = t_l
-            if t_h != t_end:
-                Logger.info("Cropping end time by {}".format(t_end - t_h))
-                t_end = t_h
-            Logger.info("New duration: {}".format(t_end - t_ref))
+        t_ref, t_end = recording.CropTime(t_l, t_h, verbose=True)
 
         Logger.info("Reading events info")
         to_keep = []
@@ -397,76 +338,23 @@ def main(argv):
             to_drop = [p.strip() 
                        for p in parameters['EVENTS']['BlackList'].split(',')]
 
-        if eegform == "embla":
-            for evfile in glob.glob(recording.InputPath("*.esedb")):
-                esedb = olefile.OleFileIO(evfile)\
-                        .openstream('Event Store/Events')
-                root = Parcel(esedb)
-                evs = root.get("Events")
-                aux_l = root.getlist("Aux Data")[0]
-                grp_l = root.getlist("Event Types")[0].getlist()
-                times = root.getlist("EventsStartTimes")[0]
-                locat = root.get("Locations", 0)
+        recording.ReadEvents(to_keep, to_drop)
+        t_ev_min = None
+        if parameters["DATATREATMENT"]["StartEvent"] != "":
+            pos = recording.SearchEvent(
+                    parameters["DATATREATMENT"]["StartEvent"],
+                    MinTime = t_ref)
+            if pos is not None:
+                t_ev_min = recording.Events[pos].GetTime()
 
-                for ev,time in zip(evs, times):
-                    ch_id = locat.getlist("Location")[ev.LocationIdx]\
-                            .get("Signaltype").get("MainType")
-                    ch_id += "_" + locat.getlist("Location")[ev.LocationIdx]\
-                             .get("Signaltype").get("SubType")
-
-                    try:
-                        name = grp_l[ev.GroupTypeIdx]
-                    except LookupError:
-                        try:
-                            name = aux_l.get("Aux", ev.AuxDataID)\
-                                   .get("Sub Classification History")\
-                                   .get("1").get("type")
-                        except Exception:
-                            Logger.warning(
-                                    "Can't get event name for index {}"
-                                    .format(ev.AuxDataID))
-                            name = ""
-
-                    if to_keep:
-                        if name not in to_keep: continue
-                    if to_drop:
-                        if name in to_drop: continue
-
-                    evnt = GenEvent(Name=name, Time=time, Duration=ev.TimeSpan)
-                    evnt.AddChannel(ch_id)
-                    recording.AddEvents(evnt)
-
-                    if parameters["DATATREATMENT"]["StartEvent"] == name\
-                            and time < t_ev_min:
-                        t_ev_min = time
-                        Logger.info(
-                                "Cropping start time by {} from event {}"
-                                .format(time - t_ref, name))
-                    if parameters["DATATREATMENT"]["EndEvent"] == name\
-                            and time > t_ev_max:
-                        t_ev_max = time
-                        Logger.info(
-                                "Cropping end time by {} from event {}"
-                                .format(t_end - time, name))
-                esedb.close()
-        else:
-            raise Exception(
-                    "EEG format {} not implemented (yet)".format(eegform))
-
-        # Treating events
-        if t_ev_min or t_ev_max:
-            t_ev_min, t_ev_max = recording.CropTime(t_ev_min, t_ev_max)
-            if t_ev_min != t_ref:
-                Logger.info(
-                        "Cropping start time by {}"
-                        .format(t_ev_min - t_ref))
-                t_ref = t_ev_min
-            if t_ev_max != t_end:
-                Logger.info(
-                        "Cropping end time by {}"
-                        .format(t_end - t_ev_max))
-                t_end = t_ev_max
-            Logger.info("New duration: {}".format(t_end - t_ref))
+        t_ev_max = None
+        if parameters["DATATREATMENT"]["EndEvent"] != "":
+            pos = recording.RSearchEvent(
+                    parameters["DATATREATMENT"]["EndEvent"],
+                    MinTime = t_ref)
+            if pos is not None:
+                t_ev_max = recording.Events[pos].GetTime()
+        t_ref, t_end = recording.CropTime(t_ev_min, t_ev_max, verbose=True)
 
         if parameters.getboolean("EVENTS","IncludeSegmentStart"):
             if recording.GetMainChannel():
@@ -781,24 +669,25 @@ def main(argv):
                 outData = EDF(recording.Path(),
                               recording.Prefix(run=run),
                               AnonymDate=ANONYM_DATE)
-                outData.Patient["Code"] = metadata["PatientInfo"]["ID"]
-                if "Gender" in metadata["PatientInfo"]:
-                    if metadata["PatientInfo"]["Gender"] == 1:
-                        outData.Patient["Sex"] = "F"
-                    else: 
-                        outData.Patient["Sex"] = "M"
+                outData.Patient["Code"] = recording.SubjectInfo.ID
+                if recording.SubjectInfo.Gender == 1:
+                    outData.Patient["Sex"] = "F"
+                elif recording.SubjectInfo.Gender == 2: 
+                    outData.Patient["Sex"] = "M"
+                else :
+                    outData.Patient["Sex"] = "X"
                 if recording.SubjectInfo.Birth != datetime.min\
                    and ANONYM_BIRTH != "":
                     if ANONYM_BIRTH is not None:
                         outData.Patient["Birthdate"] = ANONYM_BIRTH
                     else :
                         outData.Patient["Birthdate"] =\
-                                metadata["PatientInfo"]["DateOfBirth"].date()
+                                recording.SubjectInfo.Birth
 
                 outData.Patient["Name"] = recording.SubjectInfo.Name
                 outData.Record["StartDate"] = t_ref.replace(microsecond=0)
-                outData.Record["Code"] = metadata["RecordingInfo"]["Type"]
-                outData.Record["Equipment"] = metadata["Device"]["DeviceID"]
+                outData.Record["Code"] = recording.DeviceInfo.Name
+                outData.Record["Equipment"] = recording.DeviceInfo.ID
                 outData.SetStartTime(t_ref)
                 outData.RecordDuration =\
                     int(parameters["EDF"]["DataRecordDuration"])
