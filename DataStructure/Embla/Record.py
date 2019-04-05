@@ -14,7 +14,6 @@ Logger = logging.getLogger(__name__)
 
 class EmbRecord(Record):
 
-
     def __init__(self):
         super(EmbRecord, self).__init__()
         self._extList = [".ebm",".ead",".esedb",".ewp",".esrc",".esev"]
@@ -67,7 +66,7 @@ class EmbRecord(Record):
         if name is None:
             name = "*"
         return [EmbChannel(c) for c in 
-                glob.glob(self.InputPath(name+".ebm"))]
+                glob.glob(self.InputPath(name + ".ebm"))]
 
     def _readEvents(self):
         events = list()
@@ -137,16 +136,18 @@ class EmbRecord(Record):
         d = dict()
         for child in parent:
             data = child.get('{urn:schemas-microsoft-com:datatypes}dt', None)
-            if data != None :
+            if data is not None :
                 del child.attrib['{urn:schemas-microsoft-com:datatypes}dt']
                 try:
-                    if child.text == None:
+                    if child.text is None:
                         d[child.tag] = None
                     else:
                         if data == 'string':
                             d[child.tag] = child.text
                         elif data == 'datetime':
-                            d[child.tag] = datetime.strptime(child.text, "%Y-%m-%dT%H:%M:%S.%f")
+                            d[child.tag] = datetime.strptime(
+                                    child.text, 
+                                    "%Y-%m-%dT%H:%M:%S.%f")
                         elif data == 'r8':
                             d[child.tag] = float(child.text)
                         elif data == 'i2' or data == 'i4':

@@ -10,21 +10,17 @@ import time as tm
 import importlib.util
 import shutil
 import psutil
-import olefile
 
 import tools.cfi as cfi
 import tools.cli as cli
 import tools.tools as tools
 import tools.json as tjson
 
-from Parcel.parcel import Parcel
-from DataStructure.Generic.Record import Record as GRecord
 from DataStructure.Generic.Event import GenEvent
 
 from DataStructure.SPM12.MEEG import MEEG
 
 from DataStructure.Embla.Record import EmbRecord
-from DataStructure.Embla.Channel import EmbChannel
 
 from DataStructure.BrainVision.BrainVision import BrainVision
 from DataStructure.BrainVision.Channel import BvChannel
@@ -124,7 +120,6 @@ def main(argv):
         consoleHandler.setFormatter(logFormatter)
         Logger.addHandler(consoleHandler)
 
-    eegform = None
     ANONYM_DATE = None
     ANONYM_NAME = None
     ANONYM_BIRTH = None
@@ -190,7 +185,6 @@ def main(argv):
     recording = None
     try:
         if EmbRecord.IsValidInput(parameters['GENERAL']['Path']):
-                eegform = "embla"
                 recording = EmbRecord()
         else:
             raise Exception("Unable determine eeg format")
@@ -343,7 +337,7 @@ def main(argv):
         if parameters["DATATREATMENT"]["StartEvent"] != "":
             pos = recording.SearchEvent(
                     parameters["DATATREATMENT"]["StartEvent"],
-                    MinTime = t_ref)
+                    MinTime=t_ref)
             if pos is not None:
                 t_ev_min = recording.Events[pos].GetTime()
 
@@ -351,7 +345,7 @@ def main(argv):
         if parameters["DATATREATMENT"]["EndEvent"] != "":
             pos = recording.RSearchEvent(
                     parameters["DATATREATMENT"]["EndEvent"],
-                    MinTime = t_ref)
+                    MinTime=t_ref)
             if pos is not None:
                 t_ev_max = recording.Events[pos].GetTime()
         t_ref, t_end = recording.CropTime(t_ev_min, t_ev_max, verbose=True)

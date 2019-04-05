@@ -682,7 +682,7 @@ class Record(object):
         """
         if t_low == datetime.min or t_low == datetime.max: t_low = None
         if t_high == datetime.min or t_high == datetime.max: t_high = None
-        
+
         old_duration = self.__EndTime - self.__RefTime
         if t_low and t_low > self.__RefTime: 
             if verbose:
@@ -1102,16 +1102,16 @@ class Record(object):
         if pos < 0 : pos += len(self.Events)
         if pos < 0 or pos >= len(self.Events) : return None
 
-        for i in range(pos, len(self.Events) ):
+        for i in range(pos, len(self.Events)):
             if MinTime is not None:
                 if self.Events[i].GetTime() < MinTime:
                     continue
-            if self.Events[i].Getname() == name:
+            if self.Events[i].Getname() == event:
                 return i
 
         return None
 
-    def RSearchEvent(self, event, pos=-1, MaxTime=None):
+    def RSearchEvent(self, event, pos=-1, MinTime=None):
         """
         reverse search and return index to the last event of given name
         before (inclusive) position start and before time MaxTime
@@ -1148,9 +1148,9 @@ class Record(object):
 
         for i in range(pos, -1, -1):
             if MinTime is not None:
-                if self.Events[i].GetTime() > MaxTime:
+                if self.Events[i].GetTime() > MinTime:
                     continue
-            if self.Events[i].Getname() == name:
+            if self.Events[i].Getname() == event:
                 return i
 
         return None
