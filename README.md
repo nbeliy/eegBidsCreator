@@ -124,6 +124,7 @@ The next modules are required but seems to be part of python3 standard package:
  - math
  - xml.etree
  - io
+ - re
 
 ## Stand-alone executables
 
@@ -133,7 +134,7 @@ The stand-alone executables are packed with help of PyInstaller for linux and Wi
 The python packing is not a true compiling, so the launch of executables takes some time (of order of seconds).
 Installing python and using script directly is still preferred way to do.
 
-It is not clear how plugin with extra modules will interact with packed version.
+It is not clear how plugin with extra modules will interact with packed version. If one need additional packages within packed executable for satisfying plugin dependencies, he should pack the executable himself.
 
 I use next command line to pack:
 ```
@@ -183,7 +184,8 @@ Script supported a basic plug-ins. They are activated by giving a path to a py s
 
 Each of these functions must also accept parameters `cli_args = list(str)` and `cfg_args = list(tuple(str,str))`. The first one is a list of command line options passed after `--`, second is the list of tuples (key, value) representing all parameters in `PLUGINS` section of configuration file.
 
-Each function should return an integer 0, indicating that it was run successfully. Any other returned value will indicate error and will stop execution.
+Each function should return an integer 0, indicating that it was run successfully. Any other returned value will indicate error and will stop execution with code `1xy`, where first digit `1` will indicate that error was produced by plugin, second digit `y` will mark the plugin where error happened (`0 -- RecordingEP`, `1 -- ChannelsEP` etc.), and the last digit `z` will be the same as code returned by plugin. If plugin was stopped by raised exception, `z` digit will be 0.
+
 
 In order to incorporate printouts of plugin in the logging system, one should include 
 ```
@@ -194,8 +196,25 @@ in the beginning of the file. Then use standard `Logging.info/warning/error/debu
 
 The Subject, Session, Task, and Acquisition can be changed only at `RecordingEP`, and will be locked afterwards. This is done to fix the output paths.
 
-## Known issues
+## Record class definition
+It is now possible to define own data reader. For do it, one must create a daughter class of `DataStructure.Generic.Record`, and define in it following functions:
 
+- `@staticmethod _isValidInput(inputPath)` static function that checks if folder given in input path contain a correct data type and return a boolean. This function determines which class will be used to read data
+- `__init__(self)` function  that initializes parent and defines associated file extensions 
+- `_loadMetadata(self)`, that reads and parses the metadata from source files. It should define subject info with `GenRecord.SetSubject`, device info with `GenRecord.SetDevice`. It could also initialize the recording times with `GenRecord.SetStartTime`
+- `_readChannels(self, name=None)` function that reads and defines channels. This function must return a list of readded channels. Channels must inherit from `DataStructure.Generic.Channel`
+- `_readEvents(self)` function that reads and defines events. This function must return a list of readded events, that inherits from `DataStructure.Generic.Event`
+
+The channels corresponding the given format must inherit from `DataStructure.Generic.Channel`. 
+Channels are supporting discontinuous data. This is implemented via definitions of sequences in two lists: `_seqStartTime` which contains the datetime of the first data point and `_seqSize` which contains number of points of each sequences.
+In order to be able to access data, one must define:
+
+- `__init__(self, filename)` functions that initialize the parent class and setup stream
+- `_getValue(self, point, sequence)` function that reads and returns value of given index and sequence. It is not expected to check the validity of point and sequence parameters, it is done from interface function `DataStructure.Generic.Channel.GetValue`
+- `_getValueVector(self, index, size, sequence)` function that reads and returns a list of data starting at index and of the given size from given sequence. It is expected to stop at the end of sequence.
+- `__lt__(self, other)` function that defines `<` less operator used to sort channels.
+
+Channels supports a copy constructor which copies the values of all fields, but preserves the `_getValue` and `_getValueVector` functions of the source channel. So when a data from a copy is acessed, it reads it though the source channel.
 
 ## Need help!
 
@@ -215,3 +234,4 @@ Other corrections/suggestions/spell corrections can be reported as issues on git
 - Treat Frequency correction (how?)
 - Transform into C with cpython
 - Implement frequency under-sampling
+- Implement search and reverse search by event name and time
