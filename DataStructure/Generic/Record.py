@@ -10,12 +10,35 @@ import re
 from DataStructure.Generic.Channel import GenChannel as Channel
 from DataStructure.Generic.Event import GenEvent as Event
 
+from tools.json import fieldLibrary
+
 Logger = logging.getLogger(__name__)
 
 
 class Subject(object):
     __slots__ = ["_id", "Name", "Address", "__gender", "Birth",
-                 "Notes", "Height", "Weight", "Head"]
+                 "Notes", "Height", "Weight", "Head",
+                 "libValues"]
+
+    FieldsLibrary = fieldLibrary()
+    FieldsLibrary.AddField(
+            "participant_id",
+            longName="Participant Id",
+            description="label identifying a particular subject")
+    FieldsLibrary.AddField(
+            "age",
+            longName="Age",
+            description="Age of a subject",
+            units="year")
+    FieldsLibrary.AddField(
+            "sex",
+            longName="Sex",
+            description="Gender of a subject",
+            levels={
+                "n/a" : "Not available",
+                "F"   : "Female",
+                "M"   : "Male"}
+                )
 
     def __init__(self):
         self._id = ""
@@ -27,6 +50,7 @@ class Subject(object):
         self.Height = 0
         self.Weight = 0
         self.Head = 0
+        self.libValues = self.FieldsLibrary.GetTemplate()
 
     @property
     def ID(self):
@@ -235,7 +259,7 @@ class Record(object):
         self._inPath = os.path.realpath(inputPath) + '/'
         return self._inPath
 
-    def InputPath(self, appendix=""):
+    def GetInputPath(self, appendix=""):
         """
         returns the path to input directory with an attached appendix
         Do not checks if path with appendix exists
@@ -336,7 +360,7 @@ class Record(object):
         """
         return self.__locked
 
-    def GetAuxFiles(self, path="."):
+    def GetAuxFiles(self, path=None):
         """
         provides a list of paths to the auxiliary files in path directory.
         File is considered as auxiliary if his extention is not in list of
@@ -357,6 +381,8 @@ class Record(object):
         TypeError
             if provided options are of incorrect type
         """
+        if path is None:
+            path = self._inPath
         if not isinstance(path, str):
             raise TypeError("Path must be a string")
         return [os.path.basename(f) 
@@ -364,7 +390,7 @@ class Record(object):
                 if not os.path.splitext(f)[1] in self._extList 
                 ]
 
-    def GetMainFiles(self, path="."):
+    def GetMainFiles(self, path=None):
         """
         provides a list of paths to the eeg files in path directory.
         File is considered as eeg file if his extention is in list of
@@ -385,6 +411,8 @@ class Record(object):
         TypeError
             if provided options are of incorrect type
         """
+        if path is None:
+            path = self._inPath
         if not isinstance(path, str):
             raise TypeError("Path must be a string")
         return [os.path.basename(f) 

@@ -249,7 +249,7 @@ def main(argv):
                     allowDups=parameters["GENERAL"]
                     .getboolean("OverideDuplicated"))
             Logger.info("Copiyng original data to sourcedata folder")
-            shutil.copytree(recording.InputPath(),
+            shutil.copytree(recording.GetInputPath(),
                             srcPath + basename)
 
         if not recording.GetStartTime():
@@ -500,49 +500,27 @@ def main(argv):
                           c.GetReference(Void="n/a"), 
                           sep="\t", file=f)
 
-            tjson.eventsJson(recording.Path()
-                             + recording.Prefix(run=run, 
-                                                app="_events.json"))
             Logger.info("Creating events.tsv file")     
+            GenEvent.FieldsLibrary.DumpDefinitions(
+                    recording.Path()
+                    + recording.Prefix(run=run, app="_events.json"))
             with open(recording.Path()
                       + recording.Prefix(run=run,app="_events.tsv"),
                       "w", encoding='utf-8') as f:
-                print("onset", 
-                      "duration",
-                      "trial_type", 
-                      "responce_time",
-                      "value",
-                      "channels",
-                      sep='\t', file=f)
+                print(GenEvent.FieldsLibrary.GetHeader(), file=f)
                 for ev in events:
+                    ev.libValues["onset"] = ev.GetOffset(t_ref)
+                    ev.libValues["duration"] = ev.GetDuration()
+                    ev.libValues["trial_type"] = ev.GetName()
                     if ev.GetChannelsSize() == 0\
                        or parameters.getboolean("EVENTS","MergeCommonEvents"):
-                        print("%.3f\t%.2f\t%s\tn/a\tn/a" 
-                              % (ev.GetOffset(t_ref),
-                                 ev.GetDuration(), 
-                                 ev.GetName(Void="n/a", ToReplace=("\t"," "))),
-                              end="", file=f)
-                        ch_list = "\t"
-                        if ev.GetChannelsSize() == 0:
-                            ch_list += "n/a"
-                        else:
-                            for c_id in ev.GetChannels():
-                                ch = recording.GetChannelById(c_id)
-                                ch_list += ch.GetName(Void="n/a",
-                                                      ToReplace=("\t"," "))
-
-                                ch_list += ","
-                        print(ch_list, file=f)
+                        ev.libValues["channels"] = ev.GetChannels()
+                        print(GenEvent.FieldsLibrary.GetLine(ev.libValues), 
+                              file=f)
                     else :
                         for c_id in ev.GetChannels():
-                            print("%.3f\t%.2f\t%s\tn/a\tn/a\t%s" 
-                                  % (ev.GetOffset(t_ref), 
-                                     ev.GetDuration(), 
-                                     ev.GetName(Void="n/a",
-                                                ToReplace=("\t"," ")),
-                                     recording.GetChannelById(c_id)
-                                              .GetName(Void="n/a", 
-                                                       ToReplace=("\t"," "))),
+                            ev.libValues["channels"] = ev.GetChannelById(c_id)
+                            print(GenEvent.FieldsLibrary.GetLine(ev.libValues),
                                   file=f)
 
             # BV format
@@ -837,10 +815,10 @@ def main(argv):
             elif parameters['GENERAL']["Conversion"] == "":
                 Logger.info("Copying original files")
                 for f in recording.GetMainFiles(
-                            path=recording.InputPath()):
+                            path=recording.GetInputPath()):
                     Logger.debug("file: " + f)
                     shutil.copy2(
-                            recording.InputPath(f), 
+                            recording.GetInputPath(f), 
                             recording.Path(appendix=recording
                                            .Prefix(app="_" + f)))
                 file_list.append("eeg/{}\t{}".format(
@@ -870,28 +848,32 @@ def main(argv):
                                    allowDups=parameters["GENERAL"]
                                    .getboolean("OverideDuplicated"))
             Logger.info("Copying auxiliary files. It not BIDS complient!")
-            for f in recording.GetAuxFiles(path=recording.InputPath()):
+            for f in recording.GetAuxFiles(path=recording.GetInputPath()):
                 Logger.debug("file: " + f)
-                shutil.copy2(recording.InputPath(f), 
+                shutil.copy2(recording.GetInputPath(f), 
                              out + recording.Prefix(app="_" + f))
 
         with open(parameters['GENERAL']['OutputFolder'] 
                   + "participants.tsv", "a",
                   encoding='utf-8') as f:
-            s_id = recording.SubjectInfo.ID
-            s_gen = "n/a"
+            s_gen = ""
             if recording.SubjectInfo.Gender == 1: 
                 s_gen = "F"
             elif recording.SubjectInfo.Gender == 2:
                 s_gen = "M"
-            s_age = "n/a"
+            recording.SubjectInfo.libValues["participant_id"] =\
+                    "sub-" + recording.SubjectInfo.ID
+            recording.SubjectInfo.libValues["sex"] = s_gen
             if recording.SubjectInfo.Birth != datetime.min:
                 s_age = str(time_limits[0][0].year 
                             - recording.SubjectInfo.Birth.year)
-            print("{}\t{}\t{}".format(s_id, s_gen, s_age), file=f)
-        if not os.path.isfile(parameters['GENERAL']['OutputFolder'] 
+                recording.SubjectInfo.libValues["age"] = s_age
+            print(recording.SubjectInfo.FieldsLibrary.GetLine(
+                  recording.SubjectInfo.libValues), file=f)
+
+        if not os.path.isfile(parameters['GENERAL']['OutputFolder']
                               + "participants.json"):
-            tjson.participantsJson(
+            recording.SubjectInfo.FieldsLibrary.DumpDefinitions(
                     parameters['GENERAL']['OutputFolder'] 
                     + "participants.json")
 
