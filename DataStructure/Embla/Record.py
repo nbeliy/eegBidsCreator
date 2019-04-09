@@ -31,15 +31,15 @@ class EmbRecord(Record):
         ValueError
             if input path is not defined
         """
-        if len(glob.glob(self.InputPath('Recording.esrc'))) != 1:
+        if len(glob.glob(self.GetInputPath('Recording.esrc'))) != 1:
             raise FileNotFoundError("Couldn't find Recording.escr file, "
                                     "needed for recording proprieties")
-        if len(glob.glob(self.InputPath('*.esedb'))) == 0:
+        if len(glob.glob(self.GetInputPath('*.esedb'))) == 0:
             Logger.warning("No .esedb files containing events found. "
                            "Event list will be empty.")
 
         # Reading metadata
-        esrc = olefile.OleFileIO(self.InputPath('Recording.esrc'))\
+        esrc = olefile.OleFileIO(self.GetInputPath('Recording.esrc'))\
             .openstream('RecordingXML')
         xml = esrc.read().decode("utf_16_le")[2:-1]
         metadata = self.ParceRecording(xml)
@@ -66,11 +66,11 @@ class EmbRecord(Record):
         if name is None:
             name = "*"
         return [EmbChannel(c) for c in 
-                glob.glob(self.InputPath(name + ".ebm"))]
+                glob.glob(self.GetInputPath(name + ".ebm"))]
 
     def _readEvents(self):
         events = list()
-        for evfile in glob.glob(self.InputPath("*.esedb")):
+        for evfile in glob.glob(self.GetInputPath("*.esedb")):
             esedb = olefile.OleFileIO(evfile)\
                     .openstream('Event Store/Events')
             root = Parcel(esedb)
