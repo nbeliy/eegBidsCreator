@@ -10,7 +10,7 @@ import re
 from DataStructure.Generic.Channel import GenChannel as Channel
 from DataStructure.Generic.Event import GenEvent as Event
 
-from tools.json import fieldLibrary
+from tools.json import BIDSfieldLibrary
 
 Logger = logging.getLogger(__name__)
 
@@ -18,29 +18,11 @@ Logger = logging.getLogger(__name__)
 class Subject(object):
     __slots__ = ["_id", "Name", "Address", "__gender", "Birth",
                  "Notes", "Height", "Weight", "Head",
-                 "libValues"]
-
-    FieldsLibrary = fieldLibrary()
-    FieldsLibrary.AddField(
-            "participant_id",
-            longName="Participant Id",
-            description="label identifying a particular subject")
-    FieldsLibrary.AddField(
-            "age",
-            longName="Age",
-            description="Age of a subject",
-            units="year")
-    FieldsLibrary.AddField(
-            "sex",
-            longName="Sex",
-            description="Gender of a subject",
-            levels={
-                "n/a" : "Not available",
-                "F"   : "Female",
-                "M"   : "Male"}
-                )
+                 "BIDSvalues"]
+    BIDSfields = BIDSfieldLibrary()
 
     def __init__(self):
+        super(Subject, self).__init__()
         self._id = ""
         self.Name = ""
         self.Address = ""
@@ -50,7 +32,7 @@ class Subject(object):
         self.Height = 0
         self.Weight = 0
         self.Head = 0
-        self.libValues = self.FieldsLibrary.GetTemplate()
+        self.BIDSvalues = dict()
 
     @property
     def ID(self):
@@ -99,7 +81,7 @@ class Device(object):
         self.Version = ""
 
 
-class Record(object):
+class Record(BIDSfieldLibrary):
     __slots__ = ["JSONdata", "SubjectInfo", "DeviceInfo", "Type", 
                  # Time when registrement actually starts and stops
                  "__StartTime", "__StopTime",
@@ -116,7 +98,9 @@ class Record(object):
                  "_aDate",
                  "_extList",
                  "__locked"
-                 ]
+                 "BIDSvalues"]
+
+    BIDSfields = BIDSfieldLibrary()
 
     # __JSONfields contains the full list of fields in JSON with a tags:
     #   0 - required
@@ -201,6 +185,7 @@ class Record(object):
 
     def __init__(self, task="", session="", acquisition="",
                  AnonymDate=None):
+        super(Record, self).__init__()
         self.__locked = False
         self._outPath = None
         self._inPath = None
@@ -226,6 +211,8 @@ class Record(object):
         self._aDate = AnonymDate
 
         self._extList = []
+
+        self.BIDSvalues = dict()
 
     def SetInputPath(self, inputPath):
         """

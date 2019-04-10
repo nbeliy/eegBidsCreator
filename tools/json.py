@@ -191,28 +191,40 @@ class fieldEntry(object):
         return self.__name == other.__name
 
 
-class fieldLibrary(object):
+class BIDSfieldLibrary(object):
     """
-    a library class for fields.
+    a library class for fields used in BIDS tsv files.
 
-    An instance of this class is meant to be declared static for each 
-    type (events, channels, subjects, scans etc.). Then suggested and
-    custom fields are added and activated manually via AddField function.
-    Each added field must have an unique name. 
+    In order to an object to use BIDS tsv fields, this object must 
+    inherit from this class.
 
-    A dictionary with names of activated fields as keys and coressponding
-    values as values need to be filled. Such dictionary, passed to 
-    GetLine function will return tab-separated line with values interpreted
-    via str(), empty values ('' or None) will be replaced as 'n/a'
+    It contains a static list of available fields, and a dynamic 
+    dictionary of values for each of objects.
+
+    A list of required and suggested fields must be added to library in 
+    class definition (outside of __init__). User-defined fields can be 
+    added in plugin at any point.
+
+    Each field can be described by its id (name), explicit name, description,
+    possible values and descriptive url. For more details, refer to BIDS 
+    description there:
+    https://bids-specification.readthedocs.io/\
+en/latest/02-common-principles.html
+
+    Each field can be activated or deactivated. Only acive fields will be
+    reported in json and tsv filres.
+
+    The descriptive json file is created by BIDSdumpJSON(filename)
+    The header line is created by static method BIDSgetHeader()
+    Data line for each instance is created by BIDSgetLine()
     """
-    __slots__ = ["__library", "__nactive"]
+    __slots__ = ["__library"]
 
     def __init__(self):
         """
         creator
         """
         self.__library = list()
-        self.__nactive = 0
 
     def AddField(self, name, longName="", description="", 
                  levels={}, units="", url="", activated=True):
@@ -254,8 +266,6 @@ class fieldLibrary(object):
                         levels, units, url, activated)
         if fe not in self.__library:
             self.__library.append(fe)
-            if fe.Active():
-                self.__nactive += 1
         else:
             raise IndexError("Field in library already contains " + name)
 
@@ -282,27 +292,22 @@ class fieldLibrary(object):
         if not isinstance(act, bool):
             raise TypeError("act must be bool")
         old = self.__library[name].__activated 
-        if old == act : return
-        if act:
-            self.__nactive += 1
-        else:
-            self.__nactive -= 1
         self.__library[name].__activated = act
 
     def GetNActive(self):
         """
         returns number of active files
         """
-        return self.__nactive
+        count = 0
+        for f in self.__library:
+            if f.Active(): count += 1
+        return count
 
     def GetActive(self):
         """
         returns a list of active field names
         """
         active = [f.GetName() for f in self.__library if f.Active()]
-        if len(active) != self.GetNActive():
-            raise ValueError("number of active fields mismutch number "
-                             "of fields in header")
         return active
 
     def GetHeader(self):
@@ -322,9 +327,6 @@ class fieldLibrary(object):
             header
         """
         line = [f.GetName() for f in self.__library if f.Active()]
-        if len(line) != self.GetNActive():
-            raise ValueError("number of active fields mismutch number "
-                             "of fields in header")
         return ('\t'.join(line))
 
     def GetLine(self, values):
@@ -340,7 +342,7 @@ class fieldLibrary(object):
 
         Parameters
         ----------
-        values : dict
+        values : dict, optional
             a dictionary of values with keys corresponding to fields 
             defined in library
 
@@ -352,6 +354,8 @@ class fieldLibrary(object):
 latest/02-common-principles.html
 
         """ 
+        if not isinstance(values, dict):
+            raise TypeError("values must be a dictionary")
         active = self.GetActive() 
         result = list()
         for f in active:
@@ -361,8 +365,8 @@ latest/02-common-principles.html
                 result.append('n/a')
         return "\t".join(result)
 
-    @classmethod
-    def Normalize(cls, value):
+    @staticmethod
+    def Normalize(value):
         """
         class method
 
