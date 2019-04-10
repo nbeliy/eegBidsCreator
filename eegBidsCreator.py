@@ -14,10 +14,13 @@ import psutil
 import tools.cfi as cfi
 import tools.cli as cli
 import tools.tools as tools
-import tools.json as tjson
 
-from DataStructure.Generic.Event import GenEvent
+# Generic classes import
+import DataStructure.Generic.Record as GenericRecord
+import DataStructure.Generic.Event as GenericEvent
+import DataStructure.Generic.Channel as GenericChannel
 
+# Format implementation import
 from DataStructure.SPM12.MEEG import MEEG
 
 from DataStructure.Embla.Record import EmbRecord
@@ -119,6 +122,8 @@ def main(argv):
         consoleHandler = logging.StreamHandler()
         consoleHandler.setFormatter(logFormatter)
         Logger.addHandler(consoleHandler)
+
+    SetupBIDS()
 
     ANONYM_DATE = None
     ANONYM_NAME = None
@@ -222,6 +227,10 @@ def main(argv):
 
         recording.Lock()
 
+        ###########################
+        # Creating output folders #
+        ###########################
+
         tools.create_directory(
                 path=recording.Path(),
                 toRemove=recording.Prefix(app="*"),
@@ -258,6 +267,10 @@ def main(argv):
         if not recording.GetStopTime():
             Logger.warning("Unable to get EndTime of record. "
                            "Will be set to last data point.")
+
+        ####################
+        # Reading channels #
+        ####################
 
         Logger.info("Reading channels")
         main_channel = None
@@ -322,6 +335,10 @@ def main(argv):
                                     "%Y-%m-%d %H:%M:%S")
         t_ref, t_end = recording.CropTime(t_l, t_h, verbose=True)
 
+        ####################
+        # Reading events   #
+        ####################
+
         Logger.info("Reading events info")
         to_keep = []
         if parameters['EVENTS']['WhiteList'] != '':
@@ -354,7 +371,8 @@ def main(argv):
             if recording.GetMainChannel():
                 main_channel = recording.GetMainChannel()
                 for t in range(0, main_channel.GetNsequences()):
-                    ev = GenEvent(Name="New Segment", 
+                    ev = GenericEvent.GenEvent(
+                                  Name="New Segment", 
                                   Time=main_channel.GetSequenceStart(t), 
                                   Duration=main_channel.GetSequenceDuration(t))
                     ev.AddChannel(main_channel.GetId())
@@ -379,6 +397,10 @@ def main(argv):
                 ex_code = 100 + 20 + result
                 raise
 
+        ################################
+        # Creating meta-data json file #
+        ###############################
+
         Logger.info("Creating eeg.json file")
         with open(recording.Path()
                   + recording.Prefix(app="_eeg.json"),
@@ -402,7 +424,12 @@ def main(argv):
                       skipkeys=False, indent="  ", 
                       separators=(',',':'))
 
-        # Updating channels frequency multiplier and starting time
+        ############################
+        # Updating channels        #
+        # frequency multiplier     #
+        # and starting time        #
+        ############################
+
         for c in recording.Channels:
             c.SetFrequencyMultiplyer(int(
                 recording.Frequency / c.GetFrequency()))
@@ -446,7 +473,10 @@ def main(argv):
                 ex_code = 100 + 30 + result
                 raise
 
-        # Running over runs
+        #####################
+        # Running over runs #
+        #####################
+
         file_list = list()
         mem_requested = float(parameters["GENERAL"]["MemoryUsage"])\
             * (1024 ** 3)
@@ -484,44 +514,40 @@ def main(argv):
                       + recording.Prefix(run=run, app="_channels.tsv"),
                       "w", 
                       encoding='utf-8') as f:
-                print("name",
-                      "type",
-                      "units",
-                      "description", 
-                      "sampling_frequency",
-                      "reference", 
-                      sep='\t', file=f)
+                GenericChannel.GenChannel.BIDSfields.DumpDefinitions(
+                        recording.Path()
+                        + recording.Prefix(run=run, app="_channels.json")
+                        )
+                print(GenericChannel.GenChannel.BIDSfields.GetHeader(), file=f)
                 for c in channels:
-                    print(c.GetName(Void="n/a"),
-                          c.GetType(Void="n/a"),
-                          c.GetUnit(Void="n/a"),
-                          c.GetDescription(Void="n/a"),
-                          c.GetFrequency(), 
-                          c.GetReference(Void="n/a"), 
-                          sep="\t", file=f)
+                    c.BIDSvalues["name"] = c.GetName()
+                    c.BIDSvalues["type"] = c.GetType()
+                    c.BIDSvalues["units"] = c.GetUnit()
+                    c.BIDSvalues["description"] = c.GetDescription()
+                    c.BIDSvalues["sampling_frequency"] = c.GetFrequency()
+                    c.BIDSvalues["reference"] = c.GetReference()
+                    print(c.BIDSfields.GetLine(c.BIDSvalues), file=f)
 
             Logger.info("Creating events.tsv file")     
-            GenEvent.FieldsLibrary.DumpDefinitions(
+            GenericEvent.GenEvent.BIDSfields.DumpDefinitions(
                     recording.Path()
                     + recording.Prefix(run=run, app="_events.json"))
             with open(recording.Path()
                       + recording.Prefix(run=run,app="_events.tsv"),
                       "w", encoding='utf-8') as f:
-                print(GenEvent.FieldsLibrary.GetHeader(), file=f)
+                print(GenericEvent.GenEvent.BIDSfields.GetHeader(), file=f)
                 for ev in events:
-                    ev.libValues["onset"] = ev.GetOffset(t_ref)
-                    ev.libValues["duration"] = ev.GetDuration()
-                    ev.libValues["trial_type"] = ev.GetName()
+                    ev.BIDSvalues["onset"] = ev.GetOffset(t_ref)
+                    ev.BIDSvalues["duration"] = ev.GetDuration()
+                    ev.BIDSvalues["trial_type"] = ev.GetName()
                     if ev.GetChannelsSize() == 0\
                        or parameters.getboolean("EVENTS","MergeCommonEvents"):
-                        ev.libValues["channels"] = ev.GetChannels()
-                        print(GenEvent.FieldsLibrary.GetLine(ev.libValues), 
-                              file=f)
+                        ev.BIDSvalues["channels"] = ev.GetChannels()
+                        print(ev.BIDSfields.GetLine(ev.BIDSvalues), file=f)
                     else :
                         for c_id in ev.GetChannels():
-                            ev.libValues["channels"] = ev.GetChannelById(c_id)
-                            print(GenEvent.FieldsLibrary.GetLine(ev.libValues),
-                                  file=f)
+                            ev.BIDSvalues["channels"] = ev.GetChannelById(c_id)
+                            print(ev.BIDSfields.GetLine(ev.libValues), file=f)
 
             # BV format
             if parameters['GENERAL']['Conversion'] == "BV":
@@ -631,9 +657,11 @@ def main(argv):
 
                     outData.DataFile.WriteBlock(l_data)
                     t_count += 1
-                file_list.append("eeg/{}\t{}".format(
-                        recording.Prefix(run=run,app="_eeg.vhdr"), 
-                        t_ref.isoformat()))
+                    recording.BIDSvalues["filename"] = "eeg/{}".format(
+                        recording.Prefix(run=run,app="_eeg.vhdr"))
+                    recording.BIDSvalues["acq_time"] = t_ref
+                file_list.append(recording.BIDSfields
+                                 .GetLine(recording.BIDSvalues))
 
             # EDF part
             elif parameters['GENERAL']['Conversion'] == "EDF":
@@ -750,9 +778,11 @@ def main(argv):
                     t_count += 1
                 outData.Close()
 
-                file_list.append("eeg/{}\t{}".format(
-                        recording.Prefix(run=run,app="_eeg.edf"), 
-                        t_ref.isoformat()))
+                recording.BIDSvalues["filename"] = "eeg/{}".format(
+                    recording.Prefix(run=run,app="_eeg.edf"))
+                recording.BIDSvalues["acq_time"] = t_ref
+                file_list.append(recording.BIDSfields
+                                 .GetLine(recording.BIDSvalues))
 
             # Matlab SPM12 eeg format
             elif parameters['GENERAL']["Conversion"] == "MEEG":
@@ -807,9 +837,11 @@ def main(argv):
                             t_s, t_e, freq_mult=ch.GetFrequencyMultiplyer()))
                     outData.WriteBlock(l_data)
                     t_count += 1
-                file_list.append("eeg/{}\t{}".format(
-                        recording.Prefix(run=run,app="_eeg.mat"), 
-                        t_ref.isoformat()))
+                recording.BIDSvalues["filename"] = "eeg/{}".format(
+                    recording.Prefix(run=run,app="_eeg.mat"))
+                recording.BIDSvalues["acq_time"] = t_ref
+                file_list.append(recording.BIDSfields
+                                 .GetLine(recording.BIDSvalues))
 
             # Copiyng original files if there no conversion
             elif parameters['GENERAL']["Conversion"] == "":
@@ -821,9 +853,11 @@ def main(argv):
                             recording.GetInputPath(f), 
                             recording.Path(appendix=recording
                                            .Prefix(app="_" + f)))
-                file_list.append("eeg/{}\t{}".format(
-                            recording.Prefix(run=run,app="_Recording.esrc"),
-                            t_ref.isoformat()))
+                recording.BIDSvalues["filename"] = "eeg/{}".format(
+                    recording.Prefix(run=run,app="_Recording.esrc"))
+                recording.BIDSvalues["acq_time"] = t_ref
+                file_list.append(recording.BIDSfields
+                                 .GetLine(recording.BIDSvalues))
 
             else:
                 raise Exception("Conversion to {} format not implemented"
@@ -832,11 +866,10 @@ def main(argv):
             scansName = "sub-" + recording.SubjectInfo.ID
             if recording.GetSession() != "":
                 scansName += "_ses-" + recording.GetSession()
-            scansName += "_scans.tsv"
-            with open(recording.Path(appendix="")
-                      + scansName,
-                      "a",
-                      encoding='utf-8') as f:
+            scansName += "_scans"
+            scansName = recording.Path(appendix="") + scansName
+            recording.BIDSfields.DumpDefinitions(scansName + ".json")
+            with open(scansName + ".tsv", "a", encoding='utf-8') as f:
                 for l in file_list:
                     print(l, file=f)
 
@@ -856,24 +889,24 @@ def main(argv):
         with open(parameters['GENERAL']['OutputFolder'] 
                   + "participants.tsv", "a",
                   encoding='utf-8') as f:
+            flib = recording.SubjectInfo.BIDSfields
+            fval = recording.SubjectInfo.BIDSvalues
             s_gen = ""
             if recording.SubjectInfo.Gender == 1: 
                 s_gen = "F"
             elif recording.SubjectInfo.Gender == 2:
                 s_gen = "M"
-            recording.SubjectInfo.libValues["participant_id"] =\
-                    "sub-" + recording.SubjectInfo.ID
-            recording.SubjectInfo.libValues["sex"] = s_gen
+            fval["participant_id"] = "sub-" + recording.SubjectInfo.ID
+            fval["sex"] = s_gen
             if recording.SubjectInfo.Birth != datetime.min:
                 s_age = str(time_limits[0][0].year 
                             - recording.SubjectInfo.Birth.year)
-                recording.SubjectInfo.libValues["age"] = s_age
-            print(recording.SubjectInfo.FieldsLibrary.GetLine(
-                  recording.SubjectInfo.libValues), file=f)
+                fval["age"] = s_age
+            print(flib.GetLine(fval), file=f)
 
         if not os.path.isfile(parameters['GENERAL']['OutputFolder']
                               + "participants.json"):
-            recording.SubjectInfo.FieldsLibrary.DumpDefinitions(
+            flib.DumpDefinitions(
                     parameters['GENERAL']['OutputFolder'] 
                     + "participants.json")
 
@@ -950,6 +983,190 @@ in output folder.")
         Logger.error(type(e).__name__ + ": " + str(e))
 
     return(ex_code)
+
+
+def SetupBIDS():
+    """
+    Convinience function to setup any global BIDS related settings
+    """
+
+    # participants fields
+    GenericRecord.Subject.BIDSfields.AddField(
+            name="participant_id",
+            longName="Participant Id",
+            description="label identifying a particular subject")
+    GenericRecord.Subject.BIDSfields.AddField(
+        name="age",
+        longName="Age",
+        description="Age of a subject",
+        units="year")
+    GenericRecord.Subject.BIDSfields.AddField(
+        name="sex",
+        longName="Sex",
+        description="Gender of a subject",
+        levels={
+            "n/a" : "Not available",
+            "F"   : "Female",
+            "M"   : "Male"}
+            )
+
+    # scans fields
+    GenericRecord.Record.BIDSfields.AddField(
+        name="filename",
+        longName="File Name",
+        description="Path to the scan file")
+    GenericRecord.Record.BIDSfields.AddField(
+        name="acq_time",
+        longName="Acquisition time",
+        description="Time corresponding to the first data "
+        "taken during the scan")
+
+    # events fields
+    GenericEvent.GenEvent.BIDSfields.AddField(
+          name="onset", 
+          description="Onset (in seconds) of the event measured "
+          "from the beginning of the acquisition of "
+          "the first volume in the corresponding task imaging "
+          "data file. If any acquired scans have been discarded "
+          "before forming the imaging data file, ensure that "
+          "a time of 0 corresponds to the first image stored.",
+          units="s")
+    GenericEvent.GenEvent.BIDSfields.AddField(
+          name="duration",
+          description="Duration of the event (measured from onset) "
+          "in seconds. Must always be either zero "
+          "or positive. A \"duration\" value of zero "
+          "implies that the delta function or event "
+          "is so short as to be effectively modeled "
+          "as an impulse.",
+          units="s")
+    GenericEvent.GenEvent.BIDSfields.AddField(
+          name="sample",
+          description="Onset of the event according to "
+          "the sampling scheme of the recorded modality "
+          "(i.e., referring to the raw data file that "
+          "the events.tsv file accompanies).",
+          activated=False)
+    GenericEvent.GenEvent.BIDSfields.AddField(
+          name="trial_type",
+          description="Primary categorisation of each trial "
+          "to identify them as instances of the experimental "
+          "conditions. For example: for a response inhibition "
+          "task, it could take on values \"go\" and \"no-go\" "
+          "to refer to response initiation and response inhibition "
+          "experimental conditions.")
+    GenericEvent.GenEvent.BIDSfields.AddField(
+          name="response_time",
+          description="Response time measured in seconds. A negative "
+          "response time can be used to represent preemptive "
+          "responses and \"n/a\" denotes a missed response.",
+          units="s",
+          activated=False)
+    GenericEvent.GenEvent.BIDSfields.AddField(
+          name="stim_file",
+          description="Represents the location of the stimulus file "
+          "(image, video, sound etc.) presented at the given onset "
+          "time. There are no restrictions on the file formats of "
+          "the stimuli files, but they should be stored in the "
+          "/stimuli folder (under the root folder of the dataset; "
+          "with optional subfolders). The values under the stim_file "
+          "column correspond to a path relative to \"/stimuli\". "
+          "For example \"images/cat03.jpg\" will be translated to "
+          "\"/stimuli/images/cat03.jpg\".",
+          activated=False)
+    GenericEvent.GenEvent.BIDSfields.AddField(
+          name="value",
+          description="Marker value associated with the event (e.g., "
+          "the value of a TTL trigger that was recorded at the onset "
+          "of the event).")
+    GenericEvent.GenEvent.BIDSfields.AddField(
+          name="HED",
+          description="Hierarchical Event Descriptor (HED) Tag. "
+          "See Appendix III for details.",
+          url="https://bids-specification.readthedocs.io/en/latest"
+          "/99-appendices/03-hed.html",
+          activated=False)
+    GenericEvent.GenEvent.BIDSfields.AddField(
+          name="channels",
+          description="List of channels names that are associated with "
+                      "this event")
+
+    GenericChannel.GenChannel.BIDSfields.AddField(
+            name="name",
+            longName="Channel name",
+            description="Channel name (e.g., FC1, Cz)")
+    GenericChannel.GenChannel.BIDSfields.AddField(
+            name="type",
+            longName="Type of channel",
+            description="Type of channel; must be one of the type "
+            "listed there: \n"
+            "https://bids-specification.readthedocs.io/en/latest/"
+            "04-modality-specific-files/03-electroencephalography.html")
+    GenericChannel.GenChannel.BIDSfields.AddField(
+            name="units",
+            longName="Measurement units",
+            description="Physical unit of the data values recorded by "
+            "this channel in SI units (see Appendix V: Units for allowed "
+            "symbols of BIDS):\n"
+            "https://bids-specification.readthedocs.io/en/latest/"
+            "99-appendices/05-units.html")
+    GenericChannel.GenChannel.BIDSfields.AddField(
+            name="description",
+            longName="Description of channel",
+            description="Free-form text description of the channel, "
+            "or other information of interest. "
+            "Here original channel name and type.")
+    GenericChannel.GenChannel.BIDSfields.AddField(
+            name="sampling_frequency",
+            longName="Channel's sampling frequency",
+            description="Sampling rate of the channel in Hz.",
+            units="Hz")
+    GenericChannel.GenChannel.BIDSfields.AddField(
+            name="reference",
+            longName="Channel used as reference",
+            description="Name of the reference electrode(s) (not needed when "
+            "it is common to all channels, in that case it can be specified "
+            "in *_eeg.json as EEGReference).",
+            activated=False)
+    GenericChannel.GenChannel.BIDSfields.AddField(
+            name="low_cutoff",
+            longName="Low passing band cut-off",
+            description="Frequencies used for the high-pass filter applied "
+            "to the channel in Hz.",
+            units="Hz",
+            activated=False)
+    GenericChannel.GenChannel.BIDSfields.AddField(
+            name="high_cutoff",
+            longName="High passing band cut-off",
+            description="Frequencies used for the low-pass filter applied "
+            "to the channel in Hz. Note that hardware anti-aliasing "
+            "in A/D conversion of all EEG electronics applies a low-pass "
+            "filter; specify its frequency here if applicable.",
+            units="Hz",
+            activated=False)
+    GenericChannel.GenChannel.BIDSfields.AddField(
+            name="notch",
+            longName="Notch filter",
+            description="Frequencies used for the notch filter applied to "
+            "the channel, in Hz.",
+            units="Hz",
+            activated=False)
+    GenericChannel.GenChannel.BIDSfields.AddField(
+            name="status",
+            longName="Status of the channel",
+            description="Data quality observed on the channel (good/bad). "
+            "A channel is considered bad if its data quality is compromised "
+            "by excessive noise. Description of noise type SHOULD "
+            "be provided in [status_description].",
+            levels={"good": "a good channel", "bad": "noisy channel"},
+            activated=False)
+    GenericChannel.GenChannel.BIDSfields.AddField(
+            name="status_description",
+            longName="Descroption of the status",
+            description="Free-form text description of noise or artifact "
+            "affecting data quality on the channel. It is meant to explain "
+            "why the channel was declared bad in [status].",
+            activated=False)
 
 
 if __name__ == "__main__":
