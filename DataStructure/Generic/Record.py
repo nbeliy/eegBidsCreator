@@ -336,7 +336,7 @@ class Record(object):
         """
         return self.__locked
 
-    def GetAuxFiles(self, path="."):
+    def GetAuxFiles(self, path=None):
         """
         provides a list of paths to the auxiliary files in path directory.
         File is considered as auxiliary if his extention is not in list of
@@ -344,8 +344,9 @@ class Record(object):
 
         Parameters
         ----------
-        path, str
-            path to eeg files
+        path : str, optional
+            path to eeg files, if not set, files will be searched 
+            in input directory
 
         Returns
         -------
@@ -357,6 +358,8 @@ class Record(object):
         TypeError
             if provided options are of incorrect type
         """
+        if path is None:
+            path = self._inPath
         if not isinstance(path, str):
             raise TypeError("Path must be a string")
         return [os.path.basename(f) 
@@ -364,7 +367,7 @@ class Record(object):
                 if not os.path.splitext(f)[1] in self._extList 
                 ]
 
-    def GetMainFiles(self, path="."):
+    def GetMainFiles(self, path=None):
         """
         provides a list of paths to the eeg files in path directory.
         File is considered as eeg file if his extention is in list of
@@ -372,8 +375,9 @@ class Record(object):
 
         Parameters
         ----------
-        path, str
-            path to eeg files
+        path : str, optional
+            path to eeg files, if not set, files will be searched
+            in input directory
 
         Returns
         -------
@@ -385,6 +389,8 @@ class Record(object):
         TypeError
             if provided options are of incorrect type
         """
+        if path is None:
+            path = self._inPath
         if not isinstance(path, str):
             raise TypeError("Path must be a string")
         return [os.path.basename(f) 
