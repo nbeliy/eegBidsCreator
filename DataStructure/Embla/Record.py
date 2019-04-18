@@ -54,6 +54,7 @@ class EmbRecord(Record):
                         notes=metadata["PatientInfo"]["Notes"],
                         height=metadata["PatientInfo"]["Height"],
                         weight=metadata["PatientInfo"]["Weight"])
+        self.SetId(subject=metadata["PatientInfo"]["ID"])
         self.SetDevice(type=metadata["Device"]["DeviceTypeID"],
                        id=metadata["Device"]["DeviceID"],
                        name=metadata["Device"]["DeviceName"],

@@ -11,7 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Added
 - library for BIDS fields used in .tsv files. New class `tools.json.fieldEntry` is defined with a list of field definitions. New fields can be added via AddField. `DumpDescription` creates a descriptive json file, while GetHeader and GetLine generates the header and individual lines for .tsv files
 - fieldEntry is defined for participants.tsv and events.tsv files
+- scan id functions and fieldLibrary moved to BIDS/BIDS.py
 
+### Fixed
+- Sidecar Json created without run label
+- post\_processing adapted to use field description files
 
 ## [dev0.73] - 2019-04-05
 
