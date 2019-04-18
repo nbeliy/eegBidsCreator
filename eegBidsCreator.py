@@ -1,6 +1,5 @@
 import logging
 import os
-import json
 import glob
 import traceback
 import tempfile
@@ -232,21 +231,21 @@ def main(argv):
         ###########################
 
         tools.create_directory(
-                path=recording.Path(),
-                toRemove=recording.Prefix(app="*"),
+                path=recording.Path(appdir="eeg"),
+                toRemove=recording.GetPrefix(app="*"),
                 allowDups=parameters["GENERAL"]
                 .getboolean("OverideDuplicated"))
 
         tools.create_directory(
                 path=parameters['GENERAL']['OutputFolder'] 
                 + "sourcedata/log",
-                toRemove=recording.Prefix(app=".log"),
+                toRemove=recording.GetPrefix(app=".log"),
                 allowDups=True)
 
         tools.create_directory(
                 path=parameters['GENERAL']['OutputFolder'] 
                 + "sourcedata/configuration",
-                toRemove=recording.Prefix(app=".ini"),
+                toRemove=recording.GetPrefix(app=".ini"),
                 allowDups=True)
 
         if parameters['GENERAL'].getboolean('CopySource'):
@@ -399,30 +398,22 @@ def main(argv):
 
         ################################
         # Creating meta-data json file #
-        ###############################
+        ################################
 
-        Logger.info("Creating eeg.json file")
-        with open(recording.Path()
-                  + recording.Prefix(app="_eeg.json"),
-                  "w",
-                  encoding='utf-8') as f:
-            recording.UpdateJSON()
-            res = recording.CheckJSON()
-            if len(res[0]) > 0:
-                Logger.warning("JSON: Missing next required fields: "
-                               + str(res[0]))
-            if len(res[1]) > 0:
-                Logger.info("JSON: Missing next recomennded fields: "
-                            + str(res[1]))
-            if len(res[2]) > 0:
-                Logger.debug("JSON: Missing next optional fields: "
-                             + str(res[2]))
-            if len(res[3]) > 0:
-                Logger.warning("JSON: Contains next non BIDS fields: "
-                               + str(res[3]))
-            json.dump(recording.JSONdata, f, 
-                      skipkeys=False, indent="  ", 
-                      separators=(',',':'))
+        recording.UpdateJSON()
+        res = recording.CheckJSON()
+        if len(res[0]) > 0:
+            Logger.warning("JSON: Missing next required fields: "
+                           + str(res[0]))
+        if len(res[1]) > 0:
+            Logger.info("JSON: Missing next recomennded fields: "
+                        + str(res[1]))
+        if len(res[2]) > 0:
+            Logger.debug("JSON: Missing next optional fields: "
+                         + str(res[2]))
+        if len(res[3]) > 0:
+            Logger.warning("JSON: Contains next non BIDS fields: "
+                           + str(res[3]))
 
         ############################
         # Updating channels        #
@@ -508,15 +499,19 @@ def main(argv):
             if parameters["RUNS"]["SplitRuns"] != "":
                 run = count + 1
                 Logger.info("Run {}: duration: {}".format(run, t_end - t_ref))
+                recording.SetRun()
 
+            recording.DumpJSON()
             Logger.info("Creating channels.tsv file")
-            with open(recording.Path()
-                      + recording.Prefix(run=run, app="_channels.tsv"),
+            with open(recording.Path(appdir="eeg",
+                                     appfile=recording.GetPrefix()
+                                     + "_channels.tsv"),
                       "w", 
                       encoding='utf-8') as f:
                 GenericChannel.GenChannel.BIDSfields.DumpDefinitions(
-                        recording.Path()
-                        + recording.Prefix(run=run, app="_channels.json")
+                        recording.Path(appdir="eeg")
+                        + recording.GetPrefix()
+                        + "_channels.json"
                         )
                 print(GenericChannel.GenChannel.BIDSfields.GetHeader(), file=f)
                 for c in channels:
@@ -530,10 +525,10 @@ def main(argv):
 
             Logger.info("Creating events.tsv file")     
             GenericEvent.GenEvent.BIDSfields.DumpDefinitions(
-                    recording.Path()
-                    + recording.Prefix(run=run, app="_events.json"))
-            with open(recording.Path()
-                      + recording.Prefix(run=run,app="_events.tsv"),
+                    recording.Path(appdir="eeg")
+                    + recording.GetPrefix(app="_events.json"))
+            with open(recording.Path(appdir="eeg")
+                      + recording.GetPrefix(app="_events.tsv"),
                       "w", encoding='utf-8') as f:
                 print(GenericEvent.GenEvent.BIDSfields.GetHeader(), file=f)
                 for ev in events:
@@ -552,8 +547,8 @@ def main(argv):
             # BV format
             if parameters['GENERAL']['Conversion'] == "BV":
                 Logger.info("Converting to BrainVision format")
-                outData = BrainVision(recording.Path(),
-                                      recording.Prefix(run=run),
+                outData = BrainVision(recording.Path(appdir="eeg"),
+                                      recording.GetPrefix(),
                                       AnonymDate=ANONYM_DATE)
                 outData.SetEncoding(parameters['BRAINVISION']['Encoding'])
                 outData.SetDataFormat(parameters['BRAINVISION']['DataFormat'])
@@ -658,7 +653,7 @@ def main(argv):
                     outData.DataFile.WriteBlock(l_data)
                     t_count += 1
                     recording.BIDSvalues["filename"] = "eeg/{}".format(
-                        recording.Prefix(run=run,app="_eeg.vhdr"))
+                        recording.GetPrefix(app="_eeg.vhdr"))
                     recording.BIDSvalues["acq_time"] = t_ref
                 file_list.append(recording.BIDSfields
                                  .GetLine(recording.BIDSvalues))
@@ -666,8 +661,8 @@ def main(argv):
             # EDF part
             elif parameters['GENERAL']['Conversion'] == "EDF":
                 Logger.info("Converting to EDF+ format")
-                outData = EDF(recording.Path(),
-                              recording.Prefix(run=run),
+                outData = EDF(recording.Path(appdir="eeg"),
+                              recording.GetPrefix(),
                               AnonymDate=ANONYM_DATE)
                 outData.Patient["Code"] = recording.SubjectInfo.ID
                 if recording.SubjectInfo.Gender == 1:
@@ -779,7 +774,7 @@ def main(argv):
                 outData.Close()
 
                 recording.BIDSvalues["filename"] = "eeg/{}".format(
-                    recording.Prefix(run=run,app="_eeg.edf"))
+                    recording.GetPrefix(app="_eeg.edf"))
                 recording.BIDSvalues["acq_time"] = t_ref
                 file_list.append(recording.BIDSfields
                                  .GetLine(recording.BIDSvalues))
@@ -787,8 +782,8 @@ def main(argv):
             # Matlab SPM12 eeg format
             elif parameters['GENERAL']["Conversion"] == "MEEG":
                 Logger.info("Converting to Matlab SPM format")
-                outData = MEEG(recording.Path(),
-                               recording.Prefix(run=run),
+                outData = MEEG(recording.Path(appdir="eeg"),
+                               recording.GetPrefix(),
                                AnonymDate=ANONYM_DATE)
                 outData.SetStartTime(t_ref)
                 outData.SetDuration((t_end - t_ref).total_seconds())
@@ -838,7 +833,7 @@ def main(argv):
                     outData.WriteBlock(l_data)
                     t_count += 1
                 recording.BIDSvalues["filename"] = "eeg/{}".format(
-                    recording.Prefix(run=run,app="_eeg.mat"))
+                    recording.GetPrefix(app="_eeg.mat"))
                 recording.BIDSvalues["acq_time"] = t_ref
                 file_list.append(recording.BIDSfields
                                  .GetLine(recording.BIDSvalues))
@@ -851,10 +846,10 @@ def main(argv):
                     Logger.debug("file: " + f)
                     shutil.copy2(
                             recording.GetInputPath(f), 
-                            recording.Path(appendix=recording
-                                           .Prefix(app="_" + f)))
+                            recording.Path(appfile=recording
+                                           .GetPrefix(app="_" + f)))
                 recording.BIDSvalues["filename"] = "eeg/{}".format(
-                    recording.Prefix(run=run,app="_Recording.esrc"))
+                    recording.GetPrefix(app="_Recording.esrc"))
                 recording.BIDSvalues["acq_time"] = t_ref
                 file_list.append(recording.BIDSfields
                                  .GetLine(recording.BIDSvalues))
@@ -867,7 +862,7 @@ def main(argv):
             if recording.GetSession() != "":
                 scansName += "_ses-" + recording.GetSession()
             scansName += "_scans"
-            scansName = recording.Path(appendix="") + scansName
+            scansName = recording.Path() + scansName
             recording.BIDSfields.DumpDefinitions(scansName + ".json")
             with open(scansName + ".tsv", "a", encoding='utf-8') as f:
                 for l in file_list:
@@ -875,16 +870,17 @@ def main(argv):
 
         # Copiyng auxiliary files
         if parameters["BIDS"].getboolean("IncludeAuxiliary"):
-            out = recording.Path(prefix="auxiliaryfiles")
+            out = recording.Path(predir="auxiliaryfiles",
+                                 appdir="eeg")
             tools.create_directory(path=out,
-                                   toRemove=recording.Prefix(app="*"),
+                                   toRemove=recording.GetPrefix(app="*"),
                                    allowDups=parameters["GENERAL"]
                                    .getboolean("OverideDuplicated"))
             Logger.info("Copying auxiliary files. It not BIDS complient!")
             for f in recording.GetAuxFiles(path=recording.GetInputPath()):
                 Logger.debug("file: " + f)
                 shutil.copy2(recording.GetInputPath(f), 
-                             out + recording.Prefix(app="_" + f))
+                             out + recording.GetPrefix(app="_" + f))
 
         with open(parameters['GENERAL']['OutputFolder'] 
                   + "participants.tsv", "a",
@@ -944,8 +940,8 @@ in output folder.")
         Logger.error(type(e).__name__ + ": " + str(e))
         if recording is not None and recording.IsLocked():
             if outData is not None: del outData
-            flist = glob.glob(recording.Path()
-                              + recording.Prefix(app="*"))
+            flist = glob.glob(recording.Path(appdir="eeg")
+                              + recording.GetPrefix(app="*"))
             if len(flist) != 0:
                 for f in flist:
                     tools.rrm(f)
@@ -959,11 +955,11 @@ in output folder.")
             shutil.copy2(tmpDir + "/logfile",
                          parameters["GENERAL"]["OutputFolder"] 
                          + "sourcedata/log/"
-                         + recording.Prefix(app=".log"))
+                         + recording.GetPrefix(app=".log"))
             shutil.copy2(tmpDir + "/configuration",
                          parameters["GENERAL"]["OutputFolder"] 
                          + "sourcedata/configuration/"
-                         + recording.Prefix(app=".ini")) 
+                         + recording.GetPrefix(app=".ini")) 
             fileHandler.close()
             tools.rrm(tmpDir)
         else:

@@ -1,6 +1,7 @@
 import os
 import glob
 import logging
+import json
 
 import tools.tools as tools
 
@@ -23,7 +24,12 @@ path = os.sys.argv[1]
 
 Logger.info("Path: {}".format(path))
 
-dirs = [os.path.basename(d)[4:] for d in glob.glob(path + "/sub-*")]
+dirs = [os.path.basename(d) for d in glob.glob(path + "/sub-*")]
+
+Logger.info("Reading field definitions")
+fields = []
+with open(path + "/participants.json", "r") as j:
+    fields = list(json.load(j).keys())
 
 Logger.info("Reading subjects list")
 f = open(path + "/participants.tsv")
@@ -44,20 +50,25 @@ for d in dirs:
 
 # Add security measure if writ
 Logger.info("Writting subject list")
-f = open(path + "/participants.tsv", "w")
-print("\t".join(["participant_id", "sex", "age"]), file=f)
-for s in subj:
-    print("\t".join(s), end='', file=f)
-f.close()
 
+with open(path + "/participants.tsv", "w") as f:
+    print("\t".join(fields), file=f)
+    for s in subj:
+        if len(fields) != len(s):
+            Logger.warning("Subject {} fields mismatch description".format(s[0]))
+        print("\t".join(s), end='', file=f)
+
+fields = []
 Logger.info("Scnning for scan list")
 for sc in glob.glob(path + "/**/*scans.tsv", recursive=True):
     loc_path = os.path.dirname(sc)
     Logger.debug("Scan fount at {}".format(loc_path))
-    f = open(sc, "r")
-    files = [fl.split('\t') for fl in set(f.readlines())]
-    f.close()
+    with open(sc, "r") as f:
+        files = [fl.split('\t') for fl in set(f.readlines())]
     files = [fl for fl in files if os.path.isfile(loc_path + "/" + fl[0])]
+
+    with open(sc[:-4] + ".json", "r") as j:
+        fields = list(json.load(j).keys())
 
     full_list = glob.glob(loc_path + "/*/*", recursive=True)
     prefixes = []
@@ -76,10 +87,11 @@ for sc in glob.glob(path + "/**/*scans.tsv", recursive=True):
             tools.rrm(f)
 
     files.sort(key=lambda time:time[1])
-    f = open(sc, "w")
-    print("\t".join(["filename", "acq_time"]), file=f)
-    for s in files:
-        print("\t".join(s), end='', file=f)
-    f.close()
+    with open(sc, "w") as f:
+        print("\t".join(fields), file=f)
+        for s in files:
+            if len(fields) != len(s):
+                Logger.warning("Scan {} fields mismatch description".format(s[0]))
+            print("\t".join(s), end='', file=f)
 
 tools.remove_empty_dirs(path)

@@ -5,12 +5,13 @@ import os
 import logging
 import bisect
 import json
-import re
 
 from DataStructure.Generic.Channel import GenChannel as Channel
 from DataStructure.Generic.Event import GenEvent as Event
 
-from tools.json import BIDSfieldLibrary
+from DataStructure.BIDS.BIDS import BIDSid
+from DataStructure.BIDS.BIDS import BIDSfieldLibrary
+from DataStructure.BIDS.BIDS import JSONfields
 
 Logger = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ class Device(object):
         self.Version = ""
 
 
-class Record(BIDSfieldLibrary):
+class Record(BIDSid):
     __slots__ = ["JSONdata", "SubjectInfo", "DeviceInfo", "Type", 
                  # Time when registrement actually starts and stops
                  "__StartTime", "__StopTime",
@@ -89,42 +90,16 @@ class Record(BIDSfieldLibrary):
                  "__MinTime", "__MaxTime", 
                  # Time limits concidered for confertion
                  "__RefTime", "__EndTime",
-                 "__task", "__acquisition", "__session",
                  "Channels", "_chDict", "_dropped","_mainChannel",
                  "Events",
                  "__Frequency",
-                 "__path", "__prefix",
-                 "_inPath", "_outPath",
+                 "__inPath", "__outPath",
                  "_aDate",
                  "_extList",
                  "__locked"
                  "BIDSvalues"]
 
     BIDSfields = BIDSfieldLibrary()
-
-    # __JSONfields contains the full list of fields in JSON with a tags:
-    #   0 - required
-    #   1 - recommended
-    #   2 - optional
-    __JSONfields = {"TaskName": 0, "TaskDescription": 1, "Instructions":1,
-                    "CogAtlasID":1, "CogPOID":1, 
-                    "InstitutionName":1, "InstitutionAddress":1,
-                    "InstitutionalDepartementName":1,
-                    "DeviceSerialNumber":1,
-                    "HeadCircumference":1,
-                    "SamplingFrequency":0,
-                    "EEGChannelCount":0, "EOGChannelCount":1,
-                    "ECGChannelCount":1, "EMGChannelCount":1,
-                    "MiscChannelCount":2, "TriggerChannelCount":1,
-                    "EEGReference":0, "PowerLineFrequency":0, "EEGGround":1,
-                    "EEGPlacementScheme":1,
-                    "Manufacturer":1, "ManufacturersModelName":2,
-                    "CapManufacturer":1, "CapManufacturersModelName":2,
-                    "HardwareFilters":2, "SoftwareFilters":0, 
-                    "RecordingDuration":1, 
-                    "RecordingType":1, "EpochLenght":1,
-                    "SoftwareVersions":1,
-                    "SubjectArtefactDescription":2}
 
     @classmethod
     def IsValidInput(cls, inputPath):
@@ -183,12 +158,16 @@ class Record(BIDSfieldLibrary):
         """
         raise NotImplementedError("virtual _isValidInput not implemented")
 
-    def __init__(self, task="", session="", acquisition="",
+    def __init__(self, subject="", 
+                 task="", session="", acquisition="",
                  AnonymDate=None):
-        super(Record, self).__init__()
-        self.__locked = False
-        self._outPath = None
-        self._inPath = None
+
+        # BIDSfieldLibrary.__init__()
+        # BIDSid.__init__()
+        super().__init__()
+
+        self.__outPath = None
+        self.__inPath = None
         self.JSONdata = dict()
         self.SubjectInfo = Subject()
         self.DeviceInfo = Device()
@@ -199,8 +178,6 @@ class Record(BIDSfieldLibrary):
         self.__MaxTime = None
         self.__RefTime = None
         self.__EndTime = None
-        self.SetId(session, task, acquisition)
-        self.ResetPrefix()
 
         self.Channels = list()
         self._mainChannel = None
@@ -213,6 +190,10 @@ class Record(BIDSfieldLibrary):
         self._extList = []
 
         self.BIDSvalues = dict()
+
+    ##################
+    # Path and files # 
+    ##################
 
     def SetInputPath(self, inputPath):
         """
@@ -243,32 +224,8 @@ class Record(BIDSfieldLibrary):
             raise TypeError("inputPath must be a string")
         if not os.path.isdir(inputPath):
             raise FileNotFoundError("Invalid path ''".format(inputPath))
-        self._inPath = os.path.realpath(inputPath) + '/'
-        return self._inPath
-
-    def GetInputPath(self, appendix=""):
-        """
-        returns the path to input directory with an attached appendix
-        Do not checks if path with appendix exists
-
-        Parameters
-        ----------
-        appendix : str
-            appendix to attach to the path
-
-        Returns
-        -------
-        str
-            path with attached appendix
-
-        Raises
-        ------
-        TypeError
-            if parameters are of invalid type
-        """
-        if not isinstance(appendix, str):
-            raise TypeError("appendix must be a string")
-        return os.path.join(self._inPath, appendix)
+        self.__inPath = os.path.realpath(inputPath) + '/'
+        return self.__inPath
 
     def SetOutputPath(self, outputPath):
         """
@@ -295,57 +252,88 @@ class Record(BIDSfieldLibrary):
         """
         if not isinstance(outputPath, str):
             raise TypeError("outputPath must be a string")
-        if self.__locked:
+        if self.IsLocked():
             raise ValueError("record is locked")
         if not os.path.isdir(outputPath): 
             raise FileNotFoundError("Output folder {} don't exists."
                                     .format(outputPath))
-        self._outPath = os.path.realpath(outputPath)
-        Logger.info("Output will be found at '{}'".format(self._outPath))
-        return self._outPath
+        self.__outPath = os.path.realpath(outputPath)
+        Logger.info("Output will be found at '{}'".format(self.__outPath))
+        return self.__outPath
 
-    def Lock(self):
+    def GetInputPath(self, appendix=""):
         """
-        Forbids any futher changes in IDs and paths.
-        If output path not set, will raise AttributeError
+        returns the path to input directory with an attached appendix
+        Do not checks if path with appendix exists
 
-        Raises
-        ------
-        AttributeError
-            if output path is not set
-        """
-        if self._outPath is None:
-            raise AttributeError("Must set output path prior of locking IDs")
-        reg = re.compile("[a-zA-Z0-9]*")
-        if reg.fullmatch(self.SubjectInfo.ID) is None:
-            Logger.warning("Subject Id '{} contains illegal characters. "
-                           "Dataset will not be BIDS coplient"
-                           .format(self.SubjectInfo.ID))
-        if reg.fullmatch(self.__task) is None:
-            Logger.warning("Task Id '{}' contains illegal characters. "
-                           "Dataset will not be BIDS coplient"
-                           .format(self.__task))
-        if reg.fullmatch(self.__session) is None:
-            Logger.warning("Session Id '{}' contains illegal characters. "
-                           "Dataset will not be BIDS coplient"
-                           .format(self.__session))
-        if reg.fullmatch(self.__acquisition) is None:
-            Logger.warning("Acquisition Id '{}' contains illegal characters. "
-                           "Dataset will not be BIDS coplient"
-                           .format(self.__acquisition))
-        self.__locked = True
-        Logger.info("ID locked. EEG will be saved in " + self.Path())
-
-    def IsLocked(self):
-        """
-        checks if current recor is locked (i.e. its IDs are allowed to change)
+        Parameters
+        ----------
+        appendix : str
+            appendix to attach to the path
 
         Returns
         -------
-        bool
-            the locked status
+        str
+            path with attached appendix
+
+        Raises
+        ------
+        TypeError
+            if parameters are of invalid type
         """
-        return self.__locked
+        if not isinstance(appendix, str):
+            raise TypeError("appendix must be a string")
+        return os.path.join(self.__inPath, appendix)
+
+    def GetOutputPath(self):
+        """
+        provides output root directory
+        """
+        return self.__outPath
+
+    def Path(self, predir="", appdir="", appfile=""):
+        """
+        generates a path string in the output folder of the form
+        'outputFolder[/predir]/innerPath[/appdir]/[appfile]'
+        If file not specified returned path ends with '/'
+
+        Record IDs must be locked prior using this function
+
+        Parameters
+        ----------
+        predir : str
+            prefix to add to the path
+        appdir : str
+            appendix to add to the path
+        appfile: str
+            file to add to the path
+
+        Returns
+        -------
+        str
+            path string
+
+        Raises
+        ------
+        TypeError
+            if passed parameters are of wrong type
+        ValueError
+            if record is not locked
+        """
+        if not isinstance(predir, str):
+            raise TypeError("predir must be a string")
+        if not isinstance(appdir, str):
+            raise TypeError("appdir must be a string")
+        if not isinstance(appfile, str):
+            raise TypeError("appfile must be a string")
+        if not self.IsLocked():
+            raise ValueError("Record IDs must be locked prior acessing paths")
+        path = os.path.join(self.__outPath, predir,
+                            self.GetInnerPath(), appdir, appfile)
+        path = os.path.normpath(path)
+        if appfile == "":
+            path += '/'
+        return path
 
     def GetAuxFiles(self, path=None):
         """
@@ -369,7 +357,7 @@ class Record(BIDSfieldLibrary):
             if provided options are of incorrect type
         """
         if path is None:
-            path = self._inPath
+            path = self.__inPath
         if not isinstance(path, str):
             raise TypeError("Path must be a string")
         return [os.path.basename(f) 
@@ -399,7 +387,7 @@ class Record(BIDSfieldLibrary):
             if provided options are of incorrect type
         """
         if path is None:
-            path = self._inPath
+            path = self.__inPath
         if not isinstance(path, str):
             raise TypeError("Path must be a string")
         return [os.path.basename(f) 
@@ -407,160 +395,9 @@ class Record(BIDSfieldLibrary):
                 if os.path.splitext(f)[1] in self._extList 
                 ]
 
-    def SetId(self, session="", task="", acquisition=""):
-        """
-        sets the identification of sample -- session, task and acquisition
-        prefixes and paths will also be recalculated
-
-        Parameters        
-        ----------
-        session: str
-            logical grouping of neuroimaging and behavioral data consistent 
-            across subjects
-        task: str
-            a set of structured activities performed by the participant
-        acquisition : str
-            a continuous uninterrupted block of time during which 
-            a brain scanning instrument was acquiring data according 
-            to particular scanning sequence/protocol
-
-        Raises
-        ------
-        TypeError
-            if passed parameter are of wrong type
-        ValueError
-            if record is locked 
-        """
-        if not (isinstance(session, str) and isinstance(task, str)
-                and isinstance(acquisition, str)):
-            raise TypeError("session, task and acquisition must be str")
-        if self.__locked:
-            raise ValueError("record is locked")
-        self.__session = session
-        self.__acquisition = acquisition
-        self.__task = task
-        self.ResetPrefix()
-
-    def GetSession(self):
-        """
-        provides session label
-        """
-        return self.__session
-
-    def GetTask(self):
-        """
-        provides task label
-        """
-        return self.__task
-
-    def GetAcquisition(self):
-        """
-        provides acquisition label
-        """
-        return self.__acquisition
-
-    def Prefix(self, run=None, app=""):
-        """
-        provides bids-formatted prefix from the dataset id:
-        sub-<sunbId>_task-<taskId>[_ses-<sesid>][_run-<runId>]
-        If app is specifies, appends its value to prefix
-
-        Parameters
-        ----------
-        run: int, optional
-            the id of the run
-        app: str
-            appendix for prefix, for example file extention
-
-        Returns
-        -------
-        str
-            bids-formatted prefix
-
-        Raises
-        ------
-        TypeError
-            if parameters have incorrect type
-        """
-        if run is not None:
-            if not isinstance(run, int):
-                raise TypeError("run must be a int")
-            if run < 0:
-                raise ValueError("run must be positive or 0")
-        if not isinstance(app, str):
-            raise TypeError("app must be a string")
-        if run is None:
-            return self.__prefix + app
-        else: 
-            return self.__prefix + "_run-" + str(run) + app
-
-    def ResetPrefix(self):
-        """
-        updates bids-formatted prefix and sub-path. Need to be called
-        after changings in record IDs
-
-        Returns
-        -------
-        str
-            updated prefix
-
-        Raises
-        ------
-        ValueError
-            if record is locked
-        """
-        if self.__locked:
-            raise ValueError("record IDs is locked")
-        path = "sub-" + self.SubjectInfo.ID
-        if self.__session != "": 
-            path = path + "/ses-" + self.__session 
-        self.__path = path
-
-        prefix = "sub-" + self.SubjectInfo.ID
-        if self.__session != "":
-            prefix += "_ses-" + self.__session
-        prefix = prefix + "_task-" + self.__task
-        if self.__acquisition != "": 
-            prefix = prefix + "_acq-" + self.__acquisition 
-        self.__prefix = prefix
-
-        return self.__prefix
-
-    def Path(self, prefix="", appendix="eeg/"):
-        """
-        generates a path string in the output folder of the form
-        'outputFolder[/prefix]/sub-<label>[/ses-<label>][/appendix]/'
-        It ensures that returned path ends with '/'
-
-        Record IDs must be locked prior using this function
-
-        Parameters
-        ----------
-        prefix : str
-            prefix to add to the path
-        appendix : str
-            appendix to add to the path
-
-        Returns
-        -------
-        str
-            path string
-
-        Raises
-        ------
-        TypeError
-            if passed parameters are of wrong type
-        ValueError
-            if record is not locked
-        """
-        if not isinstance(prefix, str):
-            raise TypeError("prefix must be a string")
-        if not isinstance(appendix, str):
-            raise TypeError("appendix must be a string")
-        if not self.__locked:
-            raise ValueError("Record IDs must be locked prior acessing paths")
-        path = os.path.join(self._outPath, prefix, self.__path, appendix)
-        return os.path.normpath(path) + "/"
+    ###############################
+    # Frequency related functions #
+    ###############################
 
     @property
     def Frequency(self): return self.__Frequency
@@ -568,14 +405,14 @@ class Record(BIDSfieldLibrary):
     @Frequency.setter
     def Frequency(self, value):
         if not isinstance(value, int):
-            raise TypeError("Only integer frequency is supported")
+            raise TypeError("value must be an int")
         if value <= 0 :
             raise ValueError("Frequency must be positive non null value")
         self.__Frequency = value
 
     def AddFrequency(self, value):
         if not isinstance(value, int):
-            raise TypeError("Only integer frequency is supported")
+            raise TypeError("value must be an int")
         if value <= 0 :
             raise ValueError("Frequency must be positive non null value")
         if self.__Frequency == 0 or value == self.__Frequency:
@@ -586,7 +423,10 @@ class Record(BIDSfieldLibrary):
             lcd += 1
         self.__Frequency = lcd
 
-    """Time-related functions"""
+    ##########################
+    # Time-related functions #
+    ##########################
+
     def SetStartTime(self, t_start=None, t_end=None):
         """
         sets recording start/end times to given values
@@ -763,6 +603,32 @@ class Record(BIDSfieldLibrary):
         else:
             return time
 
+    def TimeIntersect(self, t_s1, t_e1, t_s2=None, t_e2=None):
+        """
+        returns intersection of time intervals [t_s1, t_e2) and
+        [t_s2, t_e2).
+
+        Parameters
+        ----------
+        t_s1: datetime
+        t_e1: datetime
+        t_s2: datetime, optional
+        t_e2: datetime, optional
+
+        Returns
+        -------
+        tupe(datetime, datetime)
+        """
+        if t_s2 is None: t_s2 = self.__RefTime
+        if t_e2 is None: t_e2 = self.__EndTime
+        ts = max(t_s1, t_s2)
+        te = min(t_e1, t_e2)
+        return (ts, te)
+
+    ###########################
+    # Subject and device info #
+    ###########################
+
     def SetSubject(self, id="", name="", address="", gender="",
                    birth=datetime.min, notes="",
                    height=0, weight=0, head=0):
@@ -785,6 +651,10 @@ class Record(BIDSfieldLibrary):
         self.DeviceInfo.Model = model
         self.DeviceInfo.Version = version
 
+    ##############################
+    # Task-description JSON file #
+    ##############################
+
     def LoadJson(self, filename):
         """Loads JSOn file. If Given filename doesn't contain '.json'
         extension, a task name will be appended together with extension.
@@ -793,7 +663,7 @@ class Record(BIDSfieldLibrary):
             raise TypeError("filename must be a string")
 
         if filename[-5:] != ".json":
-            filename += self.__task + ".json" 
+            filename += self.GetTask() + ".json" 
         filename = os.path.realpath(filename)
         Logger.info("JSON File: {}".format(filename))
         if not os.path.isfile(filename):
@@ -816,8 +686,8 @@ class Record(BIDSfieldLibrary):
 
     def UpdateJSON(self):
         if not ("TaskName" in self.JSONdata):
-            self.JSONdata["TaskName"] = self.__task
-        elif self.JSONdata["TaskName"] != self.__task:
+            self.JSONdata["TaskName"] = self.GetTask()
+        elif self.JSONdata["TaskName"] != self.GetTask():
             raise Exception("Task name in JSON file mismach task in Record")
         if "DeviceSerialNumber" not in self.JSONdata\
            and self.DeviceInfo.ID != "":
@@ -853,14 +723,26 @@ class Record(BIDSfieldLibrary):
         self.JSONdata.update(counter)
 
     def CheckJSON(self):
-        diff = [k for k in self.__JSONfields if k not in self.JSONdata]
-        res1 = [k for k in diff if self.__JSONfields[k] == 0]
-        res2 = [k for k in diff if self.__JSONfields[k] == 1]
-        res3 = [k for k in diff if self.__JSONfields[k] == 2]
-        res4 = [k for k in self.JSONdata if k not in self.__JSONfields]
+        diff = [k for k in JSONfields if k not in self.JSONdata]
+        res1 = [k for k in diff if JSONfields[k] == 0]
+        res2 = [k for k in diff if JSONfields[k] == 1]
+        res3 = [k for k in diff if JSONfields[k] == 2]
+        res4 = [k for k in self.JSONdata if k not in JSONfields]
         return (res1,res2,res3,res4)
 
-    """Channels related functions"""
+    def DumpJSON(self):
+        Logger.info("Creating eeg.json file")
+        with open(self.Path(appdir="eeg",
+                            appfile=self.GetPrefix() + "_eeg.json"),
+                  'w', encoding='utf-8') as f:
+            json.dump(self.JSONdata, f, 
+                      skipkeys=False, indent="  ", 
+                      separators=(',',':'))
+
+    ##############################
+    # Channels related functions #
+    ##############################
+
     def ReadChannels(self, name=None,
                      white_list=[], black_list=[], 
                      bidsify=False):
@@ -960,7 +842,7 @@ class Record(BIDSfieldLibrary):
 
     def SetMainChannel(self, chan_name=""):
         if not isinstance(chan_name, str):
-            raise TypeError("Chan_name must be a string")
+            raise TypeError("chan_name must be a string")
         self._mainChannel = None
         if chan_name != "":
             for c in self.Channels:
@@ -1020,7 +902,10 @@ class Record(BIDSfieldLibrary):
         else:
             raise KeyError("Id {} not in the list of channels")
 
-    """Event related functions"""
+    ###########################
+    # Event related functions #
+    ###########################
+
     def ReadEvents(self, white_list=[], black_list=[]):
         """
         reads and add events from input
@@ -1279,14 +1164,9 @@ class Record(BIDSfieldLibrary):
                     Logger.warning("Unclosed event {} at {}".format(opEv, l_t))
         return res
 
-    def TimeIntersect(self, t_s1, t_e1, t_s2=None, t_e2=None):
-        if t_s2 is None: t_s2 = self.__RefTime
-        if t_e2 is None: t_e2 = self.__EndTime
-        ts = max(t_s1, t_s2)
-        te = min(t_e1, t_e2)
-        return (ts, te)
-
-    # Virtual functions for input data processing
+    ##############################
+    # Metadata related functions #
+    ##############################
     def LoadMetadata(self):
         """
         loads metadata from imput files and performs preliminary checks. 
@@ -1299,7 +1179,7 @@ class Record(BIDSfieldLibrary):
         FileNotFoundError
             if one of manadatory files not found
         """
-        if self._inPath is None:
+        if self.GetInputPath() is None:
             raise ValueError("Input path is not defined")
         self._loadMetadata()
 

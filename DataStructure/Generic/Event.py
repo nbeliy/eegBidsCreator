@@ -1,5 +1,5 @@
 from datetime import datetime
-from tools.json import BIDSfieldLibrary
+from DataStructure.BIDS.BIDS import BIDSfieldLibrary
 
 
 def ReplaceInField(In_string, Void="", ToReplace=None):
@@ -19,7 +19,7 @@ def ReplaceInField(In_string, Void="", ToReplace=None):
     return In_string
 
 
-class GenEvent(BIDSfieldLibrary):
+class GenEvent(object):
     """An intendent virtual class serving as parent to other,
     format specific event classes"""
     __base_slots__ = [

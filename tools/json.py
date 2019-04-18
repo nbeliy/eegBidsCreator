@@ -10,9 +10,30 @@ Logger = logging.getLogger(__name__)
 
 
 def loadJson(filename, app=""):
-    """Reads JSON file and returns the resulting json object
+    """
+    reads JSON file and returns the resulting dictionary.
     If given filename do not ends with '.json', forms new
     filename as follows: 'filename''app'.json
+
+    Parameters
+    ----------
+    filename: str
+        name of file to read
+    app: str
+        appendix to complete filename
+
+    Returns
+    -------
+    dict
+
+    Raises
+    ------
+    TypeError
+        if parameters of incorrect type
+    FileNotFoundError
+        if input file not found
+    json.JSONDecodeError
+        if unabled to parce json
     """
     if not isinstance(filename,str):
         raise TypeError("filename must be a string")
@@ -33,56 +54,30 @@ def loadJson(filename, app=""):
         raise
 
 
-def eventsJson(filename):
-    """Writes events.json file describing the events.tsv
-    file fields."""
-    Logger.info("Creating events.json file")
-    ev_struct = {
-                "responce_time" : {
-                    "Description": "Response time measured in seconds. "
-                                   "A negative response time can be used "
-                                   "to represent preemptive responses "
-                                   "and “n/a” denotes a missed response.",
-                    "Units": "second"},
-                "value"         : {
-                    "Description": "The event TTL trigger value "
-                                   "(EEG Marker value) associated "
-                                   "with an event "},
-                "channels"      : {
-                    "Description": "Comma separated list of channels "
-                                   "triggering an event"
-                    }
-                }
-    return dumpJson(filename, ev_struct)
-
-
-def participantsJson(filename):
-    """Writes participants.json file describing the participants.tsv
-    file fields."""
-    Logger.info("Creating participantss.json file")
-    part_struct = {
-                    "age": {
-                        "LongName"    : "Age",
-                        "Description" : "Age of a subject",
-                        "Units"       : "year"},
-                    "sex": {
-                        "LongName"    : "Sex",
-                        "Description" : "Sex of a subject",
-                        "Levels"      : {
-                            "n/a" : "Not available",
-                            "F"   : "Female",
-                            "M"   : "Male"}
-                          }
-                    }
-    return dumpJson(filename, part_struct)
-
-
 def dumpJson(filename, data):
-    """Writes a dictionary in data into json file"""
+    """
+    dumps a dictionary content into a json file. Output file
+    will be erased if already exists
+
+    Parameters
+    ----------
+    filename : str
+        file to dump data
+    data : dict
+        data to dump
+    
+    Raises
+    ------
+    TypeError
+        if parameters of incorrect type
+    ValueError
+        if passed filename do not ends with .json
+    """
+
     if not isinstance(filename, str):
         raise TypeError("filename must be a string")
     if filename[-5:] != ".json":
-        raise Exception("filename must end with '.json'")
+        raise ValueError("filename must end with '.json'")
     if os.path.isfile(filename):
         Logger.warning("JSON file {} already exists. It will be replaced."
                        .format(filename))
@@ -333,12 +328,9 @@ en/latest/02-common-principles.html
         """
         returns tab-separated string with values corresponding 
         to active field. All values are normalized, i.e. converted 
-        to string and '\t', '\n' are replaced by ' '. Empty strings 
-        are replaced by 'n/a'. 
-
-        List values are put in form '[v1, v2, v3]'.
-
-        output string does not ends with new line
+        to string and '\\t', '\\n' are replaced by ' '. Empty strings 
+        are replaced by 'n/a'. List values are put in form '[v1, v2, v3]'.
+        Output string does not ends with new line
 
         Parameters
         ----------
@@ -352,7 +344,6 @@ en/latest/02-common-principles.html
             tab-separated string formatted folowing BIDS
             https://bids-specification.readthedocs.io/en/\
 latest/02-common-principles.html
-
         """ 
         if not isinstance(values, dict):
             raise TypeError("values must be a dictionary")
@@ -379,7 +370,9 @@ latest/02-common-principles.html
         Returns
         -------
         str
+            normalized string
         """
+
         if value is None:
             return "n/a"
         v = ""

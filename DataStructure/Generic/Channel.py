@@ -3,7 +3,7 @@ from datetime import datetime
 from datetime import timedelta
 import logging
 
-from tools.json import BIDSfieldLibrary
+from DataStructure.BIDS.BIDS import BIDSfieldLibrary
 
 Logger = logging.getLogger(__name__)
 
