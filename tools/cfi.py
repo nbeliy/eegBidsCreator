@@ -17,6 +17,7 @@ def default_parameters():
     parameters.optionxform = lambda option: option
     # Setting up default values
     parameters['GENERAL'] = {
+                            "PatientId"     :"",
                             "SessionId"     :"", 
                             "TaskId"        :"", 
                             "AcquisitionId" :"",
@@ -101,6 +102,7 @@ def check_configuration(parameters):
 
     # GENERAL
     sec = "GENERAL"
+    passed = passed and check_string(parameters, sec, "PatientId")
     passed = passed and check_string(parameters, sec, "SessionId")
     passed = passed and check_string(parameters, sec, "TaskId")
     passed = passed and check_string(parameters, sec, "AcquisitionId")
