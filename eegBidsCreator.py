@@ -31,7 +31,7 @@ from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
 
 
-VERSION = 'dev0.73'
+VERSION = 'dev0.74'
 
 
 def main(argv):
@@ -53,6 +53,8 @@ def main(argv):
         cfi.read_parameters(parameters, args.config_file[0])
 
     # Overloading values by command-line arguments
+    if args.sub is not None: 
+        parameters['GENERAL']['PatientId'] = args.sub
     if args.ses is not None: 
         parameters['GENERAL']['SessionId'] = args.ses
     if args.task is not None:
@@ -201,6 +203,9 @@ def main(argv):
                         acquisition=parameters['GENERAL']["AcquisitionId"])
 
         recording.LoadMetadata()
+        if parameters['GENERAL']["PatientId"] != "":
+            recording.SetId(subject=parameters['GENERAL']["PatientId"])
+            recording.SubjectInfo.ID=parameters['GENERAL']["PatientId"]
 
         if entry_points[0] in plugins:
             try:
