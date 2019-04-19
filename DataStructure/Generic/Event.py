@@ -1,4 +1,5 @@
 from datetime import datetime
+from DataStructure.BIDS.BIDS import BIDSfieldLibrary
 
 
 def ReplaceInField(In_string, Void="", ToReplace=None):
@@ -21,7 +22,13 @@ def ReplaceInField(In_string, Void="", ToReplace=None):
 class GenEvent(object):
     """An intendent virtual class serving as parent to other,
     format specific event classes"""
-    __base_slots__ = ["_name", "_time", "_duration", "_channels", "_baseEvent"]
+    __base_slots__ = [
+            "_name", "_time", "_duration", 
+            "_channels", "_baseEvent",
+            "BIDSvalues"]
+
+    BIDSfields = BIDSfieldLibrary()
+
     __slots__ = __base_slots__
 
     def __copy__(self, source):
@@ -33,11 +40,13 @@ class GenEvent(object):
         self._baseEvent = source
 
     def __init__(self, Name="", Time=datetime.min, Duration=0):
+        super(GenEvent, self).__init__()
         self._name = Name
         self._time = Time
         self._duration = Duration
         self._channels = []
         self._baseEvent = self
+        self.BIDSvalues = dict()
 
     def SetName(self, Name):
         if not isinstance(Name, str):

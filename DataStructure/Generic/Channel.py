@@ -3,6 +3,8 @@ from datetime import datetime
 from datetime import timedelta
 import logging
 
+from DataStructure.BIDS.BIDS import BIDSfieldLibrary
+
 Logger = logging.getLogger(__name__)
 
 
@@ -30,7 +32,7 @@ def ReplaceInField(In_string, Void="", ToReplace=None):
     return In_string
 
 
-class GenChannel(object):
+class GenChannel(BIDSfieldLibrary):
     """An intendent virtual class serving as parent to other,
     format specific channel classes."""
 
@@ -50,8 +52,11 @@ class GenChannel(object):
 
         "_startTime",
         "_frMultiplier",
-        "_baseChannel"
-    ]
+        "_baseChannel",
+        "BIDSvalues"]
+
+    BIDSfields = BIDSfieldLibrary()
+
     __slots__ = __base_slots__
 
     def __copy__(self, source):
@@ -83,6 +88,7 @@ class GenChannel(object):
                   "SYSCLOCK", "TEMP", "TRIG", "MISC"]
 
     def __init__(self):
+        super(GenChannel, self).__init__()
         self._scale = 1.
         self._offset = 0.
         self._unit = ""
@@ -106,6 +112,7 @@ class GenChannel(object):
 
         self._baseChannel = self
         self._id = -1
+        self.BIDSvalues = dict()
 
     def GetId(self): return self._id
 
