@@ -24,6 +24,9 @@ def parce_CLI(argv, VERSION):
     parser.add_argument('-a, --acquisition', 
                         metavar='acqId', dest='acq', 
                         help='Id of the acquisition')
+    parser.add_argument('-r, --run', 
+                        metavar='runId', dest='run', 
+                        help='Id of the run')
 
     parser.add_argument('-c, --config', 
                         nargs=1, dest='config_file', 

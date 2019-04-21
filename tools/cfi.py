@@ -21,6 +21,7 @@ def default_parameters():
                             "SessionId"     :"", 
                             "TaskId"        :"", 
                             "AcquisitionId" :"",
+                            "RunId"         :"",
                             "JsonFile"      :"", 
                             "OutputFolder"  :".", 
                             "OverideDuplicated" : "yes",
@@ -106,6 +107,7 @@ def check_configuration(parameters):
     passed = passed and check_string(parameters, sec, "SessionId")
     passed = passed and check_string(parameters, sec, "TaskId")
     passed = passed and check_string(parameters, sec, "AcquisitionId")
+    passed = passed and check_int(parameters, sec, "RunId")
     passed = passed and check_string(parameters, sec, "JsonFile")
     passed = passed and check_string(parameters, sec, 
                                      "OutputFolder", empty=False)
@@ -221,6 +223,11 @@ def check_configuration(parameters):
         passed = False
 
     # SplitRuns
+    if parameters["GENERAL"]["RunId"] != "" \
+            and parameters["RUNS"]["SplitRuns"] != "":
+        print("RUNS: Can't force run Id and require split runs at same time")
+        passed = False
+
     if parameters["RUNS"]["SplitRuns"] == "EventSpan":
         if parameters["RUNS"]["OpeningEvents"] == "":
             print("RUNS: Splitting by event but Event is not defined")
@@ -239,9 +246,12 @@ def check_bool(parameters, section, name, empty=True):
     if val is None:
         print(section + ": " + name + " not found")
         return False
-    if not empty and val == "":
-        print(section + ": Invalid " + name + "value : empty string")
-        return False
+    if val == "":
+        if empty:
+            return True
+        else:
+            print(section + ": Invalid " + name + "value : empty string")
+            return False
     try:
         parameters[section].getboolean(name)
     except ValueError:
@@ -255,9 +265,12 @@ def check_int(parameters, section, name, empty=True):
     if val is None:
         print(section + ": " + name + " not found")
         return False
-    if not empty and val == "":
-        print(section + ": Invalid " + name + "value : empty string")
-        return False
+    if val == "":
+        if empty:
+            return True
+        else:
+            print(section + ": Invalid " + name + "value : empty string")
+            return False
     try:
         parameters[section].getint(name)
     except ValueError:
@@ -271,9 +284,12 @@ def check_float(parameters, section, name, empty=True):
     if val is None:
         print(section + ": " + name + " not found")
         return False
-    if not empty and val == "":
-        print(section + ": Invalid " + name + "value : empty string")
-        return False
+    if val == "":
+        if empty:
+            return True
+        else:
+            print(section + ": Invalid " + name + "value : empty string")
+            return False
     try:
         parameters[section].getfloat(name)
     except ValueError:
@@ -287,9 +303,12 @@ def check_string(parameters, section, name, values=None, empty=True):
     if val is None:
         print(section + ": " + name + " not found")
         return False
-    if not empty and val == "":
-        print(section + ": Invalid " + name + "value : empty string")
-        return False
+    if val == "":
+        if empty:
+            return True
+        else:
+            print(section + ": Invalid " + name + "value : empty string")
+            return False
     if values:
         if val not in values:
             print(section + ": Invalid " + name + " value " + val)
@@ -303,11 +322,11 @@ def check_time(parameters, section, name, empty=True, chop=6):
         print(section + ": " + name + " not found")
         return False
     if val == "":
-        if not empty: 
+        if empty:
+            return True
+        else:
             print(section + ": Invalid " + name + "value : empty string")
             return False
-        else:
-            return True
     dt_format = ""
     if chop > 0: dt_format += "%Y"
     if chop > 1: dt_format += "-%m"
