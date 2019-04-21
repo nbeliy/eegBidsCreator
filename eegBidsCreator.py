@@ -61,6 +61,8 @@ def main(argv):
         parameters['GENERAL']['TaskId'] = args.task
     if args.acq is not None:
         parameters['GENERAL']['AcquisitionId'] = args.acq
+    if args.run is not None:
+        parameters['GENERAL']['RunId'] = args.run
     if args.eegJson is not None:
         parameters['GENERAL']['JsonFile'] = args.eegJson
     if args.conv is not None:
@@ -201,11 +203,13 @@ def main(argv):
         recording.SetId(session=parameters['GENERAL']["SessionId"], 
                         task=parameters['GENERAL']["TaskId"],
                         acquisition=parameters['GENERAL']["AcquisitionId"])
+        if parameters['GENERAL']["RunId"] != "":
+            recording.SetRun(int(parameters['GENERAL']["RunId"]))
 
         recording.LoadMetadata()
         if parameters['GENERAL']["PatientId"] != "":
             recording.SetId(subject=parameters['GENERAL']["PatientId"])
-            recording.SubjectInfo.ID=parameters['GENERAL']["PatientId"]
+            recording.SubjectInfo.ID = parameters['GENERAL']["PatientId"]
 
         if entry_points[0] in plugins:
             try:
@@ -228,6 +232,8 @@ def main(argv):
         Logger.info("Session Id: " + recording.GetSession())
         Logger.info("Task    Id: " + recording.GetTask())
         Logger.info("Acq     Id: " + recording.GetAcquisition())
+        if recording.GetRun() is not None:
+            Logger.info("Run     Id: " + str(recording.GetRun()))
 
         recording.Lock()
 
@@ -431,7 +437,10 @@ def main(argv):
                 recording.Frequency / c.GetFrequency()))
 
         time_limits = None
-        if parameters["RUNS"]["SplitRuns"] == "Channel":
+        if recording.GetRun is not None \
+                or parameters["RUNS"]["SplitRuns"] == "":
+            time_limits = [[t_ref, t_end]]
+        elif parameters["RUNS"]["SplitRuns"] == "Channel":
             time_limits = recording.GetRuns(
                     min_span=60 * float(parameters["RUNS"]["MinSpan"]))
         elif parameters["RUNS"]["SplitRuns"] == "EventSpan":
@@ -448,7 +457,9 @@ def main(argv):
             time_limits = recording.GetRuns(
                     openingEvents=opEvl, closingEvents=clEvl,
                     min_span=60 * float(parameters["RUNS"]["MinSpan"]))
-        else: time_limits = [[t_ref, t_end]]
+        else: 
+            raise ValueError("Unknown method for run spitting: {}"
+                             .format(parameters["RUNS"]["SplitRuns"]))
 
         if len(time_limits) == 0:
             raise Exception("No valid runs found")
@@ -500,11 +511,10 @@ def main(argv):
                 c.SetStartTime(t_ref)
 
             # Run definition
-            run = None
-            if parameters["RUNS"]["SplitRuns"] != "":
-                run = count + 1
-                Logger.info("Run {}: duration: {}".format(run, t_end - t_ref))
-                recording.SetRun()
+            if len(time_limits) > 1:
+                Logger.info("Run {}: duration: {}".format(count + 1,
+                                                          t_end - t_ref))
+                recording.SetRun(count + 1)
 
             recording.DumpJSON()
             Logger.info("Creating channels.tsv file")
