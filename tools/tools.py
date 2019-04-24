@@ -55,7 +55,11 @@ def create_directory(path, toRemove="", allowDups=True):
         raise NotADirectoryError("{} is a file".format(path))
     if not res:
         Logger.info("Creating directory {}".format(path))
-        os.makedirs(path)
+        try:
+            os.makedirs(path)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+            raise
     else:
         Logger.debug("Directory {} exists".format(path))
         if toRemove != "":
