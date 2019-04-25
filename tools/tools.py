@@ -59,7 +59,7 @@ def create_directory(path, toRemove="", allowDups=True):
             os.makedirs(path)
         except OSError as e:
             if e.errno != errno.EEXIST:
-            raise
+                raise
     else:
         Logger.debug("Directory {} exists".format(path))
         if toRemove != "":
