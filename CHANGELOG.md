@@ -5,11 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Development]
 
+## [dev0.74r1] - 2019-04-25
+
 ### Changed
 - run now can be defined by hand in cfi/cli. Doing so is incomaptible with split runs options
 
 ### Fixed
 - Directory exists error when directory was created between check and creation by other processus
+- Local file are no longer removed if `OverideDuplicated == True` and duplicated files are found. An exception will still occure
 
 ## [dev0.74] - 2019-04-19
 
