@@ -960,7 +960,7 @@ in output folder.")
         Logger.error(type(e).__name__ + ": " + str(e))
         if recording is not None and recording.IsLocked():
             if outData is not None: del outData
-            if ex_code//10 == 1 or ex_code//100 == 10:
+            if ex_code//10 != 1 and ex_code//100 != 10:
                 flist = glob.glob(recording.Path(appdir="eeg")
                                   + recording.GetPrefix(app="*"))
                 if len(flist) != 0:
@@ -973,15 +973,16 @@ in output folder.")
         Logger.info("Took {} seconds".format(tm.process_time()))
         Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
         if recording and recording.IsLocked():
-            shutil.copy2(tmpDir + "/logfile",
-                         parameters["GENERAL"]["OutputFolder"] 
-                         + "sourcedata/log/"
-                         + recording.GetPrefix(app=".log"))
-            shutil.copy2(tmpDir + "/configuration",
-                         parameters["GENERAL"]["OutputFolder"] 
-                         + "sourcedata/configuration/"
-                         + recording.GetPrefix(app=".ini")) 
-            fileHandler.close()
+            if ex_code//10 != 1:
+                shutil.copy2(tmpDir + "/logfile",
+                             parameters["GENERAL"]["OutputFolder"] 
+                             + "sourcedata/log/"
+                             + recording.GetPrefix(app=".log"))
+                shutil.copy2(tmpDir + "/configuration",
+                             parameters["GENERAL"]["OutputFolder"] 
+                             + "sourcedata/configuration/"
+                             + recording.GetPrefix(app=".ini")) 
+                fileHandler.close()
             tools.rrm(tmpDir)
         else:
             Logger.warning("Output path is not defined. See in "
