@@ -31,7 +31,7 @@ from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
 
 
-VERSION = 'dev0.74'
+VERSION = 'dev0.74r1'
 
 
 def main(argv):
@@ -241,35 +241,40 @@ def main(argv):
         # Creating output folders #
         ###########################
 
-        tools.create_directory(
-                path=recording.Path(appdir="eeg"),
-                toRemove=recording.GetPrefix(app="*"),
-                allowDups=parameters["GENERAL"]
-                .getboolean("OverideDuplicated"))
-
-        tools.create_directory(
-                path=parameters['GENERAL']['OutputFolder'] 
-                + "sourcedata/log",
-                toRemove=recording.GetPrefix(app=".log"),
-                allowDups=True)
-
-        tools.create_directory(
-                path=parameters['GENERAL']['OutputFolder'] 
-                + "sourcedata/configuration",
-                toRemove=recording.GetPrefix(app=".ini"),
-                allowDups=True)
-
-        if parameters['GENERAL'].getboolean('CopySource'):
-            srcPath = parameters['GENERAL']['OutputFolder']\
-                      + "sourcedata/"
+        try:
             tools.create_directory(
-                    path=srcPath,
-                    toRemove=basename,
+                    path=recording.Path(appdir="eeg"),
+                    toRemove=recording.GetPrefix(app="*"),
                     allowDups=parameters["GENERAL"]
                     .getboolean("OverideDuplicated"))
-            Logger.info("Copiyng original data to sourcedata folder")
-            shutil.copytree(recording.GetInputPath(),
-                            srcPath + basename)
+
+            tools.create_directory(
+                    path=parameters['GENERAL']['OutputFolder'] 
+                    + "sourcedata/log",
+                    toRemove=recording.GetPrefix(app=".log"),
+                    allowDups=True)
+
+            tools.create_directory(
+                    path=parameters['GENERAL']['OutputFolder'] 
+                    + "sourcedata/configuration",
+                    toRemove=recording.GetPrefix(app=".ini"),
+                    allowDups=True)
+
+            if parameters['GENERAL'].getboolean('CopySource'):
+                srcPath = parameters['GENERAL']['OutputFolder']\
+                          + "sourcedata/"
+                tools.create_directory(
+                        path=srcPath,
+                        toRemove=basename,
+                        allowDups=parameters["GENERAL"]
+                        .getboolean("OverideDuplicated"))
+                Logger.info("Copiyng original data to sourcedata folder")
+                shutil.copytree(recording.GetInputPath(),
+                                srcPath + basename)
+        except FileExistsError as e:
+            ex_code = 10
+            raise
+            
 
         if not recording.GetStartTime():
             Logger.warning("Unable to get StartTime of record. "
@@ -955,11 +960,12 @@ in output folder.")
         Logger.error(type(e).__name__ + ": " + str(e))
         if recording is not None and recording.IsLocked():
             if outData is not None: del outData
-            flist = glob.glob(recording.Path(appdir="eeg")
-                              + recording.GetPrefix(app="*"))
-            if len(flist) != 0:
-                for f in flist:
-                    tools.rrm(f)
+            if ex_code//10 == 1 or ex_code//100 == 10:
+                flist = glob.glob(recording.Path(appdir="eeg")
+                                  + recording.GetPrefix(app="*"))
+                if len(flist) != 0:
+                    for f in flist:
+                        tools.rrm(f)
         Logger.info("Command: '" + "' '".join(argv) + "'")
 
     try:
@@ -983,7 +989,7 @@ in output folder.")
             fileHandler.close()
     except Exception as e:
         if ex_code == 0:
-            ex_code = 10
+            ex_code = 20
         Logger.error("Unable to copy files to working directory. See in " 
                      + tmpDir + "logfile for more details.")
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
