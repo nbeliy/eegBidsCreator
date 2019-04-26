@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Development]
 
+## [dev0.74r2] - 2019-04-26
+
+### Fixed
+- usage of incorrect 'µ' character in unit prefixes
+
 ## [dev0.74r1] - 2019-04-25
 
 ### Changed
