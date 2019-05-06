@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Development]
 
+## [dev0.74r3] - 2019-05-06
+
 ### Changed
 - in brainvision, storing data using float32 will stroe an integer with corresponding scale
 - moved EDF+ annotation at the end of channels for compatibility with FASST
