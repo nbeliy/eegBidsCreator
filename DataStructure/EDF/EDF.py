@@ -180,7 +180,11 @@ class EDF(object):
 
     def WriteHeader(self):
         self.__file = open(self.__path+"/"+self.__prefix+"_eeg.edf", "wb")
-        self.__writeUpperBlock(self.__file, len(self.Channels)+1)
+        if self.__EDFplus:
+            n_channels = len(self.Channels)+1
+        else:
+            n_channels = len(self.Channels)
+        self.__writeUpperBlock(self.__file, n_channels)
         # [16] Label in format Type Emplacement
         for ch in self.Channels:
             self.__file.write("{:<16s}".format(ch.Label())

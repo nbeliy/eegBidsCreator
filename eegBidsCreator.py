@@ -674,7 +674,7 @@ def main(argv):
 
             # EDF part
             elif parameters['GENERAL']['Conversion'] == "EDF":
-                if parameters['EDF']['EDFplus'].getboolean():
+                if parameters.getboolean('EDF', 'EDFplus'):
                     Logger.info("Converting to EDF+ format")
                 else:
                     Logger.info("Converting to EDF format")
@@ -682,7 +682,7 @@ def main(argv):
                 outData = EDF(recording.Path(appdir="eeg"),
                               recording.GetPrefix(),
                               AnonymDate=ANONYM_DATE)
-                outData.SetEDFplus(parameters['EDF']['EDFplus'].getboolean())
+                outData.SetEDFplus(parameters.getboolean('EDF', 'EDFplus'))
                 outData.Patient["Code"] = recording.SubjectInfo.ID
                 if recording.SubjectInfo.Gender == 1:
                     outData.Patient["Sex"] = "F"
