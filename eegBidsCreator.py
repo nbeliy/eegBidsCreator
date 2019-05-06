@@ -643,16 +643,10 @@ def main(argv):
                                          (t_e - t_s).total_seconds()))
                     l_data = []
                     for ch in channels:
-                        if outData.Header.BinaryInfo.BinaryFormat\
-                           == "IEEE_FLOAT_32":
-                            l_data.append(ch.GetValueVector(
-                                t_s, t_e, 
-                                freq_mult=ch.GetFrequencyMultiplyer()))
-                        else:
-                            l_data.append(ch.GetValueVector(
-                                t_s, t_e, 
-                                freq_mult=ch.GetFrequencyMultiplyer(),
-                                raw=True))
+                        l_data.append(ch.GetValueVector(
+                            t_s, t_e, 
+                            freq_mult=ch.GetFrequencyMultiplyer(),
+                            raw=True))
 
                     if entry_points[4] in plugins:
                         try:
@@ -680,10 +674,15 @@ def main(argv):
 
             # EDF part
             elif parameters['GENERAL']['Conversion'] == "EDF":
-                Logger.info("Converting to EDF+ format")
+                if parameters['EDF']['EDFplus'].getboolean():
+                    Logger.info("Converting to EDF+ format")
+                else:
+                    Logger.info("Converting to EDF format")
+
                 outData = EDF(recording.Path(appdir="eeg"),
                               recording.GetPrefix(),
                               AnonymDate=ANONYM_DATE)
+                outData.SetEDFplus(parameters['EDF']['EDFplus'].getboolean())
                 outData.Patient["Code"] = recording.SubjectInfo.ID
                 if recording.SubjectInfo.Gender == 1:
                     outData.Patient["Sex"] = "F"

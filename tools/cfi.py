@@ -75,7 +75,8 @@ def default_parameters():
                                     "Endian"    :"Little"
                                 }
     parameters['EDF'] = {
-                        "DataRecordDuration"    :"10"
+                        "DataRecordDuration"    :"10",
+                        "EDFplus"               :"yes"
                         }
     parameters['MEEG'] = {}
     return parameters
@@ -184,6 +185,7 @@ def check_configuration(parameters):
     sec = "EDF"
     passed = passed and check_int(parameters, sec, 
                                   "DataRecordDuration", empty=False)
+    passed = passed and check_bool(parameters, sec, "EDFplus")
 
     if not passed: 
         return False
