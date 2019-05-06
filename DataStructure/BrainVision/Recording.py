@@ -42,8 +42,6 @@ class Header(object):
         c_count = 1
         for i,ch in enumerate(self.Channels):
             scale = ch.GetScale()
-            if self.BinaryInfo.BinaryFormat == "IEEE_FLOAT_32":
-                scale = 1.
             f.write("Ch{}={},{},{},{},{}\n".format(i+1, ch.GetName(), ch.GetReference(),scale,ch.GetUnit().replace("%","%%"),ch.GetComments() ))
 
         f.close()
