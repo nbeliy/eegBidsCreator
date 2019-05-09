@@ -1020,7 +1020,7 @@ def SetupBIDS():
     GenericRecord.Subject.BIDSfields.AddField(
         name="sex",
         longName="Sex",
-        description="Gender of a subject",
+        description="Sex of a subject",
         levels={
             "F"   : "Female",
             "M"   : "Male"}
