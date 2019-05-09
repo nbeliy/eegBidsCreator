@@ -1022,7 +1022,6 @@ def SetupBIDS():
         longName="Sex",
         description="Gender of a subject",
         levels={
-            "n/a" : "Not available",
             "F"   : "Female",
             "M"   : "Male"}
             )
