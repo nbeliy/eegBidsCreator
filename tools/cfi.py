@@ -104,88 +104,89 @@ def check_configuration(parameters):
 
     # GENERAL
     sec = "GENERAL"
-    passed = passed and check_string(parameters, sec, "PatientId")
-    passed = passed and check_string(parameters, sec, "SessionId")
-    passed = passed and check_string(parameters, sec, "TaskId")
-    passed = passed and check_string(parameters, sec, "AcquisitionId")
-    passed = passed and check_int(parameters, sec, "RunId")
-    passed = passed and check_string(parameters, sec, "JsonFile")
-    passed = passed and check_string(parameters, sec, 
-                                     "OutputFolder", empty=False)
-    passed = passed and check_bool(parameters, sec, "OverideDuplicated")
-    passed = passed and check_string(parameters, sec, "Conversion",
-                                     ["","BV","EDF","MEEG"])
-    passed = passed and check_bool(parameters, sec, "CopySource")
-    passed = passed and check_int(parameters, sec, "MemoryUsage")
+    passed = check_string(parameters, sec, "PatientId") and passed
+    passed = check_string(parameters, sec, "SessionId") and passed
+    passed = check_string(parameters, sec, "TaskId") and passed
+    passed = check_string(parameters, sec, "AcquisitionId") and passed
+    passed = check_int(parameters, sec, "RunId") and passed
+    passed = check_string(parameters, sec, "JsonFile") and passed
+    passed = check_string(parameters, sec, "OutputFolder", empty=False) \
+        and passed
+    passed = check_bool(parameters, sec, "OverideDuplicated") and passed
+    passed = check_string(parameters, sec, "Conversion", 
+                          ["","BV","EDF","MEEG"]) \
+        and passed
+    passed = check_bool(parameters, sec, "CopySource") and passed
+    passed = check_int(parameters, sec, "MemoryUsage") and passed
 
     # LOGGING
     sec = "LOGGING"
-    passed = passed and check_string(
-                parameters, sec, "LogLevel",
-                ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
-    passed = passed and check_string(parameters, sec, "LogFile")
-    passed = passed and check_bool(parameters, sec, "Quiet")
+    passed = check_string(parameters, sec, "LogLevel",
+                          ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]) \
+        and passed
+    passed = check_string(parameters, sec, "LogFile") and passed
+    passed = check_bool(parameters, sec, "Quiet") and passed
 
     # CHANNELS
     sec = "CHANNELS"
-    passed = passed and check_string(parameters, sec, "WhiteList")
-    passed = passed and check_string(parameters, sec, "BlackList")
-    passed = passed and check_string(parameters, sec, "MainChannel")
+    passed = check_string(parameters, sec, "WhiteList") and passed
+    passed = check_string(parameters, sec, "BlackList") and passed
+    passed = check_string(parameters, sec, "MainChannel") and passed
 
     # EVENTS
     sec = "EVENTS"
-    passed = passed and check_string(parameters, sec, "WhiteList")
-    passed = passed and check_string(parameters, sec, "BlackList")
-    passed = passed and check_bool(parameters, sec, "IgnoreOutOfTimeEvents")
-    passed = passed and check_bool(parameters, sec, "IncludeSegmentStart")
-    passed = passed and check_bool(parameters, sec, "MergeCommonEvents")
+    passed = check_string(parameters, sec, "WhiteList") and passed
+    passed = check_string(parameters, sec, "BlackList") and passed
+    passed = check_bool(parameters, sec, "IgnoreOutOfTimeEvents") and passed
+    passed = check_bool(parameters, sec, "IncludeSegmentStart") and passed
+    passed = check_bool(parameters, sec, "MergeCommonEvents") and passed
 
     # DATATREATMENT
     sec = "DATATREATMENT"
-    passed = passed and check_time(parameters, sec, "StartTime", chop=6)
-    passed = passed and check_time(parameters, sec, "EndTime", chop=6)
-    passed = passed and check_string(parameters, sec, "StartEvent")
-    passed = passed and check_string(parameters, sec, "EndEvent")
+    passed = check_time(parameters, sec, "StartTime", chop=6) and passed
+    passed = check_time(parameters, sec, "EndTime", chop=6) and passed
+    passed = check_string(parameters, sec, "StartEvent") and passed
+    passed = check_string(parameters, sec, "EndEvent") and passed
 
     # RUNS
     sec = "RUNS"
-    passed = passed and check_string(
-                parameters, sec, "SplitRuns",
-                ["", "Channel", "EventSpan", "EventLimit"])
-    passed = passed and check_string(parameters, sec, "OpeningEvents")
-    passed = passed and check_string(parameters, sec, "ClosingEvents")
-    passed = passed and check_int(parameters, sec, "MinSpan")
+    passed = check_string(parameters, sec, "SplitRuns",
+                          ["", "Channel", "EventSpan", "EventLimit"]) \
+        and passed
+    passed = check_string(parameters, sec, "OpeningEvents") and passed
+    passed = check_string(parameters, sec, "ClosingEvents") and passed
+    passed = check_int(parameters, sec, "MinSpan") and passed
 
     # ANONYMIZATION
     sec = "ANONYMIZATION"
-    passed = passed and check_bool(parameters, sec, "Anonymize")
-    passed = passed and check_time(parameters, sec, "StartDate", chop=3)
-    passed = passed and check_string(parameters, sec, "SubjName")
-    passed = passed and check_time(parameters, sec, "BirthDate", chop=3)
+    passed = check_bool(parameters, sec, "Anonymize") and passed
+    passed = check_time(parameters, sec, "StartDate", chop=3) and passed
+    passed = check_string(parameters, sec, "SubjName") and passed
+    passed = check_time(parameters, sec, "BirthDate", chop=3) and passed
 
     # BIDS
     sec = "BIDS"
-    passed = passed and check_bool(parameters, sec, "IncludeAuxiliary")
-    passed = passed and check_bool(parameters, sec, "OriginalTypes")
+    passed = check_bool(parameters, sec, "IncludeAuxiliary") and passed
+    passed = check_bool(parameters, sec, "OriginalTypes") and passed
 
     # PLUGINS
     sec = "PLUGINS"
-    passed = passed and check_string(parameters, sec, "Plugin")
+    passed = check_string(parameters, sec, "Plugin") and passed
 
     # BRAINVISION
     sec = "BRAINVISION"
-    passed = passed and check_string(parameters, sec, 
-                                     "Encoding", empty=False)
-    passed = passed and check_string(parameters, sec, 
-                                     "DataFormat", empty=False)
-    passed = passed and check_string(parameters, sec, 
-                                     "Endian", empty=False)
+    passed = check_string(parameters, sec, "Encoding", empty=False) \
+        and passed
+    passed = check_string(parameters, sec, "DataFormat", empty=False) \
+        and passed
+    passed = check_string(parameters, sec, "Endian", empty=False) \
+        and passed
 
     # EDF
     sec = "EDF"
-    passed = passed and check_int(parameters, sec, 
-                                  "DataRecordDuration", empty=False)
-    passed = passed and check_bool(parameters, sec, "EDFplus")
+    passed = check_int(parameters, sec, "DataRecordDuration", empty=False) \
+        and passed
+    passed = check_bool(parameters, sec, "EDFplus") and passed
 
     if not passed: 
         return False
