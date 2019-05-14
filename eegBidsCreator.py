@@ -40,7 +40,7 @@ def main(argv):
     recording = None
     outData = None
 
-    argv_plugin = None
+    argv_plugin = []
     if '--' in argv:
         argv_plugin = argv[argv.index('--') + 1:]
         argv = argv[:argv.index('--')]
