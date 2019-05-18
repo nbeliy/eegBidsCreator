@@ -31,7 +31,7 @@ from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
 
 
-VERSION = 'dev0.74r3'
+VERSION = 'dev0.75'
 
 
 def main(argv):
@@ -217,7 +217,7 @@ def main(argv):
                 result = plugins[entry_points[0]](
                         recording, 
                         argv_plugin,
-                        parameters.items("PLUGINS"))
+                        parameters["PLUGINS"])
                 if result != 0:
                     raise Exception("Plugin {} returned code {}"
                                     .format(entry_points[0], result))
@@ -274,7 +274,6 @@ def main(argv):
         except FileExistsError as e:
             ex_code = 10
             raise
-            
 
         if not recording.GetStartTime():
             Logger.warning("Unable to get StartTime of record. "
@@ -321,7 +320,7 @@ def main(argv):
                 result = plugins[entry_points[1]](
                         recording, 
                         argv_plugin, 
-                        parameters.items("PLUGINS"))
+                        parameters["PLUGINS"])
                 if result != 0:
                     raise Exception("Plugin {} returned code {}"
                                     .format(entry_points[1], result))
@@ -401,9 +400,10 @@ def main(argv):
         if entry_points[2] in plugins:
             try:
                 result = 0
-                result = plugins[entry_points[2]](recording,
-                                                  argv_plugin,
-                                                  parameters.items("PLUGINS"))
+                result = plugins[entry_points[2]](
+                        recording,
+                        argv_plugin,
+                        parameters["PLUGINS"])
                 if result != 0:
                     raise Exception(
                             "Plugin {} returned code {}"
@@ -476,7 +476,7 @@ def main(argv):
                          recording,
                          time_limits,
                          argv_plugin,
-                         parameters.items("PLUGINS"))
+                         parameters["PLUGINS"])
                 if result != 0:
                     raise Exception(
                             "Plugin {} returned code {}"
@@ -655,7 +655,7 @@ def main(argv):
                                     recording,
                                     l_data,
                                     argv_plugin, 
-                                    parameters.items("PLUGINS"))
+                                    parameters["PLUGINS"])
                             if result != 0:
                                 raise Exception(
                                         "Plugin {} returned code {}"
@@ -778,8 +778,10 @@ def main(argv):
                         try:
                             result = 0
                             result = plugins[entry_points[4]](
-                                        channels, l_data, argv_plugin, 
-                                        parameters.items("PLUGINS"))
+                                        channels, 
+                                        l_data, 
+                                        argv_plugin, 
+                                        parameters["PLUGINS"])
                             if result != 0:
                                 raise Exception(
                                         "Plugin {} returned code {}"
@@ -959,20 +961,20 @@ in output folder.")
         Logger.error(type(e).__name__ + ": " + str(e))
         if recording is not None and recording.IsLocked():
             if outData is not None: del outData
-            if ex_code//10 != 1 and ex_code//100 != 10:
+            if ex_code // 10 != 1 and ex_code // 100 != 10:
                 flist = glob.glob(recording.Path(appdir="eeg")
                                   + recording.GetPrefix(app="*"))
                 if len(flist) != 0:
                     for f in flist:
                         tools.rrm(f)
-        Logger.info("Command: '" + "' '".join(argv) + "'")
+        Logger.info("Command: '" + "' '".join(argv + argv_plugin) + "'")
 
     try:
         Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
         Logger.info("Took {} seconds".format(tm.process_time()))
         Logger.info("<<<<<<<<<<<<<<<<<<<<<<")
         if recording and recording.IsLocked():
-            if ex_code//10 != 1:
+            if ex_code // 10 != 1:
                 shutil.copy2(tmpDir + "/logfile",
                              parameters["GENERAL"]["OutputFolder"] 
                              + "sourcedata/log/"
