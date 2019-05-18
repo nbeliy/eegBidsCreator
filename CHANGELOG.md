@@ -5,9 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Development]
 
-### Changed
--CLI arguments for plugin initialized as empty list instead of None value
+## [dev0.745] - 2019-05-18
 
+### Changed
+- CLI arguments for plugin initialized as empty list instead of None value
+- Configuration file parameters to plugin are passed now using configparser.SectionProxy
 
 ## [dev0.74r3] - 2019-05-06
 
