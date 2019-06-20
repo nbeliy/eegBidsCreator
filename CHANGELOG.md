@@ -5,7 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Development]
 
-## [dev0.745] - 2019-05-18
+### Removed
+- `Data_example` folder
+
+### Added
+- `GPL2.0+` license and headers
+
+## [dev0.75] - 2019-05-18
 
 ### Changed
 - CLI arguments for plugin initialized as empty list instead of None value
