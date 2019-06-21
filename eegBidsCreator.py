@@ -76,6 +76,8 @@ def main(argv):
     ex_code = 0
     args = cli.parce_CLI(argv[1:], VERSION)
 
+    # disable printing warnings in reading ini file
+    cfi.warnings = False
     parameters = cfi.default_parameters()
     if args.config_file:
         cfi.read_parameters(parameters, args.config_file[0])

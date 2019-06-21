@@ -29,12 +29,11 @@ import configparser
 import logging
 from datetime import datetime
 
-Logger = logging.getLogger(__name__)
-
 '''
     Contain initialisation and default configuration file parameters
 '''
 
+warnings = True
 
 def default_parameters():
     '''Creates and returns configparser.ConfigParser object 
@@ -381,6 +380,7 @@ def get_list(parameters, section, name, check=None):
     if check is not None:
         space_warning = [c for c in ch if check in c]
         if len(space_warning) != 0:
-            print(section + ": " + name + " contains elements with space:" 
-                  + ",".join(space_warning))
+            if warnings :
+                print(section + ": " + name + " contains elements with space:" 
+                      + ",".join(space_warning))
     return ch
