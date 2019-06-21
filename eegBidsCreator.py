@@ -42,6 +42,8 @@ import tools.cfi as cfi
 import tools.cli as cli
 import tools.tools as tools
 
+import tools.exceptions as Error
+
 # Generic classes import
 import DataStructure.Generic.Record as GenericRecord
 import DataStructure.Generic.Event as GenericEvent
@@ -117,7 +119,7 @@ def main(argv):
         parameters['GENERAL']['Path'] += '/'
 
     if not cfi.check_configuration(parameters):
-        raise Exception("Errors in configuration file")
+        raise Error.CfgFileError("Errors in configuration file")
 
     # Setup logging.
     # Logfile will be stored into temporary directory first,
@@ -181,7 +183,7 @@ def main(argv):
     pl_name = ""
     if parameters["PLUGINS"]["Plugin"] != "":
         if not os.path.exists(parameters["PLUGINS"]["Plugin"]):
-            raise FileNotFoundError(
+            raise Error.PluginNotfound(
                     "Plug-in file {} not found".format(
                         parameters["PLUGINS"]["Plugin"]))
         pl_name = os.path.splitext(
@@ -192,7 +194,7 @@ def main(argv):
         spec = importlib.util.spec_from_file_location(
                 pl_name, parameters["PLUGINS"]["Plugin"])
         if spec is None:
-            raise Exception(
+            raise Error.PluginModuleNotFound(
                     "Unable to load module {} from {}".format(
                         pl_name, parameters["PLUGINS"]["Plugin"]))
         itertools = importlib.util.module_from_spec(spec)
@@ -225,7 +227,7 @@ def main(argv):
         if EmbRecord.IsValidInput(parameters['GENERAL']['Path']):
                 recording = EmbRecord()
         else:
-            raise Exception("Unable determine eeg format")
+            raise Error.UnknownFormatError("Unable determine eeg format")
 
         recording.SetOutputPath(parameters['GENERAL']['OutputFolder'])
         recording.SetInputPath(parameters['GENERAL']['Path'])
@@ -248,12 +250,15 @@ def main(argv):
                         recording, 
                         argv_plugin,
                         parameters["PLUGINS"])
-                if result != 0:
-                    raise Exception("Plugin {} returned code {}"
-                                    .format(entry_points[0], result))
-            except Exception:
-                ex_code = 100 + 0 + result
+            except Error.PluginError:
                 raise
+            except Exception as e:
+                raise Error.RecordingEPError(str(e))
+            if result != 0:
+                e = Error.RecordingEPError("Plugin {} returned code {}"
+                                           .format(entry_points[0], result))
+                e.code += result % 10
+                raise e
 
         if parameters['GENERAL']['JsonFile'] != "":
             recording.LoadJson(parameters['GENERAL']['JsonFile'])
@@ -303,7 +308,7 @@ def main(argv):
                                 srcPath + basename)
         except FileExistsError as e:
             ex_code = 10
-            raise
+            raise 
 
         if not recording.GetStartTime():
             Logger.warning("Unable to get StartTime of record. "
@@ -359,7 +364,7 @@ def main(argv):
                 raise
 
         if not t_ref or not t_end:
-            raise ValueError("Unable to determine reference times")
+            raise Error.TimeError("Unable to determine reference times")
 
         Logger.debug("Start time: {}, Stop time: {}".format(
             recording.GetStartTime(True), recording.GetStopTime(True)))
@@ -493,11 +498,13 @@ def main(argv):
                     openingEvents=opEvl, closingEvents=clEvl,
                     min_span=60 * float(parameters["RUNS"]["MinSpan"]))
         else: 
-            raise ValueError("Unknown method for run spitting: {}"
-                             .format(parameters["RUNS"]["SplitRuns"]))
+            raise Error.UnableToSplitRunsError(
+                    "Unknown method for run spitting: {}"
+                    .format(parameters["RUNS"]["SplitRuns"])
+                    )
 
         if len(time_limits) == 0:
-            raise Exception("No valid runs found")
+            raise Error.NoValidRunsError("No valid runs found")
 
         if entry_points[3] in plugins:
             try:
@@ -906,8 +913,10 @@ def main(argv):
                                  .GetLine(recording.BIDSvalues))
 
             else:
-                raise Exception("Conversion to {} format not implemented"
-                                .format(parameters['GENERAL']["Conversion"]))
+                raise Error.NotImplementedFormatError(
+                        "Conversion to {} format not implemented"
+                        .format(parameters['GENERAL']["Conversion"])
+                        )
 
             scansName = "sub-" + recording.SubjectInfo.ID
             if recording.GetSession() != "":
@@ -980,7 +989,9 @@ in output folder.")
                              + "code/.")
 
     except Exception as e:
-        if ex_code == 0:
+        if isinstance(e, Error.BIDSexception):
+            ex_code = e.code
+        else:
             ex_code = 1
 
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
@@ -991,7 +1002,8 @@ in output folder.")
         Logger.error(type(e).__name__ + ": " + str(e))
         if recording is not None and recording.IsLocked():
             if outData is not None: del outData
-            if ex_code // 10 != 1 and ex_code // 100 != 10:
+            if not isinstance(e, Error.RecordingExistsError) \
+                    and not isinstance(e, Error.RecordingEPError):
                 flist = glob.glob(recording.Path(appdir="eeg")
                                   + recording.GetPrefix(app="*"))
                 if len(flist) != 0:
@@ -1021,7 +1033,7 @@ in output folder.")
             fileHandler.close()
     except Exception as e:
         if ex_code == 0:
-            ex_code = 20
+            ex_code = 5
         Logger.error("Unable to copy files to working directory. See in " 
                      + tmpDir + "logfile for more details.")
         exc_type, exc_value, exc_traceback = os.sys.exc_info()
