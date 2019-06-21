@@ -3,6 +3,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [0.76] - 2019-06-21
+
+### Removed
+- `Data_example` folder
+
+### Added
+- `GPL2.0+` license and headers
+
 ## [0.75] - 2019-05-18
 
 ### Changed
