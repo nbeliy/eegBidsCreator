@@ -30,7 +30,7 @@ def parce_CLI(argv, VERSION):
     '''Parce passed array of string and returns resulting 
     argparse.ArgumentParser object.'''
     parser = argparse.ArgumentParser(
-            description='Converts EEG file formats to BID standard')
+            description='Converts EEG files to BIDS standard')
     parser.add_argument('infile',
                         metavar='eegfile', nargs=1,
                         help='input eeg file')
