@@ -41,6 +41,7 @@ import psutil
 import tools.cfi as cfi
 import tools.cli as cli
 import tools.tools as tools
+import tools.plugins as plugins
 
 import tools.exceptions as Error
 
@@ -177,37 +178,7 @@ def main(argv):
                 ANONYM_BIRTH = datetime.strptime(
                         parameters["ANONYMIZATION"]["BirthDate"],"%Y-%m-%d")
 
-    entry_points = \
-        ["RecordingEP", "ChannelsEP", "EventsEP", "RunsEP", "DataEP"]
-    plugins = dict()
-    pl_name = ""
-    if parameters["PLUGINS"]["Plugin"] != "":
-        if not os.path.exists(parameters["PLUGINS"]["Plugin"]):
-            raise Error.PluginNotfound(
-                    "Plug-in file {} not found".format(
-                        parameters["PLUGINS"]["Plugin"]))
-        pl_name = os.path.splitext(
-                os.path.basename(parameters["PLUGINS"]["Plugin"]))[0]
-        Logger.info(
-                "Loading module {} from {}".format(
-                    pl_name, parameters["PLUGINS"]["Plugin"]))
-        spec = importlib.util.spec_from_file_location(
-                pl_name, parameters["PLUGINS"]["Plugin"])
-        if spec is None:
-            raise Error.PluginModuleNotFound(
-                    "Unable to load module {} from {}".format(
-                        pl_name, parameters["PLUGINS"]["Plugin"]))
-        itertools = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(itertools)
-        f_list = dir(itertools)
-        for ep in entry_points:
-            if ep in f_list and callable(getattr(itertools,ep)):
-                Logger.debug("Entry point {} found".format(ep))
-                plugins[ep] = getattr(itertools,ep)
-        if len(plugins) == 0:
-            Logger.warning(
-                    "Plugin {} loaded but "
-                    "no compatible functions found".format(pl_name))
+    plugins.ImportPlugins(parameters["PLUGINS"]["Plugin"])
 
     Logger.info(">>>>>>>>>>>>>>>>>>>>>>")
     Logger.info("Starting new bidsifier")
@@ -242,23 +213,8 @@ def main(argv):
         if parameters['GENERAL']["PatientId"] != "":
             recording.SetId(subject=parameters['GENERAL']["PatientId"])
             recording.SubjectInfo.ID = parameters['GENERAL']["PatientId"]
-
-        if entry_points[0] in plugins:
-            try:
-                result = 0
-                result = plugins[entry_points[0]](
-                        recording, 
-                        argv_plugin,
-                        parameters["PLUGINS"])
-            except Error.PluginError:
-                raise
-            except Exception as e:
-                raise Error.RecordingEPError(str(e))
-            if result != 0:
-                e = Error.RecordingEPError("Plugin {} returned code {}"
-                                           .format(entry_points[0], result))
-                e.code += result % 10
-                raise e
+        
+        plugins.RunPlugin("RecordingEP", recording, argv_plugin, parameters["PLUGINS"])
 
         if parameters['GENERAL']['JsonFile'] != "":
             recording.LoadJson(parameters['GENERAL']['JsonFile'])
@@ -349,19 +305,7 @@ def main(argv):
                                        recording.GetMaxTime())
         t_ref, t_end = recording.SetReferenceTime()
 
-        if entry_points[1] in plugins:
-            try:
-                result = 0
-                result = plugins[entry_points[1]](
-                        recording, 
-                        argv_plugin, 
-                        parameters["PLUGINS"])
-                if result != 0:
-                    raise Exception("Plugin {} returned code {}"
-                                    .format(entry_points[1], result))
-            except Exception:
-                ex_code = 100 + 10 + result
-                raise
+        plugins.RunPlugin("ChannelsEP", recording, argv_plugin, parameters["PLUGINS"])
 
         if not t_ref or not t_end:
             raise Error.TimeError("Unable to determine reference times")
@@ -432,20 +376,7 @@ def main(argv):
                         "Switching off IncludeSegmentStart")
                 parameters["EVENTS"]["IncludeSegmentStart"] = "no"
 
-        if entry_points[2] in plugins:
-            try:
-                result = 0
-                result = plugins[entry_points[2]](
-                        recording,
-                        argv_plugin,
-                        parameters["PLUGINS"])
-                if result != 0:
-                    raise Exception(
-                            "Plugin {} returned code {}"
-                            .format(entry_points[2], result))
-            except Exception:
-                ex_code = 100 + 20 + result
-                raise
+        plugins.RunPlugin("EventsEP", recording, argv_plugin, parameters["PLUGINS"])
 
         ################################
         # Creating meta-data json file #
@@ -506,21 +437,8 @@ def main(argv):
         if len(time_limits) == 0:
             raise Error.NoValidRunsError("No valid runs found")
 
-        if entry_points[3] in plugins:
-            try:
-                result = 0
-                result = plugins[entry_points[3]](
-                         recording,
-                         time_limits,
-                         argv_plugin,
-                         parameters["PLUGINS"])
-                if result != 0:
-                    raise Exception(
-                            "Plugin {} returned code {}"
-                            .format(entry_points[3], result))
-            except Exception:
-                ex_code = 100 + 30 + result
-                raise
+        plugins.RunPlugin("RunsEP", recording, argv_plugin, parameters["PLUGINS"], 
+                  times=time_limits)
 
         #####################
         # Running over runs #
@@ -685,21 +603,9 @@ def main(argv):
                             freq_mult=ch.GetFrequencyMultiplyer(),
                             raw=True))
 
-                    if entry_points[4] in plugins:
-                        try:
-                            result = 0
-                            result = plugins[entry_points[4]](
-                                    recording,
-                                    l_data,
-                                    argv_plugin, 
-                                    parameters["PLUGINS"])
-                            if result != 0:
-                                raise Exception(
-                                        "Plugin {} returned code {}"
-                                        .format(entry_points[4], result))
-                        except Exception:
-                            ex_code = 100 + 40 + result
-                            raise
+                    plugins.RunPlugin("DataEP", recording,
+                              argv_plugin, parameters["PLUGINS"], 
+                              data=l_data)
 
                     outData.DataFile.WriteBlock(l_data)
                     t_count += 1
@@ -977,14 +883,14 @@ in output folder.")
 in output folder.")
 
         # Cheking Plugin file
-        if len(plugins) != 0:
+        if len(plugins.active_plugins) != 0:
             if not os.path.isfile(parameters['GENERAL']['OutputFolder']
                                   + "code/" 
-                                  + parameters["PLUGINS"]["Plugin"]):
+                                  + plugins.file):
                 tools.create_directory(parameters['GENERAL']['OutputFolder']
                                        + "code")
                 Logger.info("Copying plugin file to code/")
-                shutil.copy2(parameters["PLUGINS"]["Plugin"],
+                shutil.copy2(plugins.file,
                              parameters['GENERAL']['OutputFolder']
                              + "code/.")
 

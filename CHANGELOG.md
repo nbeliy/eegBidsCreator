@@ -6,9 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Changed
 - The warnings in `.ini` file (like spaces in channel names) are silenced in eegBidsCreator,
 but still be shown in `check_configuration.py`
+- Streamlined plugin managment
 
 ### Added
-- Custom Exception. All expected exceptions should (in theory) inherit from thi class
+- Custom Exception. All expected exceptions should (in theory) inherit from the class
 
 ## [0.76] - 2019-06-21
 
