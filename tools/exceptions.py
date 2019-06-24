@@ -5,7 +5,7 @@
 ## Copyright (c) 2018-2019, University of Liège
 ## Author: Nikita Beliy
 ## Owner: Liege University https://www.uliege.be
-## Version: 0.76
+## Version: 0.77
 ## Maintainer: Nikita Beliy
 ## Email: Nikita.Beliy@uliege.be
 ## Status: developpement
