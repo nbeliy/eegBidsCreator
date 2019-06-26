@@ -1,15 +1,15 @@
 # eegBidsCreator
 
-A script to convert embla files to the BID standard
+A script to convert embla files to the BIDS standard
 It creates the required folders: `sub-<participant_label>/[ses-<session_label>/]eeg`,
 which will contain acquisition information, and `source/sub-<participant_label>/[ses-<session_label>/]eeg`,
 where the original raw data will be copied.
 
-It also creates channels.tsv file, containing the list of all channels.
+It also creates `channels.tsv` file, containing the list of all channels.
 Information that I managed to retrieve are the name, units, type, description (if it is provided by embla),
 and sampling frequency. Remaining fields are filled with "n/a".
 
-Extracted events are stored in events.tsv file with its onset time, duration, type,
+Extracted events are stored in `events.tsv` file with its onset time, duration, type,
 and corresponding sample (i.e. the number of data point of corresponding time, onset\*sampling) 
 
 I didn't found the task/acquisition/session id in the files, so they must be passed to script via options
@@ -30,7 +30,7 @@ usage: eegBidsCreator.py [-h] [--version] [-a, --acquisition acqId]
                          [--mem MEM] [--conversion {EDF,BV,MEEG}]
                          eegfile
 
-Converts EEG file formats to BID standard
+Converts EEG files to BIDS standard
 
 positional arguments:
   eegfile               input eeg file
@@ -70,7 +70,7 @@ These points should be adressed in two ways.
 ### Config File
 
 Several options are accessible by the configuration file, which is loaded by `-c <configuration file>`.
-The file follows a standard `ini` structture, with parameters and possible values are explained 
+The file follows a standard `ini` structure, with parameters and possible values are explained 
 in the example file `eegBidsCreator.ini`. 
 
 The parameters specification priority are as follows: `default < conf < cmd line`
@@ -128,11 +128,11 @@ The next modules are required but seems to be part of python3 standard package:
 
 ## Stand-alone executables
 
-The stand-alone executables are packed with help of PyInstaller for linux and Windows10. They can be found in 
-`bin/` directory. Their work was tested on Windows10 and Ubuntu machines, it should be tested on MacOSX and Windows7.
+The stand-alone executables are packed with help of PyInstaller for GNU/Linux and Windows10. They can be found in 
+`bin/` directory. Their work was tested on Windows10 and Ubuntu machines, it should be tested on MacOS X and Windows7.
 
-The python packing is not a true compiling, so the launch of executables takes some time (of order of seconds).
-Installing python and using script directly is still preferred way to do.
+The Python packing is not a true compiling, so the launch of executables takes some time (of order of seconds).
+Installing Python and using script directly is still the preferred way to do.
 
 It is not clear how plugin with extra modules will interact with packed version. If one need additional packages within packed executable for satisfying plugin dependencies, he should pack the executable himself.
 
@@ -141,7 +141,7 @@ I use next command line to pack:
 python3 -m PyInstaller -F --distpath=bin/ eegBidsCreator.py
 ```
 
-**The executables are garanteed to correspond to a tagged commit, but I will not do this for each commit between tags**
+**The executables are guaranteed to correspond to a tagged commit, but I will not do this for each commit between tags**
 
 ## Conversion into BrainVision
 
