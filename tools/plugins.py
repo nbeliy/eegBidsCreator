@@ -4,7 +4,7 @@
 ## Copyright (c) 2018-2019, University of Liège
 ## Author: Nikita Beliy
 ## Owner: Liege University https://www.uliege.be
-## Version: 0.77
+## Version: 0.77r1
 ## Maintainer: Nikita Beliy
 ## Email: Nikita.Beliy@uliege.be
 ## Status: developpement
@@ -70,6 +70,7 @@ def ImportPlugins(plugin_file):
     if plugin_file == "":
         return 0
 
+    global file 
     file = plugin_file
 
     if not os.path.isfile(file):
