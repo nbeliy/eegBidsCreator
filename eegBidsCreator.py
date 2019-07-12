@@ -7,7 +7,7 @@
 ## Copyright (c) 2018-2019, University of Liège
 ## Author: Nikita Beliy
 ## Owner: Liege University https://www.uliege.be
-## Version: 0.77r1
+## Version: 0.77r2
 ## Maintainer: Nikita Beliy
 ## Email: Nikita.Beliy@uliege.be
 ## Status: developpement
@@ -62,7 +62,7 @@ from DataStructure.EDF.EDF import EDF
 from DataStructure.EDF.EDF import Channel as EDFChannel
 
 
-VERSION = '0.77r1'
+VERSION = '0.77r2'
 
 
 def main(argv):
@@ -263,8 +263,7 @@ def main(argv):
                 shutil.copytree(recording.GetInputPath(),
                                 srcPath + basename)
         except FileExistsError as e:
-            ex_code = 10
-            raise 
+            raise Error.RecordingExistsError(str(e))
 
         if not recording.GetStartTime():
             Logger.warning("Unable to get StartTime of record. "

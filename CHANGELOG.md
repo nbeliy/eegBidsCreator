@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [0.77r2] - 2019-07-12
+
+# Fixed
+- Fixed bug in `eegBidsCreator.py` where the duplicated recordings are removed due to 
+change in exception system
+
 ## [0.77r1] - 2019-06-26
 
 ### Fixed
