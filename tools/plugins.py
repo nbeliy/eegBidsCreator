@@ -130,8 +130,8 @@ def RunPlugin(entry, recording, argv_plugin, parameters, **kwargs):
     except Exception as e:
         raise entry_points[entry](str(e)).with_traceback(sys.exc_info()[2]) 
     if result != 0:
-        e = Error.RecordingEPError("Plugin {} returned code {}"
-                                   .format(entry_points[0], result))
+        e = entry_points[entry]("Plugin {} returned code {}"
+                                .format(entry, result))
         e.code += result % 10
         raise e
 
