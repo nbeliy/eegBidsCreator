@@ -3,6 +3,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [0.77r3] - 2019-11-20
+
+# Added
+- Added errors 50 and 51 for recording parameters and invalid subject id
+- Added check for empty subject id, with error 51 if it fails
+- Added trap for invalid xml in recording.esrc for Embla format
+
+
 ## [0.77r2] - 2019-07-12
 
 # Fixed
