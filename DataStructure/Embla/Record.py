@@ -30,6 +30,8 @@ import logging
 import xml.etree.ElementTree as ElementTree
 from datetime import datetime
 
+from tools import exceptions as error
+
 from Parcel.parcel import Parcel
 from DataStructure.Generic.Event import GenEvent
 from DataStructure.Embla.Channel import EmbChannel
@@ -64,9 +66,14 @@ class EmbRecord(Record):
                            "Event list will be empty.")
 
         # Reading metadata
-        esrc = olefile.OleFileIO(self.GetInputPath('Recording.esrc'))\
-            .openstream('RecordingXML')
-        xml = esrc.read().decode("utf_16_le")[2:-1]
+        try:
+            esrc = olefile.OleFileIO(self.GetInputPath('Recording.esrc'))\
+                .openstream('RecordingXML')
+            xml = esrc.read().decode("utf_16_le")[2:-1]
+        except Exception as e:
+            raise error.EegFormatError("Unable to read recording info xml "
+                                       "from Recording.esrc: {}"
+                                       .format(str(e)))
         metadata = self.ParceRecording(xml)
 
         birth = datetime.min

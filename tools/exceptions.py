@@ -91,6 +91,18 @@ class NoValidRunsError(RunError):
     """
     code = 42
 
+class RecordingError(BIDSexception):
+    """
+    Raises if recording has invalid parameters 
+    """
+    code = 50
+
+class InvalidSubjectId(RecordingError):
+    """
+    Raises if subject id is invalid
+    """
+    code = 51
+
 class PluginError(BIDSexception):
     """
     Generic plugin error

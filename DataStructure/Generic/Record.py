@@ -32,6 +32,8 @@ import logging
 import bisect
 import json
 
+from tools import exceptions as error
+
 from DataStructure.Generic.Channel import GenChannel as Channel
 from DataStructure.Generic.Event import GenEvent as Event
 
@@ -50,7 +52,7 @@ class Subject(object):
 
     def __init__(self):
         super(Subject, self).__init__()
-        self._id = ""
+        self._id = "unknown"
         self.Name = ""
         self.Address = ""
         self.Gender = 0
@@ -67,8 +69,11 @@ class Subject(object):
 
     @ID.setter
     def ID(self, value):
+        if not value:
+            raise error.InvalidSubjectId("Subject ID can't be empty")
         if not isinstance(value, str):
-            raise TypeError("value must be a string")
+            raise error.InvalidSubjectId("Subject ID must be a string, "
+                                         " got {}".format(type(value)))
         self._id = value
 
     @property
