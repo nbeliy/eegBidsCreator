@@ -1039,7 +1039,7 @@ class Record(BIDSid):
             if MinTime is not None:
                 if self.Events[i].GetTime() < MinTime:
                     continue
-            if self.Events[i].Getname() == event:
+            if self.Events[i].GetName() == event:
                 return i
 
         return None
@@ -1083,7 +1083,7 @@ class Record(BIDSid):
             if MinTime is not None:
                 if self.Events[i].GetTime() > MinTime:
                     continue
-            if self.Events[i].Getname() == event:
+            if self.Events[i].GetName() == event:
                 return i
 
         return None

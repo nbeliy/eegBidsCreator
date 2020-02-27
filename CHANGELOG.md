@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [0.77r4] - 2020-02-27
+
+### Fixed
+- Misspelled function in `searchEvent`
+
+
 ## [0.77r3] - 2019-11-20
 
 # Added
@@ -13,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [0.77r2] - 2019-07-12
 
-# Fixed
+### Fixed
 - Fixed bug in `eegBidsCreator.py` where the duplicated recordings are removed due to 
 change in exception system
 
