@@ -575,12 +575,12 @@ class Record(BIDSid):
         if t_low and t_low > self.__RefTime: 
             if verbose:
                 Logger.info("Cropping reference time by {}"
-                            .format(self.__RefTime - t_low))
+                            .format(t_low - self.__RefTime))
                 Logger.debug("from {} to {}".format(
                     self._returnTime(self.__RefTime, True), 
                     self._returnTime(t_low, True)))
             self.__RefTime = t_low 
-        if t_high and t_high > self.__EndTime: 
+        if t_high and t_high < self.__EndTime: 
             if verbose:
                 Logger.info("Cropping end time by {}"
                             .format(self.__EndTime - t_high))
@@ -591,7 +591,7 @@ class Record(BIDSid):
         new_duration = self.__EndTime - self.__RefTime
         if verbose and old_duration != new_duration:
             Logger.info("New duration: {}"
-                        .format(old_duration - new_duration))
+                        .format(new_duration))
 
         if new_duration < timedelta():
             ValueError("New duration {} is negative".format(new_duration))

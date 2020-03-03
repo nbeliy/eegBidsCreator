@@ -354,7 +354,7 @@ def main(argv):
         if parameters["DATATREATMENT"]["EndEvent"] != "":
             pos = recording.RSearchEvent(
                     parameters["DATATREATMENT"]["EndEvent"],
-                    MinTime=t_ref)
+                    MinTime=t_end)
             if pos is not None:
                 t_ev_max = recording.Events[pos].GetTime()
         t_ref, t_end = recording.CropTime(t_ev_min, t_ev_max, verbose=True)
